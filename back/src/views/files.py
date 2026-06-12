@@ -11,6 +11,7 @@ from typing import List
 from controllers.FileManager import FileManager
 from controllers.NoteManager import NoteManager
 from controllers.OCRManager import OCRManager
+from controllers.PreviewManager import PreviewManager
 from controllers.SummarizeManager import SummarizeManager
 from controllers.TranscriptionManager import TranscriptionManager
 from db import get_db
@@ -181,6 +182,9 @@ async def upload_files(
                 elif auto_summary:
                     SummarizeManager.add_file_to_queue(file_path)
 
+                if get_setting("enable_auto_preview"):
+                    PreviewManager.add_file_to_queue(file_path)
+
         return {"message": f"{len(files)} files uploaded successfully."}
     except Exception as e:
         for file in files:
@@ -190,6 +194,7 @@ async def upload_files(
             SummarizeManager.delete(file_path)
             OCRManager.delete(file_path)
             TranscriptionManager.delete(file_path)
+            PreviewManager.delete(file_path)
         logging.error(f"Removed files after error: {file_path}")
 
         logging.error(f"Error uploading files: {str(e)}")
@@ -210,6 +215,7 @@ async def delete_file(file: str):
         SummarizeManager.delete(file_path)
         OCRManager.delete(file_path)
         TranscriptionManager.delete(file_path)
+        PreviewManager.delete(file_path)
         NoteManager.delete(file_path)
 
         db = get_db()
@@ -277,6 +283,7 @@ async def move_file(
         SummarizeManager.move(file, new_file_path)
         OCRManager.move(file, new_file_path)
         TranscriptionManager.move(file, new_file_path)
+        PreviewManager.move(file, new_file_path)
         NoteManager.move(file, new_file_path)
         db = get_db()
         try:
@@ -363,16 +370,23 @@ async def get_file_metadata(file: str):
             "mime_type": guess_mime(file_path),
         }
 
+        ARCHIVE_LIMIT = 100
         if mime.endswith("zip"):
             try:
                 with zipfile.ZipFile(file_path, "r") as z:
-                    metadata["zip_paths"] = z.namelist()
+                    all_names = z.namelist()
+                    metadata["zip_paths"] = all_names[:ARCHIVE_LIMIT]
+                    metadata["zip_paths_truncated"] = len(all_names) > ARCHIVE_LIMIT
+                    metadata["zip_paths_total"] = len(all_names)
             except Exception as e:
                 logging.error(f"Error reading archive contents: {str(e)}")
         elif mime.endswith(("tar.gz", "tgz", "tar")):
             try:
                 with tarfile.open(file_path, "r") as tar:
-                    metadata["zip_paths"] = tar.getnames()
+                    all_names = tar.getnames()
+                    metadata["zip_paths"] = all_names[:ARCHIVE_LIMIT]
+                    metadata["zip_paths_truncated"] = len(all_names) > ARCHIVE_LIMIT
+                    metadata["zip_paths_total"] = len(all_names)
             except Exception as e:
                 logging.error(f"Error reading archive contents: {str(e)}")
 

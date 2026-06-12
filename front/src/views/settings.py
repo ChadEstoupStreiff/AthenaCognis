@@ -254,6 +254,9 @@ def tasks(
         with st.expander("Transcription Tasks", expanded=True):
             fetch_display_tasks("transcription", file)
 
+    with st.expander("Preview Tasks", expanded=True):
+        fetch_display_tasks("preview", file)
+
 
 def chose_ai_menu(default_ai_type: str, default_model: str, key: str = "ai_menu"):
     import requests
@@ -540,6 +543,44 @@ def settings():
                 default=settings.get("chat_files_default_representation_mode", 0),
                 key="chat_representation",
             )
+
+        with st.expander("Preview Settings", expanded=True):
+            prev_cols = st.columns(4)
+            with prev_cols[0]:
+                settings["enable_auto_preview"] = st.toggle(
+                    "Auto-generate previews on upload",
+                    value=settings.get("enable_auto_preview", True),
+                )
+            with prev_cols[1]:
+                quality_options = ["low", "medium", "high"]
+                quality_labels = ["Low (144p)", "Medium (360p)", "High (720p)"]
+                current_quality = settings.get("preview_quality", "medium")
+                settings["preview_quality"] = st.radio(
+                    "Preview quality",
+                    options=quality_options,
+                    format_func=lambda x: quality_labels[quality_options.index(x)],
+                    index=quality_options.index(current_quality) if current_quality in quality_options else 1,
+                    horizontal=True,
+                    help="Resolution of image/PDF thumbnails.",
+                )
+            with prev_cols[2]:
+                settings["preview_text_chars"] = st.number_input(
+                    "Text preview characters",
+                    min_value=50,
+                    max_value=5000,
+                    value=int(settings.get("preview_text_chars", 300)),
+                    step=50,
+                    help="Number of characters to show for text file previews.",
+                )
+            with prev_cols[3]:
+                settings["preview_zip_subfiles"] = st.number_input(
+                    "Archive preview entries",
+                    min_value=1,
+                    max_value=100,
+                    value=int(settings.get("preview_zip_subfiles", 15)),
+                    step=1,
+                    help="Number of archive entries to list in zip/tar previews.",
+                )
 
         cols = st.columns(2)
         with cols[0]:

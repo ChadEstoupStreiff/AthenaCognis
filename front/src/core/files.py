@@ -8,6 +8,7 @@ from utils import (
     clear_cache,
     delete_file,
     download_and_display_file,
+    download_and_display_preview,
     download_file_button,
     generate_aside_project_markdown,
     generate_aside_tag_markdown,
@@ -355,7 +356,7 @@ multiple_selection_options = ["🔎 View", "📦 Select"]
 def multi_select_menu(
     key: str = "multi_select", default_mode: int = 0, disable_pill: bool = False
 ):
-    cols = st.columns([2, 4, 1, 1, 1, 1, 1])
+    cols = st.columns([2, 4, 1, 1, 1, 1, 1, 1])
     with cols[0]:
         if disable_pill:
             interact_mode = multiple_selection_options[default_mode]
@@ -383,7 +384,7 @@ def multi_select_menu(
 
 def multi_select_actions_menu(selected_files, key: str = "multi_select", cols=None):
     if cols is None:
-        cols = st.columns([0, 0, 1, 1, 1, 1, 1])
+        cols = st.columns([0, 0, 1, 1, 1, 1, 1, 1])
     with cols[2]:
         spacer(25)
         if st.button(
@@ -422,6 +423,29 @@ def multi_select_actions_menu(selected_files, key: str = "multi_select", cols=No
             # TODO implement download all files
             pass
     with cols[6]:
+        spacer(25)
+        if st.button(
+            "🖼️ Generate Previews",
+            use_container_width=True,
+            key=f"{key}_generate_previews",
+            disabled=len(selected_files) == 0,
+        ):
+            errors = []
+            for file in selected_files:
+                result = requests.post(f"http://back:80/preview/generate/{file}")
+                if result.status_code not in (200, 500):
+                    errors.append(file)
+            if errors:
+                toast_for_rerun(
+                    f"Failed to queue preview for {len(errors)} file(s).",
+                    icon="⚠️",
+                )
+            else:
+                toast_for_rerun(
+                    f"Preview generation queued for {len(selected_files)} file(s).",
+                    icon="🖼️",
+                )
+    with cols[7]:
         spacer(25)
         if st.button(
             "✨ AI actions",
@@ -511,12 +535,10 @@ def box_file(
     # MARK: BOX FILE
     selected = None
     with st.container(border=True, height=height):
-        preview_container = None
-        if show_preview:
-            preview_container = st.container(
-                border=True,
-                height=height // 2,
-            )
+        preview_container = st.container(
+            border=True,
+            height=height // 2,
+        )
         file_name = os.path.basename(file)
         date = file.split("/")[2]
         subfolder = file.split("/")[3]
@@ -587,7 +609,7 @@ def boxes_files(
         with cols[i % nbr_of_files_per_line]:
             preview_container, selected = box_file(
                 file,
-                height=600 if show_preview else 300,
+                height=600 if show_preview else 400,
                 show_preview=show_preview,
                 select_mode=interact_mode == multiple_selection_options[1],
                 select_default_value=select_default_value,
@@ -596,10 +618,12 @@ def boxes_files(
             file_preview_containers.append(preview_container)
             if selected:
                 selected_files.append(file)
-    if show_preview:
-        for i, file_preview_container in enumerate(file_preview_containers):
-            with file_preview_container:
+    for i, file_preview_container in enumerate(file_preview_containers):
+        with file_preview_container:
+            if show_preview:
                 download_and_display_file(files[i], default_height_if_needed=250)
+            else:
+                download_and_display_preview(files[i])
 
     if interact_mode == multiple_selection_options[1] and allow_actions:
         multi_select_actions_menu(selected_files, key=key, cols=multi_select_cols)
@@ -620,8 +644,8 @@ def line_file(
         date = file.split("/")[2]
         subfolder = file.split("/")[3]
 
-        cols = st.columns([2, 2, 3, 1] if show_preview else [2, 3, 1])
-        with cols[1 if show_preview else 0]:
+        cols = st.columns([2, 2, 3, 1])
+        with cols[1]:
             st.markdown(f"#### {file_name}")
             st.caption(
                 f"**📅 Date:** {date}<br/>**📁 Subfolder:** {subfolder}",
@@ -645,7 +669,7 @@ def line_file(
                     ),
                     unsafe_allow_html=True,
                 )
-        with cols[2 if show_preview else 1]:
+        with cols[2]:
             result = requests.get(f"http://back:80/summarize/get/{file}")
             if result.status_code == 200 and result.json() is not None:
                 summary = result.json().get("summary", "")
@@ -655,7 +679,7 @@ def line_file(
                     st.markdown(summary)
             else:
                 st.info("No summary available for this file.")
-        with cols[3 if show_preview else 2]:
+        with cols[3]:
             if select_mode:
                 selected = st.checkbox(
                     "📦 Select",
@@ -671,12 +695,10 @@ def line_file(
                 st.session_state.file_to_see = file
                 st.switch_page(PAGE_VIEWER)
             download_file_button(file)
-        if show_preview:
-            return cols[0].container(
-                border=True,
-                height=300,
-            ), selected
-    return None, selected
+        return cols[0].container(
+            border=True,
+            height=300,
+        ), selected
 
 
 def list_files(
@@ -705,10 +727,14 @@ def list_files(
         if selected:
             selected_files.append(file)
         file_preview_infos.append(preview_container)
-    if show_preview:
-        for i, file_preview_container in enumerate(file_preview_infos):
-            with file_preview_container:
+    for i, file_preview_container in enumerate(file_preview_infos):
+        if file_preview_container is None:
+            continue
+        with file_preview_container:
+            if show_preview:
                 download_and_display_file(files[i], default_height_if_needed=250)
+            else:
+                download_and_display_preview(files[i])
 
     if interact_mode == multiple_selection_options[1] and allow_actions:
         multi_select_actions_menu(selected_files, key=key, cols=multi_select_cols)
@@ -781,9 +807,9 @@ def representation_mode_select(
     with cols[1 if aside else 0]:
         if representation_mode in [1, 2]:
             show_preview = st.toggle(
-                "Show file preview",
+                "Detailed preview",
                 value=False,
-                help="Toggle to show or hide file previews.",
+                help="Off: shows a small quick preview. On: loads the full file.",
             )
     with cols[2 if aside else 0]:
         if representation_mode == 1:

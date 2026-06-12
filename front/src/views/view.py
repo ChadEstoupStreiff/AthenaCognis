@@ -966,6 +966,11 @@ def view():
                 or file.endswith(".tgz")
             ):
                 if "metadata" in infos and "zip_paths" in infos["metadata"]:
+                    if infos["metadata"].get("zip_paths_truncated"):
+                        total = infos["metadata"].get("zip_paths_total", "?")
+                        st.warning(
+                            f"Archive contains {total} entries. Showing first 100 only."
+                        )
                     st.markdown(
                         paths_to_markdown_tree(
                             infos["metadata"]["zip_paths"],

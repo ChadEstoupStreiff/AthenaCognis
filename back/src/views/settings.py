@@ -35,6 +35,10 @@ default_settings = {
     "refractor_type": "llama",
     "refractor_model": "llama3.2:1b",
     "auto_display_file_size_limit": 10,  # 10Mb
+    "enable_auto_preview": True,
+    "preview_quality": "medium",  # low=144p, medium=360p, high=720p
+    "preview_text_chars": 300,
+    "preview_zip_subfiles": 15,
     "link_type": "llama",
     "link_model": "llama3.2:1b",
     "mistral_api_key": "",

@@ -26,7 +26,8 @@ from db.models import (
     KanbanBoard,
     KanbanColumn,
     KanbanColumnTask,
-    Link
+    Link,
+    PreviewTask,
 )
 
 

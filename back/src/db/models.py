@@ -297,3 +297,15 @@ class KanbanColumnTask(Base):
         primary_key=True,
         index=True,
     )
+
+
+class PreviewTask(Base):
+    __tablename__ = "PreviewTask"
+
+    file = Column(String(512), primary_key=True, index=True)
+    state = Column(
+        SQLEnum(TaskStateEnum), nullable=False, default=TaskStateEnum.PENDING
+    )
+    added = Column(DateTime, primary_key=True)
+    completed = Column(DateTime, nullable=True)
+    result = Column(TEXT, nullable=True)

@@ -15,6 +15,7 @@ PyPDF2
 python-docx
 pillow
 pillow-heif
+PyMuPDF
 
 # TRANSCRIPTION
 faster_whisper

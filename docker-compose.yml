@@ -88,6 +88,7 @@ services:
       - "${FRONT_PORT}:8501"
     volumes:
       - .env:/.env
+      - ./front/src:/app/src
     hostname: front
     networks:
       - appnet

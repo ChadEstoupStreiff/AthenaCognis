@@ -9,6 +9,7 @@ import uvicorn
 from controllers.ChatManager import ChatManager
 from controllers.FileManager import FileManager
 from controllers.OCRManager import OCRManager
+from controllers.PreviewManager import PreviewManager
 from controllers.SummarizeManager import SummarizeManager
 from controllers.TranscriptionManager import TranscriptionManager
 from db import DB, ProjectFile, TagFile, Link, create_default_values, get_db
@@ -96,6 +97,10 @@ app.include_router(views.utils.router)
 import views.settings
 
 app.include_router(views.settings.router)
+
+import views.preview
+
+app.include_router(views.preview.router)
 
 
 @app.get("/ocr/health")
@@ -276,6 +281,10 @@ if __name__ == "__main__":
     chat_thread = Thread(target=ChatManager.start_thread)
     chat_thread.daemon = True  # Daemonize thread
     chat_thread.start()
+
+    preview_thread = Thread(target=PreviewManager.start_thread)
+    preview_thread.daemon = True
+    preview_thread.start()
 
     # if len(list_models()) == 0:
     #     pull_model(get_setting("summarization_model"))

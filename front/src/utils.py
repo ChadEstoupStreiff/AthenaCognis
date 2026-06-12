@@ -420,6 +420,34 @@ def download_and_display_file(file_name, default_height_if_needed=1000):
                     )
 
 
+def download_and_display_preview(file_name: str):
+    encoded_file_name = quote(file_name)
+    result = requests.get(f"http://back:80/preview/{encoded_file_name}")
+
+    if result.status_code == 404:
+        if st.button(
+            "Generate preview",
+            key=f"gen_preview_{file_name}",
+            use_container_width=True,
+        ):
+            requests.post(f"http://back:80/preview/generate/{encoded_file_name}")
+            st.toast("Preview queued!", icon="🖼️")
+        return
+
+    if result.status_code != 200:
+        st.caption("Preview unavailable")
+        return
+
+    content_type = result.headers.get("content-type", "")
+
+    if content_type.startswith("image/"):
+        st.image(result.content, use_container_width=True)
+    elif content_type.startswith("text/"):
+        st.code(result.text, language=None)
+    else:
+        st.caption("Preview unavailable")
+
+
 def download_file_button(file: str):
     file_name = os.path.basename(file)
     if (
