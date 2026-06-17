@@ -1,8 +1,8 @@
-<img src="assets/logo.png" alt="God Assistant Logo" width="40"/>
+<img src="assets/logo.png" alt="AthenaCognis Logo" width="40"/>
 
-# God Assistant
+# AthenaCognis
 
-**God Assistant** is a self-hosted, AI-powered document management and knowledge assistant.
+**AthenaCognis** is a self-hosted, AI-powered document management and knowledge assistant.
 Inspired by tools like *Paperless*, it combines full-text search, multi-provider AI extraction, project and task management, research bibliography tools, and productivity tracking — all in one web application that keeps your data on your own infrastructure.
 
 ## 📷 Preview
@@ -239,8 +239,8 @@ The application runs as five Docker services on a shared internal network:
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/yourusername/god-assistant.git
-cd god-assistant
+git clone https://github.com/yourusername/athenacognis.git
+cd athenacognis
 ```
 
 ### 2. Configure environment
@@ -275,9 +275,9 @@ All core configuration is done via the `.env` file:
 
 | Variable | Required | Description | Example |
 |----------|----------|-------------|---------|
-| `PROJECT_NAME` | ✅ | Internal Docker Compose project name | `godassistant` |
+| `PROJECT_NAME` | ✅ | Internal Docker Compose project name | `athenacognis` |
 | `USER_NAME` | ✅ | Your name — shown in the dashboard greeting | `chad` |
-| `DATA_PATH` | ✅ | Absolute path on the host for all persistent data (files, database, models, caches) | `/data/godassistant` |
+| `DATA_PATH` | ✅ | Absolute path on the host for all persistent data (files, database, models, caches) | `/data/athenacognis` |
 | `BACK_PORT` | ✅ | Host port for the FastAPI backend | `8400` |
 | `FRONT_PORT` | ✅ | Host port for the Streamlit frontend | `8401` |
 | `PMA_PORT` | ✅ | Host port for phpMyAdmin | `8402` |

@@ -13,7 +13,7 @@ from controllers.PreviewManager import PreviewManager
 from controllers.SummarizeManager import SummarizeManager
 from controllers.TranscriptionManager import TranscriptionManager
 from db import DB, ProjectFile, TagFile, Link, create_default_values, get_db
-from db.models import Base, CalendarRecord, Summary
+from db.models import Base, CalendarRecord, Summary, Contact, Task, KanbanBoard
 from fastapi import FastAPI
 from pillow_heif import register_heif_opener
 from sqlalchemy import func
@@ -180,6 +180,10 @@ def metrics():
         calendars = db.query(CalendarRecord).all()
         nbr_summaries = db.query(func.count(Summary.file)).scalar()
         nbr_links = db.query(func.count()).select_from(Link).scalar()
+        nbr_contacts = db.query(func.count(Contact.id)).scalar()
+        nbr_tasks = db.query(func.count(Task.id)).scalar()
+        nbr_kanban_boards = db.query(func.count(KanbanBoard.id)).scalar()
+        nbr_validated_tasks = db.query(func.count(Task.id)).filter(Task.completed.isnot(None)).scalar()
         # Count files per project
         files_per_project = dict(
             db.query(ProjectFile.project, func.count(ProjectFile.file))
@@ -247,6 +251,10 @@ def metrics():
         "nbr_files": len(all_files),
         "nbr_summaries": nbr_summaries,
         "nbr_links": nbr_links,
+        "nbr_contacts": nbr_contacts,
+        "nbr_tasks": nbr_tasks,
+        "nbr_kanban_boards": nbr_kanban_boards,
+        "nbr_validated_tasks": nbr_validated_tasks,
         "files_per_project": files_per_project,
         "files_per_tag": files_per_tag,
         "files_without_tag": len(no_tag),

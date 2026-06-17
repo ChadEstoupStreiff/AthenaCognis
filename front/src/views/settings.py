@@ -10,6 +10,8 @@ from utils import (
     spacer,
     toast_for_rerun,
 )
+from dotenv import dotenv_values
+from src.utils import get_setting
 
 
 # MARK: Settings func
@@ -35,10 +37,6 @@ def apply_settings(settings):
             "Failed to apply settings. Please try again later.",
             icon="❌",
         )
-
-
-def ai_settings(prefix: str):
-    pass
 
 
 # MARK: Project func
@@ -348,7 +346,13 @@ def chose_ai_menu(default_ai_type: str, default_model: str, key: str = "ai_menu"
     return ai_type, model
 
 
-def chose_vision_ai_menu(default_type: str, default_model: str, key: str, local_label: str = "Local", local_key: str = "local"):
+def chose_vision_ai_menu(
+    default_type: str,
+    default_model: str,
+    key: str,
+    local_label: str = "Local",
+    local_key: str = "local",
+):
     import requests
     import streamlit as st
 
@@ -372,15 +376,24 @@ def chose_vision_ai_menu(default_type: str, default_model: str, key: str, local_
         installed_models = (
             [m["name"] for m in result.json()] if result.status_code == 200 else []
         )
-        vision_models = [m for m in installed_models if any(
-            tag in m for tag in ["llava", "moondream", "bakllava", "minicpm", "vision"]
-        )] or installed_models
+        vision_models = [
+            m
+            for m in installed_models
+            if any(
+                tag in m
+                for tag in ["llava", "moondream", "bakllava", "minicpm", "vision"]
+            )
+        ] or installed_models
         if not vision_models:
-            st.error("No vision-capable LLaMA models found. Pull a vision model (e.g. llava:7b).")
+            st.error(
+                "No vision-capable LLaMA models found. Pull a vision model (e.g. llava:7b)."
+            )
         model = st.selectbox(
             "LLaMA Vision Model",
             options=vision_models,
-            index=vision_models.index(default_model) if default_model in vision_models else 0,
+            index=vision_models.index(default_model)
+            if default_model in vision_models
+            else 0,
             key=f"{key}_model",
             help="Select a vision-capable Ollama model (e.g. llava:7b).",
         )
@@ -389,7 +402,9 @@ def chose_vision_ai_menu(default_type: str, default_model: str, key: str, local_
         model = st.selectbox(
             "Mistral Vision Model",
             options=pixtral_models,
-            index=pixtral_models.index(default_model) if default_model in pixtral_models else 0,
+            index=pixtral_models.index(default_model)
+            if default_model in pixtral_models
+            else 0,
             key=f"{key}_model",
         )
     elif ai_type == "ChatGPT":
@@ -397,7 +412,9 @@ def chose_vision_ai_menu(default_type: str, default_model: str, key: str, local_
         model = st.selectbox(
             "OpenAI Vision Model",
             options=gpt_vision_models,
-            index=gpt_vision_models.index(default_model) if default_model in gpt_vision_models else 0,
+            index=gpt_vision_models.index(default_model)
+            if default_model in gpt_vision_models
+            else 0,
             key=f"{key}_model",
         )
     elif ai_type == "Gemini":
@@ -409,7 +426,9 @@ def chose_vision_ai_menu(default_type: str, default_model: str, key: str, local_
         model = st.selectbox(
             "Gemini Vision Model",
             options=gemini_vision_models,
-            index=gemini_vision_models.index(default_model) if default_model in gemini_vision_models else 0,
+            index=gemini_vision_models.index(default_model)
+            if default_model in gemini_vision_models
+            else 0,
             key=f"{key}_model",
         )
     return ai_type, model
@@ -435,7 +454,9 @@ def chose_transcription_menu(default_type: str, default_model: str, key: str):
         model = st.radio(
             "Whisper model",
             options=local_models,
-            index=local_models.index(default_model) if default_model in local_models else 2,
+            index=local_models.index(default_model)
+            if default_model in local_models
+            else 2,
             horizontal=True,
             key=f"{key}_model",
         )
@@ -449,16 +470,22 @@ def chose_transcription_menu(default_type: str, default_model: str, key: str):
 | large-v3 | Slowest | ~10–12 GB | ~2.7%       |
 """)
     elif transcription_type == "openai":
-        st.caption("Uses OpenAI's Whisper API. Requires an OpenAI API key in LLM Settings.")
+        st.caption(
+            "Uses OpenAI's Whisper API. Requires an OpenAI API key in LLM Settings."
+        )
         model = "whisper-1"
         st.info("Model: whisper-1 (only available model on OpenAI Whisper API)")
     elif transcription_type == "groq":
-        st.caption("Uses Groq's ultra-fast Whisper API. Requires a Groq API key in LLM Settings.")
+        st.caption(
+            "Uses Groq's ultra-fast Whisper API. Requires a Groq API key in LLM Settings."
+        )
         groq_models = ["whisper-large-v3", "whisper-large-v3-turbo"]
         model = st.selectbox(
             "Groq Whisper Model",
             options=groq_models,
-            index=groq_models.index(default_model) if default_model in groq_models else 0,
+            index=groq_models.index(default_model)
+            if default_model in groq_models
+            else 0,
             key=f"{key}_model",
         )
     return transcription_type, model
@@ -476,6 +503,7 @@ def settings():
             "Tags Management",
             "LLM Settings",
             "Tasks",
+            "Telemetry",
         ]
     )
 
@@ -509,7 +537,7 @@ def settings():
                 value=settings.get("search_default_timeframe_days", 30),
                 help="Set the default timeframe (in days) for search operations.",
             )
-        
+
         with cols[2]:
             settings["target_hourly_working_time"] = st.number_input(
                 "Target hourly working time (hours)",
@@ -544,14 +572,15 @@ def settings():
                 key="chat_representation",
             )
 
-        with st.expander("Preview Settings", expanded=True):
-            prev_cols = st.columns(4)
-            with prev_cols[0]:
+
+        cols = st.columns(2)
+        with cols[0]:
+            
+            with st.expander("Preview Settings", expanded=True):
                 settings["enable_auto_preview"] = st.toggle(
                     "Auto-generate previews on upload",
                     value=settings.get("enable_auto_preview", True),
                 )
-            with prev_cols[1]:
                 quality_options = ["low", "medium", "high"]
                 quality_labels = ["Low (144p)", "Medium (360p)", "High (720p)"]
                 current_quality = settings.get("preview_quality", "medium")
@@ -559,31 +588,32 @@ def settings():
                     "Preview quality",
                     options=quality_options,
                     format_func=lambda x: quality_labels[quality_options.index(x)],
-                    index=quality_options.index(current_quality) if current_quality in quality_options else 1,
+                    index=quality_options.index(current_quality)
+                    if current_quality in quality_options
+                    else 1,
                     horizontal=True,
                     help="Resolution of image/PDF thumbnails.",
                 )
-            with prev_cols[2]:
-                settings["preview_text_chars"] = st.number_input(
-                    "Text preview characters",
-                    min_value=50,
-                    max_value=5000,
-                    value=int(settings.get("preview_text_chars", 300)),
-                    step=50,
-                    help="Number of characters to show for text file previews.",
-                )
-            with prev_cols[3]:
-                settings["preview_zip_subfiles"] = st.number_input(
-                    "Archive preview entries",
-                    min_value=1,
-                    max_value=100,
-                    value=int(settings.get("preview_zip_subfiles", 15)),
-                    step=1,
-                    help="Number of archive entries to list in zip/tar previews.",
-                )
+                sub_cols = st.columns(2)
+                with sub_cols[0]:
+                    settings["preview_text_chars"] = st.number_input(
+                        "Text preview characters",
+                        min_value=50,
+                        max_value=5000,
+                        value=int(settings.get("preview_text_chars", 300)),
+                        step=50,
+                        help="Number of characters to show for text file previews.",
+                    )
+                with sub_cols[1]:
+                    settings["preview_zip_subfiles"] = st.number_input(
+                        "Archive preview entries",
+                        min_value=1,
+                        max_value=100,
+                        value=int(settings.get("preview_zip_subfiles", 15)),
+                        step=1,
+                        help="Number of archive entries to list in zip/tar previews.",
+                    )
 
-        cols = st.columns(2)
-        with cols[0]:
             with st.expander("Calendar Progress Bar", expanded=True):
                 settings["calendar_progress_bar_enabled"] = st.toggle(
                     "Show progress bar in Calendar",
@@ -598,7 +628,9 @@ def settings():
                     pb_start_val = datetime.date.fromisoformat(
                         settings.get("calendar_progress_bar_start_date", "2025-11-01")
                     )
-                    pb_start = st.date_input("Start date", value=pb_start_val, key="pb_start")
+                    pb_start = st.date_input(
+                        "Start date", value=pb_start_val, key="pb_start"
+                    )
                     settings["calendar_progress_bar_start_date"] = pb_start.isoformat()
                 with pb_cols[1]:
                     pb_end_val = datetime.date.fromisoformat(
@@ -695,10 +727,12 @@ def settings():
                     value=settings["enable_auto_transcription"],
                     help="Enable automatic transcription of audio files when uploaded.",
                 )
-                settings["transcription_type"], settings["transcription_model"] = chose_transcription_menu(
-                    settings.get("transcription_type", "local"),
-                    settings.get("transcription_model", "small"),
-                    key="transcription",
+                settings["transcription_type"], settings["transcription_model"] = (
+                    chose_transcription_menu(
+                        settings.get("transcription_type", "local"),
+                        settings.get("transcription_model", "small"),
+                        key="transcription",
+                    )
                 )
 
         if settings != loaded_settings:
@@ -998,7 +1032,10 @@ def settings():
                 apply_settings(settings)
 
         with tab_groq:
-            st.image("https://cdn.sanity.io/images/chol0sk5/production/ce0b2266373b3c9722b0bccb9a98441c26c89696-1200x630.png", width=300)
+            st.image(
+                "https://cdn.sanity.io/images/chol0sk5/production/ce0b2266373b3c9722b0bccb9a98441c26c89696-1200x630.png",
+                width=300,
+            )
             st.text(
                 "Groq provides ultra-fast inference for Whisper transcription models. Ideal for fast and accurate audio transcription."
             )
@@ -1081,6 +1118,72 @@ def settings():
                             st.toast("Google Gemini API key is invalid.", icon="❌")
                     except requests.RequestException as e:
                         st.toast(f"Gemini check failed: {e}", icon="⚠️")
+
+    # MARK: Telemetry
+    with settings_tabs[5]:
+        config = dotenv_values("/.env")
+        telemetry_url = config.get("TELEMETRY_SERVER_URL", "")
+        dashboard_url = config.get("TELEMETRY_DASHBOARD_URL", "")
+
+        st.info(
+            "AthenaCognis can send anonymous usage statistics once a day. "
+            "No personal data, file names, or content is ever collected."
+            "If you wish to gather or delete all your telemetry data, please contact us at chad.estoup@gmail.com, and we will do it for you."
+            "Thank you for helping us improve AthenaCognis!"
+        )
+
+        if not telemetry_url:
+            st.info(
+                "Telemetry is not configured. Set `TELEMETRY_SERVER_URL` in your `.env` file to enable it.",
+                icon="ℹ️",
+            )
+        else:
+            telemetry_enabled = get_setting("telemetry_enabled")
+            telemetry_uuid = get_setting("telemetry_uuid", None)
+            telemetry_last_sent = get_setting("telemetry_last_sent", None)
+
+            cols = st.columns([1, 1])
+            with cols[0]:
+                if st.button(
+                    "Reset consent (show dialog again)", use_container_width=False
+                ):
+                    settings["telemetry_enabled"] = None
+                    apply_settings(settings)
+                if telemetry_last_sent:
+                    st.caption(f"Last telemetry ping sent: {telemetry_last_sent} (UTC)")
+                else:
+                    st.caption("No telemetry ping has been sent yet.")
+
+                if dashboard_url:
+                    st.markdown(f"Public stats dashboard: {dashboard_url}")
+            
+            with cols[1]:
+                st.text(
+                    "Telemetry is currently "
+                    + ("enabled ✅, sending to " + telemetry_url if telemetry_enabled else "disabled ❌")
+                )
+                st.text(f"Telemetry UUID: {telemetry_uuid}")
+
+            with st.expander("What data is collected?", expanded=True):
+                st.markdown(
+                    """
+| Field | Description |
+|---|---|
+| `nbr_files` | Total number of files |
+| `nbr_projects` | Number of projects |
+| `nbr_tags` | Number of tags |
+| `nbr_calendars` | Number of calendar records |
+| `nbr_hours` | Total hours tracked |
+| `nbr_summaries` | AI summaries generated |
+| `nbr_links` | File links created |
+| `files_without_tag` | Files with no tag |
+| `files_without_project` | Files in no project |
+| `disk_files_bytes` | Storage used by your files (bytes) |
+
+No file names, content, API keys, or personal identifiers are ever sent.
+All aggregated statistics are publicly visible.
+                    """
+                )
 
 
 if __name__ == "__main__":

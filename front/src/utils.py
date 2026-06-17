@@ -268,6 +268,11 @@ def get_setting(key: str, default=None):
     else:
         st.error(f"Failed to retrieve setting {key}: {result.text}")
         return default
+    
+def set_setting(key: str, value):
+    result = requests.post(f"http://back:80/settings/{key}", json={"value": value})
+    if result.status_code != 200:
+        st.error(f"Failed to set setting {key}: {result.text}")
 
 
 def display_file(file_path: str, default_height_if_needed: int = 1000):

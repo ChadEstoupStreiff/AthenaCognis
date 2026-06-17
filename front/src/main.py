@@ -1,5 +1,6 @@
 import streamlit as st
 from auth import Authentificator
+from telemetry import get_consent, is_configured, send_daily_ping, should_send_today, show_consent_dialog
 from pages import (
     PAGE_AUDIO_RECORD,
     PAGE_CALENDAR,
@@ -18,7 +19,7 @@ from pages import (
 
 if __name__ == "__main__":
     st.set_page_config(
-        page_title="GodAssistant",
+        page_title="AthenaCognis",
         page_icon="/assets/logo.png",
         layout="wide",
     )
@@ -29,6 +30,14 @@ if __name__ == "__main__":
         del st.session_state.toast_for_rerun
         
     if Authentificator.try_loggin():
+        if is_configured():
+            consent = get_consent()
+            if consent is None:
+                show_consent_dialog()
+            elif consent is True and should_send_today():
+                with st.spinner("Syncing telemetry..."):
+                    send_daily_ping()
+
         pg = st.navigation(
             {
                 "": [

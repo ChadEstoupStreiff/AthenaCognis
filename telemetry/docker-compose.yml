@@ -1,0 +1,30 @@
+services:
+  telemetry_server:
+    build: ./server
+    container_name: telemetry_server
+    restart: unless-stopped
+    ports:
+      - "${TELEMETRY_PORT:-8403}:80"
+    volumes:
+      - "${DATA_PATH}/telemetry:/data"
+    environment:
+      - DATA_PATH=/data
+    networks:
+      - telemetry_net
+
+  telemetry_dashboard:
+    build: ./dashboard
+    container_name: telemetry_dashboard
+    restart: unless-stopped
+    ports:
+      - "${TELEMETRY_DASHBOARD_PORT:-8404}:8501"
+    environment:
+      - TELEMETRY_SERVER_URL=http://telemetry_server
+    depends_on:
+      - telemetry_server
+    networks:
+      - telemetry_net
+
+networks:
+  telemetry_net:
+    driver: bridge

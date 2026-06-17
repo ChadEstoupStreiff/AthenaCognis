@@ -5,6 +5,7 @@ from typing import Any
 
 from db import Setting, get_db
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 router = APIRouter(tags=["Settings"])
 
@@ -45,6 +46,9 @@ default_settings = {
     "openai_api_key": "",
     "gemini_api_key": "",
     "groq_api_key": "",
+    "telemetry_enabled": None,
+    "telemetry_uuid": "",
+    "telemetry_last_sent": "",
     "chat_user_description": "",
     "chat_presets": [
         [
@@ -164,8 +168,12 @@ async def get_setting_value(key: str):
         )
 
 
+class SettingValue(BaseModel):
+    value: Any
+
+
 @router.post("/settings/{key}")
-async def set_setting_value(key: str, value: Any):
+async def set_setting_value(key: str, body: SettingValue):
     """
     Set a specific setting value by key.
     """
@@ -173,9 +181,9 @@ async def set_setting_value(key: str, value: Any):
     try:
         setting = db.query(Setting).filter(Setting.key == key).first()
         if setting:
-            setting.value = format_value(value)
+            setting.value = format_value(body.value)
         else:
-            new_setting = Setting(key=key, value=format_value(value))
+            new_setting = Setting(key=key, value=format_value(body.value))
             db.add(new_setting)
         db.commit()
         return {"message": "Setting updated successfully."}
