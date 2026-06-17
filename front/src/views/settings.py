@@ -10,8 +10,9 @@ from utils import (
     spacer,
     toast_for_rerun,
 )
+from telemetry import send_daily_ping
 from dotenv import dotenv_values
-from src.utils import get_setting
+from src.utils import get_setting, set_setting
 
 
 # MARK: Settings func
@@ -1234,6 +1235,15 @@ def settings():
                 ):
                     settings["telemetry_enabled"] = None
                     apply_settings(settings)
+                # if st.button("Reset identity", use_container_width=False, help="Forget this installation's UUID and get a new one on the next ping."):
+                #     set_setting("telemetry_uuid", None)
+                #     set_setting("telemetry_last_sent", None)
+                #     st.toast("Telemetry identity reset. A new UUID will be assigned on the next ping.", icon="🔄")
+                #     st.rerun()
+                # if st.button("Send telemetry ping now", use_container_width=False, help="Send a telemetry ping immediately."):
+                #     send_daily_ping()
+                #     st.toast("Telemetry ping sent.", icon="📡")
+                #     st.rerun()
                 if telemetry_last_sent:
                     st.caption(f"Last telemetry ping sent: {telemetry_last_sent} (UTC)")
                 else:
