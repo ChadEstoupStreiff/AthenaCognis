@@ -99,11 +99,15 @@ You can visit my website for more of me: [https://chades.fr](https://chades.fr) 
 
 ### 🔍 Search
 - **Three search depths:**
-  - ⚡ **FAST**, keyword index only (filename, notes)
+  - ⚡ **FAST**, filename and per-file notes only
   - 🔍 **NORMAL**, adds AI-generated summaries and keywords
   - 🧠 **DEEP**, full document content scan
+- **Streaming results**, files appear one by one as they are examined, with a live progress bar showing `Watching X / N files — filename`
+- **Smart normalisation**, if the query contains no special characters, punctuation and separators are stripped from both the query and content before matching — `UNet` finds `U-Net`, `u_net`, `U:Net`, etc.
+- **✨ Semantic boost toggle**, after the keyword scan, runs a second pass using `sentence-transformers` embeddings to find files that are conceptually related to the query even if they share no exact words (e.g. searching `UNet` surfaces papers about CNNs or segmentation). Embeddings are generated lazily and cached in the database.
+- **Similarity threshold**, configurable in Settings → Search Settings; controls how close a file's meaning must be to the query to be included in the semantic pass (default 0.4)
 - **Filters**, date range, file type, subfolder, project, tag, each with an include/exclude toggle
-- **Powered by Whoosh**, NGRAM full-text indexing for fuzzy partial-word matching
+- **Batch ZIP download**, select any files and click **📥 Download All** to receive a `.zip` archive where each entry is named `<date>_<original_filename>`
 
 ### 🧠 AI Extraction
 - **Auto-summarisation**, LLM-generated summary and keywords, stored per file and used in NORMAL/DEEP search
@@ -211,12 +215,13 @@ Each task selects its provider and model independently. Cloud providers require 
 
 | Task | Local | Cloud |
 |------|-------|-------|
-| Chat | Ollama (any model) | Mistral, OpenAI ChatGPT, Google Gemini |
-| Summarisation | Ollama | Mistral, OpenAI ChatGPT, Google Gemini |
-| Text Refractor | Ollama | Mistral, OpenAI ChatGPT, Google Gemini |
-| Auto-link | Ollama | Mistral, OpenAI ChatGPT, Google Gemini |
-| OCR (text extraction) | PaddleOCR |, |
-| Image caption / vision | Local BLIP, Ollama vision | Mistral Pixtral, GPT-4o / GPT-4.1, Gemini Vision |
+| Chat | Ollama (any model) | Mistral, OpenAI, Gemini, Claude |
+| Summarisation | Ollama | Mistral, OpenAI, Gemini, Claude |
+| Text Refractor | Ollama | Mistral, OpenAI, Gemini, Claude |
+| Auto-link | Ollama | Mistral, OpenAI, Gemini, Claude |
+| Semantic search embeddings | `all-MiniLM-L6-v2` (local, CPU) | — |
+| OCR (text extraction) | PaddleOCR | — |
+| Image caption / vision | Local BLIP, Ollama vision | Mistral Pixtral, GPT-4o / GPT-4.1, Gemini Vision, Claude |
 | Transcription | Faster-Whisper (tiny → large-v3) | OpenAI Whisper API, Groq (whisper-large-v3 / turbo) |
 
 **Supported cloud models:**
@@ -227,6 +232,7 @@ Each task selects its provider and model independently. Cloud providers require 
 | Mistral | ministral-3b, ministral-8b, mistral-small, mistral-medium, mistral-large, magistral-small, magistral-medium |
 | OpenAI | gpt-3.5-turbo, gpt-4, gpt-4o, gpt-4o-mini, gpt-4.1, gpt-4.1-mini, gpt-4.1-nano |
 | Gemini | gemini-2.0-flash-lite, gemini-2.0-flash, gemini-2.5-flash-lite, gemini-2.5-flash, gemini-2.5-pro |
+| Claude | claude-haiku-4-5, claude-sonnet-4-6, claude-opus-4-8, claude-fable-5 |
 | Groq | whisper-large-v3, whisper-large-v3-turbo *(transcription only)* |
 
 ## 📦 Tech Stack
@@ -236,9 +242,10 @@ Each task selects its provider and model independently. Cloud providers require 
 | Backend | Python 3, FastAPI, SQLAlchemy |
 | Frontend | Streamlit |
 | Database | MariaDB 10.6 |
-| Full-text search | Whoosh (NGRAM indexing) |
+| Keyword search | Inline substring matching with smart normalisation, streamed via NDJSON |
+| Semantic search | `sentence-transformers` (`all-MiniLM-L6-v2`), cosine similarity, lazy embedding cache |
 | Local LLM inference | Ollama |
-| Cloud AI | OpenAI, Mistral AI, Google Gemini, Groq |
+| Cloud AI | OpenAI, Mistral AI, Google Gemini, Groq, Anthropic Claude |
 | OCR | PaddleOCR |
 | Image captioning | BLIP (local) |
 | Transcription | Faster-Whisper (local), OpenAI Whisper API, Groq |
@@ -277,6 +284,7 @@ The application runs as five Docker services on a shared internal network:
 - `SummarizeManager`, generates LLM summaries and keyword lists
 - `PreviewManager`, generates image/text/archive preview thumbnails
 - `ChatManager`, handles streaming LLM responses asynchronously
+- `EmbeddingManager`, generates and caches `sentence-transformers` vector embeddings per file on demand (used by the semantic boost search)
 
 ## 🚀 Quick Start
 
