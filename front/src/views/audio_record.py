@@ -14,7 +14,7 @@ def audio_record():
         key="audio_date",
     )
 
-    if st.button("Save recorded audio", use_container_width=True):
+    if st.button("Save recorded audio", use_container_width=True, type="primary"):
         if audio_data:
             file_name = f"audio_{date.strftime('%Y-%m-%d')}.wav"
             files_payload = [

@@ -204,6 +204,77 @@ class FileManager:
         writer.commit()
 
     @classmethod
+    def stream_search(
+        cls,
+        text: str = None,
+        start_date: str = None,
+        end_date: str = None,
+        subfolders: List[str] = None,
+        types: List[list] = None,
+        projects: List[str] = None,
+        tags: List[str] = None,
+        search_mode: int = 0,
+        exclude_file_types: bool = False,
+        exclude_subfolders: bool = False,
+        exclude_projects: bool = False,
+        exclude_tags: bool = False,
+    ):
+        """Sync generator that yields event dicts for streaming search results."""
+        try:
+            files = cls.list_files(
+                start_date=start_date,
+                end_date=end_date,
+                subfolders=subfolders,
+                types=types,
+                projects=projects,
+                tags=tags,
+                exclude_file_types=exclude_file_types,
+                exclude_subfolders=exclude_subfolders,
+                exclude_projects=exclude_projects,
+                exclude_tags=exclude_tags,
+            )
+            files.sort()
+            files.reverse()
+            total = len(files)
+            yield {"type": "total", "count": total}
+
+            # Split query into words so any word matching triggers a result (OR behaviour)
+            query_words = [w.lower() for w in text.strip().split()] if text else []
+
+            for i, file in enumerate(files):
+                filename = os.path.basename(file)
+
+                yield {"type": "progress", "current": i + 1, "total": total, "file": filename}
+
+                if query_words:
+                    parts = [filename.lower()]
+
+                    summary_keywords = SummarizeManager.get(file)
+                    if summary_keywords is not None:
+                        parts.append(",".join(summary_keywords.get("keywords", [])).lower())
+                        if search_mode != 0:
+                            parts.append(summary_keywords.get("summary", "").lower())
+
+                    if search_mode == 2:
+                        content = read_content(file, force_read=True)
+                        if content:
+                            parts.append(content.lower())
+
+                    note = NoteManager.get(file)
+                    if note:
+                        parts.append(note.get("note", "").lower())
+
+                    combined = " ".join(parts)
+                    if any(word in combined for word in query_words):
+                        yield {"type": "result", "path": file}
+                else:
+                    yield {"type": "result", "path": file}
+
+        except Exception as e:
+            logging.error(f"Error in stream_search: {str(e)}")
+            yield {"type": "error", "message": str(e)}
+
+    @classmethod
     def search_files(
         cls,
         text: str = None,

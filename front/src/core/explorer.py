@@ -1,8 +1,10 @@
 import datetime
+import json
 from typing import List
 
 import requests
 import streamlit as st
+from stqdm import stqdm
 from utils import get_setting, mimes_map_compressed
 
 
@@ -72,6 +74,102 @@ def search_files(
     }
 
 
+def search_files_stream(
+    text,
+    start_date,
+    end_date,
+    subfolder=None,
+    types=None,
+    projects=None,
+    tags=None,
+    search_mode=0,
+    exclude_file_types=False,
+    exclude_subfolders=False,
+    exclude_projects=False,
+    exclude_tags=False,
+):
+    """Generator that yields event dicts from the backend NDJSON stream.
+
+    Event types:
+      {"type": "total",    "count": N}
+      {"type": "progress", "current": i, "total": N, "file": name}
+      {"type": "result",   "path": "/shared/..."}
+      {"type": "error",    "message": "..."}
+    """
+    request = f"http://back:80/files/search/stream?start_date={start_date}&end_date={end_date}&search_mode={search_mode}"
+    if text is not None:
+        request += f"&text={text}"
+    if subfolder is not None and len(subfolder) > 0:
+        request += f"&subfolder={','.join(subfolder)}&exclude_subfolders={exclude_subfolders}"
+    if types is not None and len(types) > 0:
+        request += f"&types={','.join(types)}&exclude_file_types={exclude_file_types}"
+    if projects is not None and len(projects) > 0:
+        request += f"&projects={','.join(projects)}&exclude_projects={exclude_projects}"
+    if tags is not None and len(tags) > 0:
+        request += f"&tags={','.join(tags)}&exclude_tags={exclude_tags}"
+
+    with requests.get(request, stream=True) as response:
+        if response.status_code == 200:
+            for line in response.iter_lines():
+                if line:
+                    yield json.loads(line)
+        else:
+            yield {"type": "error", "message": response.text}
+
+
+def run_streaming_search(search_params):
+    """Run a streaming search with a stqdm progress bar. Returns a result dict
+    compatible with generate_query_description and session state storage."""
+    start_time = datetime.datetime.now()
+    files = []
+    total = 0
+
+    placeholder = st.empty()
+
+    with placeholder.container():
+        pbar = stqdm(total=1, desc="Starting search...")
+
+        for event in search_files_stream(
+            text=search_params["query"],
+            start_date=search_params["start_date"],
+            end_date=search_params["end_date"],
+            subfolder=search_params["subfolder"],
+            types=search_params["types"],
+            projects=search_params["projects"],
+            tags=search_params["tags"],
+            search_mode=search_params["search_mode"],
+            exclude_file_types=search_params["exclude_file_types"],
+            exclude_subfolders=search_params["exclude_subfolders"],
+            exclude_projects=search_params["exclude_projects"],
+            exclude_tags=search_params["exclude_tags"],
+        ):
+            etype = event.get("type")
+            if etype == "total":
+                total = event["count"]
+                pbar.total = max(total, 1)
+                pbar.set_description(f"Watched 0 / {total} files")
+                pbar.refresh()
+            elif etype == "progress":
+                pbar.set_description(
+                    f"Watching {event['current']} / {event['total']}  —  {event.get('file', '')}"
+                )
+                pbar.update(1)
+            elif etype == "result":
+                files.append(event["path"])
+            elif etype == "error":
+                st.error(f"Search error: {event['message']}")
+
+        pbar.close()
+    placeholder.empty()
+    end_time = datetime.datetime.now()
+
+    return {
+        **search_params,
+        "files": files,
+        "time_spent": end_time - start_time,
+    }
+
+
 def search_engine(
     nbr_columns: int = 6,
     force_types: List[str] = None,
@@ -79,6 +177,7 @@ def search_engine(
     force_tags: List[str] = None,
     force_projects: List[str] = None,
     force_start_date: datetime = None,
+    streaming: bool = False,
 ):
     with st.form("file_search_form", clear_on_submit=False):
         search_text = st.text_input(
@@ -196,6 +295,7 @@ def search_engine(
             "Search",
             use_container_width=True,
             help="Click to search files based on the criteria.",
+            type="primary",
         ):
             if force_types is not None:
                 for t in force_types:
@@ -213,8 +313,24 @@ def search_engine(
                 for p in force_projects:
                     if p not in projects:
                         projects.append(p)
+            text = search_text if len(search_text) > 0 else None
+            if streaming:
+                return {
+                    "query": text,
+                    "start_date": search_dates[0],
+                    "end_date": search_dates[1],
+                    "types": file_types,
+                    "subfolder": subfolder,
+                    "projects": projects,
+                    "tags": tags,
+                    "search_mode": search_mode,
+                    "exclude_file_types": exclude_file_types,
+                    "exclude_subfolders": exuclude_subfolders,
+                    "exclude_projects": exclude_projects,
+                    "exclude_tags": exclude_tags,
+                }
             return search_files(
-                search_text if len(search_text) > 0 else None,
+                text,
                 search_dates[0],
                 search_dates[1],
                 subfolder,

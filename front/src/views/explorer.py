@@ -1,14 +1,16 @@
 import streamlit as st
-from core.explorer import search_engine, generate_query_description
+from core.explorer import (
+    generate_query_description,
+    run_streaming_search,
+    search_engine,
+)
 from core.files import display_files, representation_mode_select
 from utils import get_setting
 
 
 def explorer():
     # MARK: SEARCH FORM
-    search_result = search_engine()
-    if search_result is not None:
-        st.session_state.explorer_files = search_result
+    search_params = search_engine(streaming=True)
 
     with st.sidebar:
         representation_mode, show_preview, nbr_of_files_per_line = (
@@ -16,6 +18,9 @@ def explorer():
                 default_mode=get_setting("explorer_default_representation_mode")
             )
         )
+
+    if search_params is not None:
+        st.session_state.explorer_files = run_streaming_search(search_params)
 
     if "explorer_files" in st.session_state:
         query_str = generate_query_description(st.session_state.explorer_files)
@@ -31,7 +36,7 @@ def explorer():
             )
         else:
             st.write("No files found in the system.")
-    else:
+    elif search_params is None:
         st.info("Search for files first :)")
 
 

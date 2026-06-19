@@ -32,7 +32,7 @@ def create_kanban_board():
         placeholder="Enter a description for the new Kanban board (optional)",
         height=100,
     )
-    if st.button("Create", use_container_width=True):
+    if st.button("Create", use_container_width=True, type="primary"):
         if not board_name:
             st.error("Board name cannot be empty.")
             return
@@ -59,7 +59,7 @@ def edit_kanban_board(board):
     new_description = st.text_area(
         "Board description", value=board["description"], height=200
     )
-    if st.button("Save changes", use_container_width=True):
+    if st.button("Save changes", use_container_width=True, type="primary"):
         if not new_name:
             st.error("Board name cannot be empty.")
             return
@@ -147,7 +147,7 @@ def create_task(column, default_project: List[str] = []):
     )
     new_contact_ids = [c["id"] for c in new_contacts]
 
-    if st.button("Add Task", use_container_width=True):
+    if st.button("Add Task", use_container_width=True, type="primary"):
         if not task_title:
             st.error("Task title cannot be empty.")
             return
@@ -211,7 +211,7 @@ def edit_kanban_column(column, board_id):
 
     new_name = st.text_input("Column name", value=column["name"])
     new_color = st.color_picker("Column color", value=column["color"])
-    if st.button("Save changes", use_container_width=True):
+    if st.button("Save changes", use_container_width=True, type="primary"):
         if not new_name:
             st.error("Column name cannot be empty.")
             return
@@ -309,7 +309,7 @@ def edit_task(task):
     )
     new_contact_ids = [c["id"] for c in new_contacts]
 
-    if st.button("Save changes", use_container_width=True):
+    if st.button("Save changes", use_container_width=True, type="primary"):
         if not new_title:
             st.error("Task title cannot be empty.")
             return
@@ -583,7 +583,7 @@ def _view_timeline(board_info, projects, tags, contacts_by_id, selected_projects
 
 def organization():
     with st.sidebar:
-        if st.button("🆕 Create Board", use_container_width=True):
+        if st.button("🆕 Create Board", use_container_width=True, type="primary"):
             create_kanban_board()
         in_sidebar_board_selector = st.toggle(
             "📋 Board selector in sidebar",
@@ -759,7 +759,7 @@ def organization():
                         unsafe_allow_html=True,
                     )
 
-                    if st.button(
+                    if show_edit_tasks and st.button(
                         "➕ Add Task",
                         use_container_width=True,
                         key=f"add_task_{column['id']}",
@@ -946,7 +946,7 @@ def organization():
                         "Name", placeholder="Enter the name of the new column"
                     )
                     new_column_color = cols[1].color_picker("Color", value="#FFFFFF")
-                    if st.button("Add Column", use_container_width=True):
+                    if st.button("Add Column", use_container_width=True, type="primary"):
                         if not new_column_name:
                             st.error("Column name cannot be empty.")
                             return

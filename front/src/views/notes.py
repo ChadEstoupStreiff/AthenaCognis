@@ -27,7 +27,7 @@ def notes():
             )
 
             with st.container(border=True):
-                if st.button("Create new note", use_container_width=True):
+                if st.button("Create new note", use_container_width=True, type="primary"):
                     clear_cache()
                     new_note_name = datetime.datetime.now().strftime("%H-%M-%S")
                     st.session_state["note_name"] = (

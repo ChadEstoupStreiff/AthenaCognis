@@ -7,7 +7,7 @@ from typing import List
 import requests
 import streamlit as st
 from core.contacts import render_contact_pills
-from core.explorer import search_engine as file_search_engine
+from core.explorer import run_streaming_search, search_engine as file_search_engine
 from core.files import display_files, representation_mode_select
 from core.ocr import _bbox_from_any, _draw_label, _open_image
 from pages import PAGE_EXPLORER, PAGE_NOTES, PAGE_VIEWER
@@ -86,7 +86,7 @@ def dialog_edit_file(file: str, projects: List[str], tags: List[str]):
         st.warning(
             f"You are about to change the date to {new_date}. This action cannot be undone."
         )
-    if st.button("Save Changes", use_container_width=True):
+    if st.button("Save Changes", use_container_width=True, type="primary"):
         if new_name != file_name or new_date != date:
             result_move = requests.post(
                 f"http://back:80/files/move/{file}?name={new_name}&date={new_date}&subfolder={subfolder}",
@@ -125,6 +125,7 @@ def dialog_edit_file(file: str, projects: List[str], tags: List[str]):
         if st.button(
             "Add Project",
             use_container_width=True,
+            type="primary",
             help="Click to add the selected project to this file.",
         ):
             result_add = requests.post(
@@ -179,6 +180,7 @@ def dialog_edit_file(file: str, projects: List[str], tags: List[str]):
         if st.button(
             "Add Tag",
             use_container_width=True,
+            type="primary",
             help="Click to add the selected tag to this file.",
         ):
             result_add = requests.post(
@@ -228,9 +230,9 @@ def dialog_auto_link(file):
     )
 
     with st.expander("Search Files to Analyze", expanded=True):
-        result = file_search_engine(nbr_columns=3)
-        if result is not None:
-            st.session_state.auto_link_search_files = result["files"]
+        search_params = file_search_engine(nbr_columns=3, streaming=True)
+        if search_params is not None:
+            st.session_state.auto_link_search_files = run_streaming_search(search_params)["files"]
 
     selected_files = []
     if "auto_link_search_files" in st.session_state:
@@ -379,9 +381,9 @@ def dialog_auto_link(file):
 @st.dialog("🔗 Add Link", width="large")
 def dialog_add_link(file):
     with st.expander("Search Files", expanded=True):
-        result = file_search_engine(nbr_columns=3)
-        if result is not None:
-            st.session_state.link_search_files = result["files"]
+        search_params = file_search_engine(nbr_columns=3, streaming=True)
+        if search_params is not None:
+            st.session_state.link_search_files = run_streaming_search(search_params)["files"]
 
     if "link_search_files" in st.session_state:
         representation_mode, show_preview, nbr_of_files_per_line = (

@@ -7,7 +7,7 @@ import streamlit as st
 from core.files import representation_mode_select, display_files
 from core.calendar import box_calendar_record
 from core.calendar import search_engine as calendar_search_engine
-from core.explorer import search_engine as file_search_engine
+from core.explorer import run_streaming_search, search_engine as file_search_engine
 from utils import generate_badges_html, spacer, toast_for_rerun, get_setting
 
 
@@ -21,7 +21,7 @@ def dialog_new_chat():
             help="Enter a title for the new chat session.",
         )
 
-        if st.form_submit_button("Create Chat", use_container_width=True):
+        if st.form_submit_button("Create Chat", use_container_width=True, type="primary"):
             response = requests.post(
                 "http://back:80/chat/create?title=" + chat_title,
             )
@@ -39,9 +39,9 @@ def dialog_new_chat():
 def dialog_search_files():
     # MARK: Search files
     with st.expander("Search Files", expanded=True):
-        result = file_search_engine(nbr_columns=3)
-        if result is not None:
-            st.session_state.chat_search_files = result["files"]
+        search_params = file_search_engine(nbr_columns=3, streaming=True)
+        if search_params is not None:
+            st.session_state.chat_search_files = run_streaming_search(search_params)["files"]
 
     top = st.container()
 
@@ -64,7 +64,7 @@ def dialog_search_files():
         selected = []
 
     with top:
-        if st.button("Add Selected Files", disabled=not selected, use_container_width=True):
+        if st.button("Add Selected Files", disabled=not selected, use_container_width=True, type="primary"):
             for file in selected:
                 if file not in st.session_state.chat_files:
                     st.session_state.chat_files.append(file)
@@ -104,7 +104,7 @@ def dialog_search_calendars():
                     show_edit_button=False,
                 )
 
-        if st.button("Add Selected Calendar Events", use_container_width=True):
+        if st.button("Add Selected Calendar Events", use_container_width=True, type="primary"):
             if len(selected) > 0:
                 for record in selected:
                     if record not in st.session_state.chat_calendars:
@@ -130,7 +130,7 @@ def dialog_edit_chat():
     chat_title = st.text_input("Chat Title", value=chat_info["title"])
     chat_description = st.text_area("Chat Description", value=chat_info["description"])
 
-    if st.button("✏️Save Changes", use_container_width=True):
+    if st.button("✏️Save Changes", use_container_width=True, type="primary"):
         response = requests.put(
             f"http://back:80/chat/{st.session_state.chat_session}/edit?title={chat_title}&description={chat_description}",
         )
@@ -262,7 +262,7 @@ def dialog_message_presets():
                                     save_presets(presets)
         if show_edition:
             with top:
-                if st.button("✏️ Save edition", use_container_width=True, key="save_presets"):
+                if st.button("✏️ Save edition", use_container_width=True, key="save_presets", type="primary"):
                     save_presets(presets)
                 st.divider()
 
@@ -368,7 +368,7 @@ def chat():
     # MARK: Main
     with st.sidebar:
         with st.container(border=True):
-            if st.button("🆕 New Chat", use_container_width=True):
+            if st.button("🆕 New Chat", use_container_width=True, type="primary"):
                 dialog_new_chat()
 
             try:

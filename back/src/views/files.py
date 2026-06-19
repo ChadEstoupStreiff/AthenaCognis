@@ -19,7 +19,7 @@ from db.models import Note, ProjectFile, TagFile, Link, StockPile, Contact, Cont
 from fastapi import APIRouter, HTTPException, UploadFile
 from PIL import Image
 from pillow_heif import register_heif_opener
-from starlette.responses import FileResponse
+from starlette.responses import FileResponse, StreamingResponse
 from utils import guess_mime, walk_files
 from views.settings import get_setting
 from views.stockpile import StockPile, get_recent_added
@@ -475,6 +475,53 @@ async def search_files(
         logging.error(f"Error searching files: {str(e)}")
         logging.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Error searching files: {str(e)}")
+
+
+@router.get("/search/stream")
+def search_files_stream(
+    text: str = None,
+    start_date: str = None,
+    end_date: str = None,
+    subfolder: str = None,
+    types: str = None,
+    projects: str = None,
+    tags: str = None,
+    search_mode: int = 0,
+    exclude_file_types: bool = False,
+    exclude_subfolders: bool = False,
+    exclude_projects: bool = False,
+    exclude_tags: bool = False,
+):
+    """Search for files and stream progress + results as NDJSON."""
+    if text is not None and len(text) == 0:
+        text = None
+    if types is not None and len(types) == 0:
+        types = None
+    if subfolder is not None and len(subfolder) == 0:
+        subfolder = None
+    if projects is not None and len(projects) == 0:
+        projects = None
+    if tags is not None and len(tags) == 0:
+        tags = None
+
+    def generate():
+        for event in FileManager.stream_search(
+            text,
+            start_date,
+            end_date,
+            subfolder.split(",") if subfolder else None,
+            types.split(",") if types else None,
+            projects.split(",") if projects else None,
+            tags.split(",") if tags else None,
+            search_mode=search_mode,
+            exclude_file_types=exclude_file_types,
+            exclude_subfolders=exclude_subfolders,
+            exclude_projects=exclude_projects,
+            exclude_tags=exclude_tags,
+        ):
+            yield json.dumps(event) + "\n"
+
+    return StreamingResponse(generate(), media_type="application/x-ndjson")
 
 
 @router.get("/index")

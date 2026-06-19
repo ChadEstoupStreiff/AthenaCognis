@@ -60,7 +60,7 @@ def dialog_create_project():
     )
     st.write(color)
 
-    if st.button("Create Project", use_container_width=True):
+    if st.button("Create Project", use_container_width=True, type="primary"):
         response = requests.post(
             f"http://back:80/project?name={name}&description={description}&color={color[1:]}"
         )
@@ -94,7 +94,7 @@ def dialog_edit_project(project):
         help="Select a color for the project.",
     )
 
-    if st.button("Update Project", use_container_width=True):
+    if st.button("Update Project", use_container_width=True, type="primary"):
         response = requests.put(
             f"http://back:80/project/{project['name']}?name={name}&description={description}&color={color[1:]}",
         )
@@ -143,7 +143,7 @@ def dialog_create_tag():
             help="Select a color for the tag.",
         )
 
-        if st.form_submit_button("Create Tag", use_container_width=True):
+        if st.form_submit_button("Create Tag", use_container_width=True, type="primary"):
             response = requests.post(
                 f"http://back:80/tag?name={name}&color={color[1:]}"
             )
@@ -172,7 +172,7 @@ def dialog_edit_tag(tag):
             help="Select a color for the tag.",
         )
 
-        if st.form_submit_button("Update Tag", use_container_width=True):
+        if st.form_submit_button("Update Tag", use_container_width=True, type="primary"):
             response = requests.put(
                 f"http://back:80/tag/{tag['name']}?name={name}&color={color[1:]}"
             )
@@ -772,7 +772,7 @@ def settings():
 
     # MARK: Projects Management
     with settings_tabs[1]:
-        if st.button("🆕 Create new project", use_container_width=True):
+        if st.button("🆕 Create new project", use_container_width=True, type="primary"):
             dialog_create_project()
 
         projects = requests.get("http://back:80/projects").json()
@@ -807,7 +807,7 @@ def settings():
 
     # MARK: Tags Management
     with settings_tabs[2]:
-        if st.button("🆕 Create new tag", use_container_width=True):
+        if st.button("🆕 Create new tag", use_container_width=True, type="primary"):
             dialog_create_tag()
 
         tags = requests.get("http://back:80/tags").json()
@@ -986,7 +986,7 @@ def settings():
                 st.caption(
                     "See available models at this link: https://ollama.com/library"
                 )
-                if st.button("Pull Model", use_container_width=True):
+                if st.button("Pull Model", use_container_width=True, type="primary"):
                     with st.spinner("Pulling model...", show_time=True):
                         if model_pull_name:
                             result = requests.post(

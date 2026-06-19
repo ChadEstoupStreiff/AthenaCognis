@@ -42,7 +42,7 @@ def dialog_edit_record(record):
     )
     edited_contact_ids = [c["id"] for c in edited_contacts]
 
-    if st.button("✅ Save Changes", use_container_width=True):
+    if st.button("✅ Save Changes", use_container_width=True, type="primary"):
         result = requests.put(
             f"http://back:80/calendar/record/{record['id']}",
             params={
@@ -196,7 +196,7 @@ def search_engine():
                 + [p["name"] for p in requests.get("http://back:80/projects").json()],
             )
 
-        if st.form_submit_button("Search", use_container_width=True, help="Search for calendar records"):
+        if st.form_submit_button("Search", use_container_width=True, help="Search for calendar records", type="primary"):
             return search_calendars(
                 query, dates[0], dates[1], project if project != "All" else None
             )

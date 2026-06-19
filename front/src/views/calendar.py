@@ -395,7 +395,7 @@ def dialog_create_record(projects):
     )
     new_record_contact_ids = [c["id"] for c in new_record_contacts]
 
-    if st.button("Save Record", use_container_width=True):
+    if st.button("Save Record", use_container_width=True, type="primary"):
         if len(new_record_title) == 0:
             st.error("Title cannot be empty.")
             return
@@ -532,7 +532,7 @@ def calendar():
     if pb_enabled is None:
         pb_enabled = True
     with st.sidebar:
-        if st.button("🆕 Create Record", use_container_width=True):
+        if st.button("🆕 Create Record", use_container_width=True, type="primary"):
             dialog_create_record(projects)
             
         if pb_enabled:
@@ -667,7 +667,7 @@ def calendar():
                     + datetime.timedelta(days=30),
                 )
             submitted = st.form_submit_button(
-                "Generate Statistics", use_container_width=True
+                "Generate Statistics", use_container_width=True, type="primary"
             )
         if submitted:
             records = requests.get(

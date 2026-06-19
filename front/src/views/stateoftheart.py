@@ -4,7 +4,7 @@ from typing import Any, Dict
 import pandas
 import requests
 import streamlit as st
-from core.explorer import generate_query_description, search_engine
+from core.explorer import generate_query_description, run_streaming_search, search_engine
 from core.stateoftheart import (
     format_APA,
     format_BibTeX,
@@ -117,7 +117,7 @@ def edit_stateoftheart_dialog():
 
     if "sota_selected_files_copy" not in st.session_state:
         st.session_state.sota_selected_files_copy = st.session_state.sota_selected_files
-    if st.button("Save Changes", use_container_width=True, key="top_save_button"):
+    if st.button("Save Changes", use_container_width=True, key="top_save_button", type="primary"):
         update_sota_info()
     for i, file_data in enumerate(st.session_state.sota_selected_files_copy):
         with st.expander(f"Edit File {i + 1}: {file_data['Filename']}", expanded=True):
@@ -179,7 +179,7 @@ def edit_stateoftheart_dialog():
                     value=file_data.get("pages", ""),
                     key=f"pages_{i}",
                 )
-    if st.button("Save Changes", use_container_width=True, key="bottom_save_button"):
+    if st.button("Save Changes", use_container_width=True, key="bottom_save_button", type="primary"):
         update_sota_info()
 
 
@@ -261,9 +261,9 @@ def stateoftheart():
     if sota_tag is None:
         st.warning("Please select a tag for State-of-the-art files.")
     else:
-        search_result = search_engine(force_tags=[sota_tag])
-        if search_result is not None:
-            st.session_state.sota_files = search_result
+        search_params = search_engine(force_tags=[sota_tag], streaming=True)
+        if search_params is not None:
+            st.session_state.sota_files = run_streaming_search(search_params)
 
         if "sota_files" in st.session_state:
             query_str = generate_query_description(st.session_state.sota_files)
@@ -405,6 +405,7 @@ def stateoftheart():
                         "🔍 Find info",
                         use_container_width=True,
                         disabled=not selected_files_data,
+                        type="primary",
                     )
                     button_format_apa = st.button(
                         "📚 Format APA",
