@@ -296,6 +296,11 @@ The application runs as five Docker services on a shared internal network:
 
 > **Note:** A GPU is optional. The app runs on CPU alone; local AI tasks (OCR, transcription, summarisation) will simply be slower.
 
+There are two ways to run AthenaCognis:
+
+- **Docker Hub images** — just a `docker-compose.yml` and `.env`, no source needed. See [DEPLOYMENT.md](DEPLOYMENT.md).
+- **Clone & build from source** — full source, builds the images locally. Steps below.
+
 ### 1. Clone the repository
 
 ```bash
