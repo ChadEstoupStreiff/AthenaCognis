@@ -349,6 +349,19 @@ def _get_priority(task):
     return next((p for p in PRIORITY_OPTIONS if p["value"] == task["priority"]), None)
 
 
+DESCRIPTION_PREVIEW_LENGTH = 200
+
+
+def _render_task_description(description):
+    if len(description) > DESCRIPTION_PREVIEW_LENGTH:
+        preview = description[:DESCRIPTION_PREVIEW_LENGTH].rstrip() + "..."
+        st.markdown(preview)
+        with st.expander("Show more"):
+            st.markdown(description)
+    else:
+        st.markdown(description)
+
+
 def _collect_filtered_tasks(board_info, selected_projects, selected_tags, selected_priorities, show_validated_tasks):
     tasks = []
     seen_ids = set()
@@ -516,7 +529,7 @@ def _render_timeline_group(due_date, tasks, projects, tags, contacts_by_id, show
                         st.toast("Failed to update task status. Please try again.", icon="❌")
 
             if task["description"]:
-                st.markdown(task["description"])
+                _render_task_description(task["description"])
 
             if task["start_date"]:
                 start = datetime.datetime.strptime(task["start_date"], "%Y-%m-%dT%H:%M:%S")
@@ -891,7 +904,7 @@ def organization():
                                 else f"### **{task['title']}**"
                             )
                             if task["description"]:
-                                st.markdown(task["description"])
+                                _render_task_description(task["description"])
 
                             if task["start_date"]:
                                 start_date = datetime.datetime.strptime(

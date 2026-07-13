@@ -99,6 +99,36 @@ class EmbeddingManager:
         return cls._get_model().encode(text, normalize_embeddings=True)
 
     @classmethod
+    def search(cls, query_vector, top_k=5, min_similarity=0.4, exclude_files=None, include_files=None):
+        """Vectorized cosine-similarity top-k search over stored embeddings.
+        If include_files is given, only those files are considered (used to scope search to an
+        already-filtered candidate set). Returns a list of (file, score) tuples, most similar first."""
+        exclude = set(exclude_files or [])
+        allow = set(include_files) if include_files is not None else None
+        db = get_db()
+        try:
+            rows = db.query(Embedding).all()
+            files, vectors = [], []
+            for row in rows:
+                if row.file in exclude:
+                    continue
+                if allow is not None and row.file not in allow:
+                    continue
+                files.append(row.file)
+                vectors.append(json.loads(row.vector))
+        finally:
+            db.close()
+
+        if not files:
+            return []
+
+        matrix = np.array(vectors, dtype=np.float32)
+        scores = matrix @ np.asarray(query_vector, dtype=np.float32)
+
+        ranked = sorted(zip(files, scores.tolist()), key=lambda pair: pair[1], reverse=True)
+        return [(file, score) for file, score in ranked if score >= min_similarity][:top_k]
+
+    @classmethod
     def delete(cls, file):
         db = get_db()
         try:

@@ -6,7 +6,6 @@ import traceback
 from threading import Thread
 
 import uvicorn
-from controllers.ChatManager import ChatManager
 from controllers.FileManager import FileManager
 from controllers.OCRManager import OCRManager
 from controllers.PreviewManager import PreviewManager
@@ -293,10 +292,6 @@ if __name__ == "__main__":
     ocr_thread = Thread(target=OCRManager.start_thread)
     ocr_thread.daemon = True  # Daemonize thread
     ocr_thread.start()
-
-    chat_thread = Thread(target=ChatManager.start_thread)
-    chat_thread.daemon = True  # Daemonize thread
-    chat_thread.start()
 
     preview_thread = Thread(target=PreviewManager.start_thread)
     preview_thread.daemon = True

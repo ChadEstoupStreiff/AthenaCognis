@@ -1,14 +1,20 @@
 import json
 import os
-import time
 
 import requests
 import streamlit as st
+from core import api_client
 from core.files import representation_mode_select, display_files
 from core.calendar import box_calendar_record
 from core.calendar import search_engine as calendar_search_engine
 from core.explorer import run_streaming_search, search_engine as file_search_engine
 from utils import generate_badges_html, spacer, toast_for_rerun, get_setting
+
+
+def _parse_files(files_json):
+    """files is either a list of plain paths (legacy) or {"path", "source"} dicts (with provenance)."""
+    raw = json.loads(files_json) if files_json else []
+    return [f if isinstance(f, dict) else {"path": f, "source": "manual"} for f in raw]
 
 
 @st.dialog("🆕 New Chat")
@@ -22,9 +28,7 @@ def dialog_new_chat():
         )
 
         if st.form_submit_button("Create Chat", use_container_width=True, type="primary"):
-            response = requests.post(
-                "http://back:80/chat/create?title=" + chat_title,
-            )
+            response = api_client.post("/chat/create?title=" + chat_title)
             if response.status_code == 200:
                 toast_for_rerun(
                     f"Chat '{chat_title}' created successfully!",
@@ -131,8 +135,8 @@ def dialog_edit_chat():
     chat_description = st.text_area("Chat Description", value=chat_info["description"])
 
     if st.button("✏️Save Changes", use_container_width=True, type="primary"):
-        response = requests.put(
-            f"http://back:80/chat/{st.session_state.chat_session}/edit?title={chat_title}&description={chat_description}",
+        response = api_client.put(
+            f"/chat/{st.session_state.chat_session}/edit?title={chat_title}&description={chat_description}",
         )
         if response.status_code == 200:
             toast_for_rerun("Chat updated successfully!", icon="✅")
@@ -152,9 +156,7 @@ def dialog_delete_chat():
         use_container_width=True,
         key=f"delete_chat_{st.session_state.chat_session}",
     ):
-        response = requests.delete(
-            f"http://back:80/chat/{st.session_state.chat_session}",
-        )
+        response = api_client.delete(f"/chat/{st.session_state.chat_session}")
         if response.status_code == 200:
             toast_for_rerun("Chat deleted successfully!", icon="🗑️")
             clear_chat()
@@ -268,40 +270,27 @@ def dialog_message_presets():
 
 def clear_chat():
     # MARK: Clear
-    for key in ["chat_session", "chat_infos", "chat_files", "chat_calendars", "chat_messages"]:
+    for key in ["chat_session", "chat_infos", "chat_files", "chat_calendars", "chat_messages", "chat_failed_prompt"]:
         st.session_state.pop(key, None)
 
 
 def load_chat_session(session_id, silent: bool = False):
     # MARK: Load
     st.session_state.chat_session = session_id
-    st.session_state.chat_infos = requests.get(
-        f"http://back:80/chat/{session_id}/info"
-    ).json()
-    st.session_state.chat_messages = requests.get(
-        f"http://back:80/chat/{st.session_state.chat_session}/messages"
+    st.session_state.chat_infos = api_client.get(f"/chat/{session_id}/info").json()
+    st.session_state.chat_messages = api_client.get(
+        f"/chat/{st.session_state.chat_session}/messages"
     ).json()
 
     if len(st.session_state.chat_messages) > 0:
-        st.session_state.chat_files = st.session_state.chat_messages[-1].get(
-            "files", []
-        )
-        st.session_state.chat_calendars = st.session_state.chat_messages[-1].get(
-            "calendar", []
-        )
-        if not st.session_state.chat_files or len(st.session_state.chat_files) == 0:
-            st.session_state.chat_files = []
-        else:
-            st.session_state.chat_files = json.loads(st.session_state.chat_files)
-        if (
-            not st.session_state.chat_calendars
-            or len(st.session_state.chat_calendars) == 0
-        ):
+        last_files = _parse_files(st.session_state.chat_messages[-1].get("files"))
+        st.session_state.chat_files = [f["path"] for f in last_files if f.get("source") != "retrieved"]
+
+        chat_calendars = st.session_state.chat_messages[-1].get("calendar", [])
+        if not chat_calendars or len(chat_calendars) == 0:
             st.session_state.chat_calendars = []
         else:
-            st.session_state.chat_calendars = json.loads(
-                st.session_state.chat_calendars
-            )
+            st.session_state.chat_calendars = json.loads(chat_calendars)
     else:
         st.session_state.chat_files = []
         st.session_state.chat_calendars = []
@@ -317,7 +306,7 @@ def load_chat_session(session_id, silent: bool = False):
 # MARK: Thinking
 def is_chat_running(session_id):
     try:
-        response = requests.get(f"http://back:80/chat/{session_id}/is_running")
+        response = api_client.get(f"/chat/{session_id}/is_running")
         if response.status_code == 200:
             return response.json()
         else:
@@ -328,39 +317,50 @@ def is_chat_running(session_id):
         return False
 
 
-def stream_thinking(session_id):
-    data = ""
-    while True:
-        time.sleep(0.2 if len(data) == 0 else 0.05)
-        running_info = is_chat_running(session_id)
+@st.fragment(run_every=0.4)
+def render_active_generation(session_id):
+    run_state = is_chat_running(session_id)
 
-        if not running_info:
-            break
+    if not run_state or run_state.get("state") == "not_running":
+        load_chat_session(session_id, silent=True)
+        return
 
-        if running_info.get("state") == "not_running":
-            load_chat_session(session_id, silent=True)
-
-        part_data = running_info.get("answer", "")
-        if part_data != data:
-            new_chunk = part_data[len(data):]
-            data += new_chunk
-            yield new_chunk
+    with st.chat_message("assistant"):
+        answer = run_state.get("answer", "")
+        st.markdown(answer if answer else "_Thinking..._")
+        if st.button("⏹ Stop generating", key=f"stop_gen_{session_id}"):
+            try:
+                api_client.post(f"/chat/{session_id}/cancel")
+                st.toast("Cancellation requested.", icon="⏹")
+            except requests.RequestException as e:
+                st.toast(f"Failed to cancel: {e}", icon="❌")
 
 
 def send_message(prompt):
-    response = requests.post(
-        f"http://back:80/chat/{st.session_state.chat_session}/message",
-        json={
-            "user_description": get_setting("chat_user_description", "") if st.session_state.chat_include_user_description else "",
-            "content": prompt,
-            "files": json.dumps(st.session_state.chat_files),
-            "calendars": json.dumps(st.session_state.chat_calendars),
-        },
-    )
+    try:
+        response = api_client.post(
+            f"/chat/{st.session_state.chat_session}/message",
+            json={
+                "user_description": get_setting("chat_user_description", "") if st.session_state.chat_include_user_description else "",
+                "content": prompt,
+                "files": st.session_state.chat_files,
+                "calendars": st.session_state.chat_calendars,
+                "rag_enabled": st.session_state.get("chat_rag_enabled", True),
+            },
+        )
+    except requests.RequestException as e:
+        st.session_state.chat_failed_prompt = prompt
+        st.toast(f"Failed to send message: {e}", icon="❌")
+        return
+
     if response.status_code == 200:
         st.session_state.chat_messages.append(response.json())
+        st.session_state.pop("chat_failed_prompt", None)
         st.rerun()
+    elif response.status_code == 400:
+        st.toast("This chat is already generating a response.", icon="⏳")
     else:
+        st.session_state.chat_failed_prompt = prompt
         st.toast("Failed to send message.", icon="❌")
 
 
@@ -372,7 +372,7 @@ def chat():
                 dialog_new_chat()
 
             try:
-                chats = requests.get("http://back:80/chat/list").json()
+                chats = api_client.get("/chat/list").json()
             except requests.RequestException as e:
                 st.error(f"Error fetching chat sessions: {e}")
                 return
@@ -389,9 +389,6 @@ def chat():
 
     if "chat_session" in st.session_state:
         with st.sidebar:
-            # if st.button("🔄 Reload Chat", use_container_width=True):
-            #     load_chat_session(st.session_state.chat_session)
-
             # MARK: Infos
             st.header(f"Chat: {st.session_state.chat_infos['title']}")
             st.markdown(f"**Created on:** {st.session_state.chat_infos['date']}")
@@ -414,6 +411,12 @@ def chat():
                 dialog_message_presets()
 
             st.session_state.chat_include_user_description = st.toggle("Include user description", value=False, key="include_user_description")
+            st.session_state.chat_rag_enabled = st.toggle(
+                "🔍 Auto-retrieve notes",
+                value=get_setting("chat_rag_enabled_default", True),
+                key="chat_rag_toggle",
+                help="Automatically pull in relevant notes/files from your library based on your message, without attaching them manually.",
+            )
 
             st.markdown("**Files attached**")
             # MARK: Files
@@ -493,22 +496,40 @@ def chat():
             user = message["user"]
             date = message["date"].replace("T", " ").replace("Z", "")
             content = message["content"]
-            files = json.loads(message["files"]) if message["files"] else []
+            files = _parse_files(message["files"])
+            manual_files = [f["path"] for f in files if f.get("source") != "retrieved"]
+            retrieved_files = [f["path"] for f in files if f.get("source") == "retrieved"]
             calendars = json.loads(message["calendar"]) if message["calendar"] else []
+            is_system = user in ("system-error", "system-cancelled")
 
             with st.chat_message("assistant" if user != "user" else "user"):
+                if is_system:
+                    icon = "⚠️" if user == "system-error" else "⏹️"
+                    st.warning(f"{icon} {content}")
+                    continue
+
                 if user != "user":
                     caption_cols = st.columns([10, 1])
                     caption_cols[0].caption(f"**{user}** - {date}")
                     with caption_cols[1]:
                         with st.popover("📋", help="Copy response"):
                             st.code(content, language=None)
-                else:
-                    st.caption(f"**You** - {date}")
-                    if len(files) > 0:
+                    if len(retrieved_files) > 0:
                         st.markdown(
                             generate_badges_html(
-                                ["📎 " + os.path.basename(f) for f in files]
+                                ["🔎 " + os.path.basename(f) for f in retrieved_files],
+                                color="rgb(52, 152, 219)",
+                                bg_color="rgba(52, 152, 219, 0.2)",
+                            ),
+                            unsafe_allow_html=True,
+                        )
+                        spacer(15)
+                else:
+                    st.caption(f"**You** - {date}")
+                    if len(manual_files) > 0:
+                        st.markdown(
+                            generate_badges_html(
+                                ["📎 " + os.path.basename(f) for f in manual_files]
                             ),
                             unsafe_allow_html=True,
                         )
@@ -524,16 +545,19 @@ def chat():
                             ),
                             unsafe_allow_html=True,
                         )
-                    if len(files) > 0 or len(calendars) > 0:
+                    if len(manual_files) > 0 or len(calendars) > 0:
                         spacer(15)
                 st.markdown(content)
 
         chat_run_state = is_chat_running(st.session_state.chat_session)
         if chat_run_state and chat_run_state.get("state") != "not_running":
-            with st.chat_message("assistant"):
-                spinner_text = "Queued..." if chat_run_state.get("state") == "queued" else "Thinking..."
-                with st.spinner(spinner_text, show_time=True):
-                    st.write_stream(stream_thinking(st.session_state.chat_session))
+            render_active_generation(st.session_state.chat_session)
+
+        if st.session_state.get("chat_failed_prompt"):
+            st.warning(f"⚠️ Failed to send: \"{st.session_state.chat_failed_prompt}\"")
+            if st.button("🔁 Retry", key="retry_failed_prompt"):
+                failed_prompt = st.session_state.chat_failed_prompt
+                send_message(failed_prompt)
 
         prompt = st.chat_input(
             "Ask a question.",

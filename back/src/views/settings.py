@@ -51,6 +51,11 @@ default_settings = {
     "telemetry_uuid": "",
     "telemetry_last_sent": "",
     "chat_user_description": "",
+    "chat_max_concurrent_generations": 3,
+    "chat_llm_timeout_seconds": 300,
+    "chat_rag_enabled_default": False,
+    "chat_rag_top_k": 5,
+    "chat_rag_similarity_threshold": 0.4,
     "chat_presets": [
         [
             "📄 Generate Academic Summary",
