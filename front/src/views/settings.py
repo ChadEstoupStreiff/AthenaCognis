@@ -657,6 +657,45 @@ def settings():
                 st.caption(
                     "Note: The user description is used to provide context to the chat model."
                 )
+                st.divider()
+                settings["chat_rag_enabled_default"] = st.toggle(
+                    "Auto-retrieve notes by default (RAG)",
+                    value=settings.get("chat_rag_enabled_default", True),
+                    help="Default state of the 'Auto-retrieve notes' toggle in new chat sessions.",
+                )
+                rag_cols = st.columns(2)
+                with rag_cols[0]:
+                    settings["chat_rag_top_k"] = st.number_input(
+                        "Max auto-retrieved files per message",
+                        min_value=1,
+                        max_value=20,
+                        value=settings.get("chat_rag_top_k", 5),
+                    )
+                with rag_cols[1]:
+                    settings["chat_rag_similarity_threshold"] = st.slider(
+                        "Similarity threshold",
+                        min_value=0.0,
+                        max_value=1.0,
+                        value=float(settings.get("chat_rag_similarity_threshold", 0.4)),
+                        step=0.05,
+                    )
+                st.divider()
+                concurrency_cols = st.columns(2)
+                with concurrency_cols[0]:
+                    settings["chat_max_concurrent_generations"] = st.number_input(
+                        "Max concurrent chat generations",
+                        min_value=1,
+                        max_value=20,
+                        value=settings.get("chat_max_concurrent_generations", 3),
+                        help="How many chat sessions can generate responses at the same time.",
+                    )
+                with concurrency_cols[1]:
+                    settings["chat_llm_timeout_seconds"] = st.number_input(
+                        "Chat request timeout (seconds)",
+                        min_value=10,
+                        max_value=3600,
+                        value=settings.get("chat_llm_timeout_seconds", 300),
+                    )
             with st.expander("Refractor Settings", expanded=True):
                 settings["refractor_type"], settings["refractor_model"] = chose_ai_menu(
                     settings["refractor_type"],

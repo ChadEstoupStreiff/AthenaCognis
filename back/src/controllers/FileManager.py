@@ -4,8 +4,6 @@ import re
 from datetime import datetime
 from typing import List
 
-import numpy as np
-
 from controllers.NoteManager import NoteManager
 from controllers.SummarizeManager import SummarizeManager
 from db import get_db
@@ -313,10 +311,13 @@ class FileManager:
                 if missing:
                     EmbeddingManager.batch_generate(missing)
 
-                for file in non_substring:
-                    vec = EmbeddingManager.get(file)
-                    if vec is not None and float(np.dot(query_vec, vec)) >= similarity_threshold:
-                        yield {"type": "result", "path": file}
+                for file, _score in EmbeddingManager.search(
+                    query_vec,
+                    top_k=len(non_substring),
+                    min_similarity=similarity_threshold,
+                    include_files=non_substring,
+                ):
+                    yield {"type": "result", "path": file}
 
         except Exception as e:
             logging.error(f"Error in stream_search: {str(e)}")

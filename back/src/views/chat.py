@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional
 
 from controllers.ChatManager import ChatManager
 from fastapi import APIRouter
@@ -15,6 +15,11 @@ def list_chat_sessions():
 @router.get("/{session_id}/is_running")
 def is_chat_running(session_id: str):
     return ChatManager.is_running(session_id)
+
+
+@router.post("/{session_id}/cancel")
+def cancel_chat(session_id: str):
+    return ChatManager.cancel(session_id)
 
 
 @router.post("/create")
@@ -45,8 +50,9 @@ def delete_chat_session(session_id: str):
 class ChatMessageRequest(BaseModel):
     user_description: Optional[str] = None
     content: str
-    files: Optional[str] = None
-    calendars: Optional[str] = None
+    files: Optional[List[str]] = None
+    calendars: Optional[List[dict]] = None
+    rag_enabled: bool = True
 
 
 @router.post("/{session_id}/message")
@@ -57,5 +63,9 @@ def add_chat_message(session_id: str, request: ChatMessageRequest):
         else f"""User description: {request.user_description}\n\nMessage: {request.content.strip()}"""
     )
     return ChatManager.add_message(
-        session_id, content, request.files, request.calendars
+        session_id,
+        content,
+        request.files,
+        request.calendars,
+        rag_enabled=request.rag_enabled,
     )
