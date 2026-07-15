@@ -146,7 +146,43 @@ docker compose up -d
 Docker will pull the images from Docker Hub on first run. The frontend will be
 available at `http://localhost:<FRONT_PORT>` (e.g. `http://localhost:8401`).
 
-## 5. (Optional) Pull a local LLM model
+## 5. (Optional) Double-click launcher instead of steps 3 & 4
+
+If you'd rather not hand-write `.env` or type Docker commands, grab the
+launcher script for your OS and drop it in the same folder as
+`docker-compose.yml`:
+
+| File | Platform | Download |
+|------|----------|----------|
+| `start.sh` | Linux | [raw link](https://raw.githubusercontent.com/ChadEstoupStreiff/athenacognis/main/start.sh) |
+| `start.command` | macOS | [raw link](https://raw.githubusercontent.com/ChadEstoupStreiff/athenacognis/main/start.command) |
+| `start.bat` | Windows | [raw link](https://raw.githubusercontent.com/ChadEstoupStreiff/athenacognis/main/start.bat) |
+
+```bash
+# Linux / macOS example
+curl -fsSL -o start.sh https://raw.githubusercontent.com/ChadEstoupStreiff/athenacognis/main/start.sh
+chmod +x start.sh
+```
+
+Double-clicking it will:
+
+1. Check Docker is installed — if not, open the Docker download page for you.
+2. Check for `.env` — if it's missing (skipping steps 3 above), ask a few
+   questions (data folder, ports, database password — press Enter to accept
+   the defaults) and write it for you.
+3. Start the stack detached (`docker compose up -d`).
+4. Wait for it to come up and open `http://localhost:<FRONT_PORT>` in your
+   browser. If it doesn't come up in time, it tells you something's wrong
+   and to check `.env` and the container logs.
+
+Closing the window afterwards does **not** stop the app — see
+[Stopping](#stopping) below.
+
+> **Linux note:** most file managers won't run a `.sh` file on double-click
+> until it's marked executable and "allowed to run as a program" (Properties
+> → Permissions, varies by desktop environment).
+
+## 6. (Optional) Pull a local LLM model
 
 Go to **Settings → LLM Settings → Local Llama**, enter a model name (e.g.
 `llama3.2:8b`) and click **Pull Model**. Browse available models at

@@ -34,6 +34,8 @@
 **AthenaCognis** is a self-hosted, AI-powered document management and knowledge assistant.
 Inspired by tools like *Paperless*, it combines full-text search, multi-provider AI extraction, project and task management, research bibliography tools, and productivity tracking, all in one web application that keeps your data on your own infrastructure.
 
+For quick launch see [the double click launchables section](#-)
+
 ## History
 I'm currently doing a PhD after obtaining a DevOps engineer degree. Before that, I was an AI & DevOps intern at a startup, my managers were genuinely happy with my output, but they often struggled to follow what I was actually working on. The problem wasn't the work itself; it was me. I've never been great at writing reports, summarising progress, or communicating what I've built.
 
@@ -324,6 +326,13 @@ Open `.env` and fill in the values (see [Configuration](#%EF%B8%8F-configuration
 
 The frontend will be available at `http://localhost:<FRONT_PORT>`.
 
+> **Prefer double-clicking?** `start.sh` (Linux), `start.command` (macOS), and
+> `start.bat` (Windows) do the same thing, but also check that Docker is
+> installed and running, ask you for `.env`'s settings interactively on
+> first run if it's missing, and open the app in your browser automatically
+> once it's confirmed running. See
+> [Double-click launchers](#double-click-launchers) below.
+
 ### 4. (Optional) Pull a local LLM model
 
 Go to **Settings → LLM Settings → Local Llama**, enter a model name (e.g. `llama3.2:8b`) and click **Pull Model**. Browse available models at [ollama.com/library](https://ollama.com/library).
@@ -333,6 +342,35 @@ Go to **Settings → LLM Settings → Local Llama**, enter a model name (e.g. `l
 ```bash
 ./down.sh
 ```
+
+### Double-click launchers
+
+For users who don't want to touch a terminal, the repo root also has:
+
+| File | Platform |
+|------|----------|
+| `start.sh` | Linux |
+| `start.command` | macOS |
+| `start.bat` | Windows |
+
+Double-click the one for your OS:
+
+1. If Docker isn't installed, it opens the Docker download page for you.
+2. If `.env` doesn't exist yet, it asks a few questions (project name, data
+   folder, ports, database password — press Enter to accept the defaults
+   shown) and writes `.env` for you.
+3. It starts AthenaCognis detached (`docker compose up -d`).
+4. It waits for the app to respond and opens it in your browser. If it
+   doesn't come up, it tells you something's wrong and to check your `.env`
+   (bad `DATA_PATH`, a port already in use, etc.) and the container logs.
+
+Closing the window afterwards does **not** stop AthenaCognis — it keeps
+running in the background; stop it with `./down.sh` or `docker compose down`.
+
+> **Linux note:** most file managers won't run a `.sh` file on double-click
+> until you mark it executable and allow execution. Right-click `start.sh` →
+> Properties → Permissions → "Allow executing file as program" (varies by
+> desktop environment), or run `chmod +x start.sh` once from a terminal.
 
 ## ⚙️ Configuration
 
