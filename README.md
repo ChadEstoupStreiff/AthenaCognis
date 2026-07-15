@@ -34,7 +34,7 @@
 **AthenaCognis** is a self-hosted, AI-powered document management and knowledge assistant.
 Inspired by tools like *Paperless*, it combines full-text search, multi-provider AI extraction, project and task management, research bibliography tools, and productivity tracking, all in one web application that keeps your data on your own infrastructure.
 
-For quick launch see [the double click launchables section](#-)
+For quick launch see [the double click launchables section](#double-click-launchers)
 
 ## History
 I'm currently doing a PhD after obtaining a DevOps engineer degree. Before that, I was an AI & DevOps intern at a startup, my managers were genuinely happy with my output, but they often struggled to follow what I was actually working on. The problem wasn't the work itself; it was me. I've never been great at writing reports, summarising progress, or communicating what I've built.
