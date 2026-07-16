@@ -1,0 +1,34 @@
+Generate a concise daily work summary as a Markdown file.
+
+Steps:
+
+0. Before scanning, check whether /Users/chad/Nextcloud (or its GodAssistant and Degree/other/resume subfolders) and /Users/chad/dev are accessible from this session. If not, call mcp__cowork__request_cowork_directory to request access to each missing path (e.g. path: "/Users/chad/Nextcloud", path: "/Users/chad/dev"). This surfaces a permission prompt to the user. If the user doesn't grant access (no response, or still inaccessible), proceed with the rest of the steps and fall back as described below — don't block indefinitely waiting on approval.
+
+1. Look in /Users/Users/chad/Nextcloud/GodAssistant/shared for today's activity:
+   - First try an exact subfolder match for today's date, checking these formats: YYYY-MM-DD, MM-DD-YYYY, DD-MM-YYYY, YYYY_MM_DD, and "Month D" / "Month DD" (e.g. "July 15"). Match case-insensitively and allow both `-` and `_` as separators.
+   - If no matching subfolder is found, fall back to scanning the entire GodAssistant tree (recursively) for any files with a modified time (mtime) of today. Treat those as today's activity regardless of which folder they're in.
+   - Read whatever files are found (from either method) and note what was worked on.
+
+2. Recursively scan /Users/chad/dev for git repositories. For each repo, check for commits/changes made today (git log --since=midnight, and git status/diff for uncommitted changes). Note the repo name and a quick summary of what changed. If no change in the git repo, don't say anything about it. If /Users/chad/dev is not accessible from this session, say so explicitly in that section instead of silently omitting it.
+
+3. Write a single Markdown file summarizing today's work (both from GodAssistant and dev repos), combining everything into one quick-to-read resume. Use short bullet points and terse sentences only — no long paragraphs, no fluff, straight to the point. Group by source (e.g. "## GodAssistant" and "## Dev"), and within Dev group by repo name.
+
+4. Save the file to /Users/chad/Nextcloud/Degree/other/resume with filename format YYYY-MM-DD.md (today's date). If that folder is not accessible from this session, save to the temporary output folder instead and clearly note in the chat/notification that it needs to be moved manually or that the folder needs to be connected.
+
+Keep the whole file short — this is meant to be read in under a minute. The ouput should follow this format:
+<Title of the day>
+
+Files:
+
+* <name>: short content description
+* ...
+
+Devs:
+
+* <git>:
+   * <commits>: description of changes
+   * ...
+* ...
+
+Resume:
+<Short description of what has been done in the day>
