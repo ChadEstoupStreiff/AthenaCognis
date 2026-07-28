@@ -1,5 +1,6 @@
 import logging
 import traceback
+from collections import defaultdict
 from datetime import datetime
 from typing import List, Optional
 
@@ -10,6 +11,7 @@ from db import (
     Task,
     TaskCalendar,
     TaskContact,
+    TaskDependency,
     TaskFile,
     TaskProject,
     TaskStateEnum,
@@ -39,7 +41,17 @@ async def list_tasks(
         if state is not None:
             tasks = tasks.filter(Task.state == state)
         tasks = tasks.all()
-        return [task.__dict__ for task in tasks]
+        all_dependencies = db.query(TaskDependency).all()
+        dependencies_by_task = defaultdict(list)
+        for dependency in all_dependencies:
+            dependencies_by_task[dependency.task_id].append(
+                dependency.depends_on_task_id
+            )
+        results = []
+        for task in tasks:
+            task.__dict__["dependencies"] = dependencies_by_task.get(task.id, [])
+            results.append(task.__dict__)
+        return results
     except Exception as e:
         logging.error(f"Error retrieving tasks: {str(e)}")
         logging.error(traceback.format_exc())
@@ -56,6 +68,7 @@ class TaskCreateRequest(BaseModel):
     files: Optional[List[str]] = None
     calendars: Optional[List[str]] = None
     contacts: Optional[List[str]] = None
+    dependencies: Optional[List[str]] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     priority: Optional[float] = 0.0
@@ -87,6 +100,8 @@ async def create_task(task: TaskCreateRequest):
             db.add(TaskCalendar(task_id=task_db.id, calendar_id=calendar))
         for contact in task.contacts or []:
             db.add(TaskContact(task_id=task_db.id, contact_id=contact))
+        for depends_on in task.dependencies or []:
+            db.add(TaskDependency(task_id=task_db.id, depends_on_task_id=depends_on))
         db.commit()
         db.refresh(task_db)
         return task_db.__dict__
@@ -111,12 +126,16 @@ async def get_task(task_id: str):
         files = db.query(TaskFile).filter(TaskFile.task_id == task_id).all()
         calendars = db.query(TaskCalendar).filter(TaskCalendar.task_id == task_id).all()
         contacts = db.query(TaskContact).filter(TaskContact.task_id == task_id).all()
+        dependencies = (
+            db.query(TaskDependency).filter(TaskDependency.task_id == task_id).all()
+        )
         if task:
             task.__dict__["projects"] = [p.project_name for p in projects]
             task.__dict__["tags"] = [t.tag for t in tags]
             task.__dict__["files"] = [f.file for f in files]
             task.__dict__["calendars"] = [c.calendar_id for c in calendars]
             task.__dict__["contacts"] = [c.contact_id for c in contacts]
+            task.__dict__["dependencies"] = [d.depends_on_task_id for d in dependencies]
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
         return task.__dict__
@@ -156,6 +175,15 @@ async def delete_task(task_id: str):
             db.query(TaskContact).filter(TaskContact.task_id == task_id).all()
         ):
             db.delete(contact)
+        for dependency in (
+            db.query(TaskDependency)
+            .filter(
+                (TaskDependency.task_id == task_id)
+                | (TaskDependency.depends_on_task_id == task_id)
+            )
+            .all()
+        ):
+            db.delete(dependency)
         db.delete(task)
         db.commit()
         return {"detail": "Task deleted"}
@@ -200,6 +228,10 @@ async def update_task(task_id: str, task: TaskCreateRequest):
             db.query(TaskContact).filter(TaskContact.task_id == task_id).all()
         ):
             db.delete(contact)
+        for dependency in (
+            db.query(TaskDependency).filter(TaskDependency.task_id == task_id).all()
+        ):
+            db.delete(dependency)
         for project in task.projects or []:
             db.add(TaskProject(task_id=task_id, project_name=project))
         for tag in task.tags or []:
@@ -210,6 +242,12 @@ async def update_task(task_id: str, task: TaskCreateRequest):
             db.add(TaskCalendar(task_id=task_id, calendar_id=calendar))
         for contact in task.contacts or []:
             db.add(TaskContact(task_id=task_id, contact_id=contact))
+        for depends_on in task.dependencies or []:
+            if depends_on == task_id:
+                raise HTTPException(
+                    status_code=400, detail="A task cannot depend on itself"
+                )
+            db.add(TaskDependency(task_id=task_id, depends_on_task_id=depends_on))
         db.commit()
         db.refresh(existing_task)
         return existing_task.__dict__
@@ -236,6 +274,26 @@ async def complete_task(task_id: str):
         if task.completed is not None:
             task.completed = None
         else:
+            dependencies = (
+                db.query(TaskDependency)
+                .filter(TaskDependency.task_id == task_id)
+                .all()
+            )
+            unmet = []
+            for dependency in dependencies:
+                depends_on_task = (
+                    db.query(Task)
+                    .filter(Task.id == dependency.depends_on_task_id)
+                    .first()
+                )
+                if depends_on_task and depends_on_task.completed is None:
+                    unmet.append(depends_on_task.title)
+            if unmet:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot validate task: the following dependencies are not validated yet: "
+                    + ", ".join(unmet),
+                )
             task.completed = datetime.utcnow()
         db.commit()
         db.refresh(task)
@@ -342,11 +400,17 @@ async def get_kanban_board(board_id: str):
                         .filter(TaskContact.task_id == task["id"])
                         .all()
                     )
+                    dependencies = (
+                        db.query(TaskDependency)
+                        .filter(TaskDependency.task_id == task["id"])
+                        .all()
+                    )
                     task["projects"] = [p.project_name for p in projects]
                     task["tags"] = [t.tag for t in tags]
                     task["files"] = [f.file for f in files]
                     task["calendars"] = [c.calendar_id for c in calendars]
                     task["contacts"] = [c.contact_id for c in contacts]
+                    task["dependencies"] = [d.depends_on_task_id for d in dependencies]
         if not board:
             raise HTTPException(status_code=404, detail="Kanban board not found")
         return board.__dict__

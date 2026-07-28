@@ -267,6 +267,21 @@ class TaskCalendar(Base):
     )
 
 
+class TaskDependency(Base):
+    __tablename__ = "TaskDependency"
+
+    task_id = mapped_column(
+        ForeignKey("Task.id", ondelete="CASCADE", onupdate="CASCADE"),
+        primary_key=True,
+        index=True,
+    )
+    depends_on_task_id = mapped_column(
+        ForeignKey("Task.id", ondelete="CASCADE", onupdate="CASCADE"),
+        primary_key=True,
+        index=True,
+    )
+
+
 class KanbanBoard(Base):
     __tablename__ = "KanbanBoard"
 

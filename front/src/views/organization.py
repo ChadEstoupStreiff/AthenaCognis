@@ -147,6 +147,15 @@ def create_task(column, default_project: List[str] = []):
     )
     new_contact_ids = [c["id"] for c in new_contacts]
 
+    all_tasks = requests.get("http://back:80/tasks").json()
+    new_dependencies_tasks = st.multiselect(
+        "Depends on",
+        options=all_tasks,
+        format_func=lambda t: ("✅ " if t["completed"] else "⬜ ") + t["title"],
+        help="This task can only be validated once all the tasks it depends on are validated.",
+    )
+    new_dependency_ids = [t["id"] for t in new_dependencies_tasks]
+
     if st.button("Add Task", use_container_width=True, type="primary"):
         if not task_title:
             st.error("Task title cannot be empty.")
@@ -162,6 +171,7 @@ def create_task(column, default_project: List[str] = []):
                 "files": [],
                 "calendars": [],
                 "contacts": new_contact_ids,
+                "dependencies": new_dependency_ids,
                 "start_date": start_date.strftime("%Y-%m-%dT%H:%M:%S")
                 if start_date
                 else None,
@@ -309,6 +319,22 @@ def edit_task(task):
     )
     new_contact_ids = [c["id"] for c in new_contacts]
 
+    all_tasks = requests.get("http://back:80/tasks").json()
+    dependency_options = [
+        t
+        for t in all_tasks
+        if t["id"] != task["id"] and task["id"] not in (t.get("dependencies") or [])
+    ]
+    current_dependency_ids = task.get("dependencies", []) or []
+    new_dependencies_tasks = st.multiselect(
+        "Depends on",
+        options=dependency_options,
+        default=[t for t in dependency_options if t["id"] in current_dependency_ids],
+        format_func=lambda t: ("✅ " if t["completed"] else "⬜ ") + t["title"],
+        help="This task can only be validated once all the tasks it depends on are validated.",
+    )
+    new_dependency_ids = [t["id"] for t in new_dependencies_tasks]
+
     if st.button("Save changes", use_container_width=True, type="primary"):
         if not new_title:
             st.error("Task title cannot be empty.")
@@ -324,6 +350,7 @@ def edit_task(task):
                 "files": task["files"],
                 "calendars": task["calendars"],
                 "contacts": new_contact_ids,
+                "dependencies": new_dependency_ids,
                 "start_date": new_start_date.strftime("%Y-%m-%dT%H:%M:%S")
                 if new_start_date
                 else None,
@@ -347,6 +374,29 @@ def edit_task(task):
 
 def _get_priority(task):
     return next((p for p in PRIORITY_OPTIONS if p["value"] == task["priority"]), None)
+
+
+def _get_blocking_dependencies(task, tasks_by_id):
+    return [
+        tasks_by_id[dep_id]["title"]
+        for dep_id in task.get("dependencies") or []
+        if dep_id in tasks_by_id and not tasks_by_id[dep_id]["completed"]
+    ]
+
+
+def _render_task_dependencies(task, tasks_by_id):
+    dep_ids = task.get("dependencies") or []
+    if not dep_ids:
+        return
+    lines = []
+    for dep_id in dep_ids:
+        dep_task = tasks_by_id.get(dep_id)
+        if not dep_task:
+            continue
+        check = "✅" if dep_task["completed"] else "🔒"
+        lines.append(f"{check} {dep_task['title']}")
+    if lines:
+        st.markdown("🔗 Depends on: " + ", ".join(lines))
 
 
 DESCRIPTION_PREVIEW_LENGTH = 200
@@ -477,7 +527,7 @@ def _view_calendar(board_info, projects, tags, selected_projects, selected_tags,
                                 st.markdown(f"{emoji}{task['title']}")
 
 
-def _render_timeline_group(due_date, tasks, projects, tags, contacts_by_id, show_edit_tasks, today):
+def _render_timeline_group(due_date, tasks, projects, tags, contacts_by_id, tasks_by_id, show_edit_tasks, today):
     days_diff = (due_date - today).days
     if days_diff < 0:
         n = -days_diff
@@ -511,10 +561,13 @@ def _render_timeline_group(due_date, tasks, projects, tags, contacts_by_id, show
                         use_container_width=True,
                     ):
                         edit_task(task)
+                blocking = [] if task["completed"] else _get_blocking_dependencies(task, tasks_by_id)
                 if st.button(
                     "❌" if task["completed"] else "✅",
                     key=f"tl_complete_{task['id']}",
                     use_container_width=True,
+                    disabled=bool(blocking),
+                    help=("Blocked by: " + ", ".join(blocking)) if blocking else None,
                 ):
                     response = requests.put(
                         "http://back:80/tasks/{}/complete".format(task["id"])
@@ -534,6 +587,8 @@ def _render_timeline_group(due_date, tasks, projects, tags, contacts_by_id, show
             if task["start_date"]:
                 start = datetime.datetime.strptime(task["start_date"], "%Y-%m-%dT%H:%M:%S")
                 st.markdown(f"🗓️ Start: {start.strftime('%d-%m-%Y')}")
+
+            _render_task_dependencies(task, tasks_by_id)
 
             if task["projects"]:
                 task_projects = [p for p in projects if p["name"] in task["projects"]]
@@ -558,7 +613,7 @@ def _render_timeline_group(due_date, tasks, projects, tags, contacts_by_id, show
                 render_contact_pills(task_contacts)
 
 
-def _view_timeline(board_info, projects, tags, contacts_by_id, selected_projects, selected_tags, selected_priorities, show_edit_tasks):
+def _view_timeline(board_info, projects, tags, contacts_by_id, tasks_by_id, selected_projects, selected_tags, selected_priorities, show_edit_tasks):
     all_tasks = _collect_filtered_tasks(board_info, selected_projects, selected_tags, selected_priorities, True)
     tasks_with_due = [t for t in all_tasks if t["end_date"]]
 
@@ -583,7 +638,7 @@ def _view_timeline(board_info, projects, tags, contacts_by_id, selected_projects
             if not incoming_dates:
                 st.info("No upcoming tasks.")
             for due_date in incoming_dates:
-                _render_timeline_group(due_date, grouped[due_date], projects, tags, contacts_by_id, show_edit_tasks, today)
+                _render_timeline_group(due_date, grouped[due_date], projects, tags, contacts_by_id, tasks_by_id, show_edit_tasks, today)
 
     with col_over:
         st.markdown("### 🔴 Overdue")
@@ -591,7 +646,7 @@ def _view_timeline(board_info, projects, tags, contacts_by_id, selected_projects
             if not overdue_dates:
                 st.info("No overdue tasks.")
             for due_date in overdue_dates:
-                _render_timeline_group(due_date, grouped[due_date], projects, tags, contacts_by_id, show_edit_tasks, today)
+                _render_timeline_group(due_date, grouped[due_date], projects, tags, contacts_by_id, tasks_by_id, show_edit_tasks, today)
 
 
 def organization():
@@ -620,6 +675,9 @@ def organization():
 
     all_contacts = requests.get("http://back:80/contacts").json()
     contacts_by_id = {c["id"]: c for c in all_contacts}
+
+    all_tasks_list = requests.get("http://back:80/tasks").json()
+    tasks_by_id = {t["id"]: t for t in all_tasks_list}
 
     with cols[1]:
         projects = requests.get("http://back:80/projects").json()
@@ -696,7 +754,7 @@ def organization():
             )
         elif view_mode == "Timeline":
             _view_timeline(
-                board_info, projects, tags, contacts_by_id,
+                board_info, projects, tags, contacts_by_id, tasks_by_id,
                 selected_projects, selected_tags, selected_priorities,
                 show_edit_tasks,
             )
@@ -832,24 +890,28 @@ def organization():
                                     ):
                                         edit_task(task)
                                 with cols[2]:
+                                    blocking = [] if task["completed"] else _get_blocking_dependencies(task, tasks_by_id)
                                     if st.button(
                                         "❌" if task["completed"] else "✅",
                                         use_container_width=True,
                                         key=f"toggle_completed_{task['id']}",
+                                        disabled=bool(blocking),
+                                        help=("Blocked by: " + ", ".join(blocking)) if blocking else None,
                                     ):
-                                        if not task["completed"]:
-                                            response = requests.put(
-                                                "http://back:80/kanban/columns/{column_id}/tasks/{task_id}/move".format(
-                                                    column_id=board_info["columns"][-1]["id"],
-                                                    task_id=task["id"],
-                                                )
-                                            )
+                                        was_completing = not task["completed"]
                                         response = requests.put(
                                             "http://back:80/tasks/{}/complete".format(
                                                 task["id"]
                                             )
                                         )
                                         if response.status_code == 200:
+                                            if was_completing:
+                                                requests.put(
+                                                    "http://back:80/kanban/columns/{column_id}/tasks/{task_id}/move".format(
+                                                        column_id=board_info["columns"][-1]["id"],
+                                                        task_id=task["id"],
+                                                    )
+                                                )
                                             toast_for_rerun(
                                                 "Task status updated successfully!",
                                                 icon="✅",
@@ -905,6 +967,8 @@ def organization():
                             )
                             if task["description"]:
                                 _render_task_description(task["description"])
+
+                            _render_task_dependencies(task, tasks_by_id)
 
                             if task["start_date"]:
                                 start_date = datetime.datetime.strptime(

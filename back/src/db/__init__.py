@@ -24,6 +24,7 @@ from db.models import (
     TaskProject,
     TaskFile,
     TaskCalendar,
+    TaskDependency,
     KanbanBoard,
     KanbanColumn,
     KanbanColumnTask,

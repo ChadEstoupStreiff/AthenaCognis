@@ -137,19 +137,26 @@ async def upload_files(
             db = get_db()
             try:
                 # Add to ProjectFile
-                for project in projects + file_edit_info.get(file.filename, {}).get(
-                    "projects", []
-                ):
+                file_projects = set(projects) | set(
+                    file_edit_info.get(file.filename, {}).get("projects", [])
+                )
+                for project in file_projects:
                     project_file = ProjectFile(file=file_path, project=project)
                     db.add(project_file)
 
                 # Add to TagFile
-                for tag in tags + file_edit_info.get(file.filename, {}).get("tags", []):
+                file_tags = set(tags) | set(
+                    file_edit_info.get(file.filename, {}).get("tags", [])
+                )
+                for tag in file_tags:
                     tag_file = TagFile(file=file_path, tag=tag)
                     db.add(tag_file)
 
                 # Add to ContactFile
-                for contact_id in contacts + file_edit_info.get(file.filename, {}).get("contacts", []):
+                file_contacts = set(contacts) | set(
+                    file_edit_info.get(file.filename, {}).get("contacts", [])
+                )
+                for contact_id in file_contacts:
                     contact_obj = db.query(Contact).filter(Contact.id == contact_id).first()
                     if contact_obj:
                         db.add(ContactFile(contact_id=contact_id, file=file_path))
