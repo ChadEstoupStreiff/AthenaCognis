@@ -412,6 +412,54 @@ def _render_task_description(description):
         st.markdown(description)
 
 
+@st.dialog("📄 Task Details", width="large")
+def view_task_details(task, projects, tags, contacts_by_id, tasks_by_id):
+    priority = _get_priority(task)
+    st.markdown(
+        f"## {priority['emoji']} {task['title']}" if priority else f"## {task['title']}"
+    )
+    if task["completed"]:
+        st.success("✅ Completed")
+
+    if task["description"]:
+        st.markdown(task["description"])
+
+    if task["start_date"]:
+        start_date = datetime.datetime.strptime(task["start_date"], "%Y-%m-%dT%H:%M:%S")
+        st.markdown(f"🗓️ Start: {start_date.strftime('%d-%m-%Y')}")
+    if task["end_date"]:
+        due_date = datetime.datetime.strptime(task["end_date"], "%Y-%m-%dT%H:%M:%S")
+        st.markdown(f"🗓️ Due: {due_date.strftime('%d-%m-%Y')}")
+
+    _render_task_dependencies(task, tasks_by_id)
+
+    if task["projects"]:
+        task_projects = [p for p in projects if p["name"] in task["projects"]]
+        st.markdown(
+            generate_aside_project_markdown(
+                [p["name"] for p in task_projects],
+                [p["color"] for p in task_projects],
+            ),
+            unsafe_allow_html=True,
+        )
+    if task["tags"]:
+        task_tags = [t for t in tags if t["name"] in task["tags"]]
+        st.markdown(
+            generate_aside_tag_markdown(
+                [t["name"] for t in task_tags],
+                [t["color"] for t in task_tags],
+            ),
+            unsafe_allow_html=True,
+        )
+    if task["files"]:
+        st.markdown("📎 Attached files: {}".format(", ".join(task["files"])))
+    if task["calendars"]:
+        st.markdown("📅 Linked calendars: {}".format(", ".join(task["calendars"])))
+    if task.get("contacts"):
+        task_contacts = [contacts_by_id[cid] for cid in task["contacts"] if cid in contacts_by_id]
+        render_contact_pills(task_contacts)
+
+
 def _collect_filtered_tasks(board_info, selected_projects, selected_tags, selected_priorities, show_validated_tasks):
     tasks = []
     seen_ids = set()
@@ -551,9 +599,17 @@ def _render_timeline_group(due_date, tasks, projects, tags, contacts_by_id, task
         else:
             title_text = f"{priority['emoji']} **{task['title']}**" if priority else f"**{task['title']}**"
         with st.container(border=True):
-            title_cols = st.columns([9, 1])
+            title_cols = st.columns([8, 1, 1])
             title_cols[0].markdown(f"#### {title_text}")
-            with title_cols[1]:
+            with title_cols[2]:
+                if st.button(
+                    "🔍",
+                    key=f"tl_details_{task['id']}",
+                    use_container_width=True,
+                    help="View task details",
+                ):
+                    view_task_details(task, projects, tags, contacts_by_id, tasks_by_id)
+            with title_cols[2]:
                 if show_edit_tasks:
                     if st.button(
                         "✏️",
@@ -952,6 +1008,14 @@ def organization():
                                                 icon="❌",
                                             )
 
+                            if st.button(
+                                "🔍 Details",
+                                use_container_width=True,
+                                key=f"details_{task['id']}",
+                            ):
+                                view_task_details(
+                                    task, projects, tags, contacts_by_id, tasks_by_id
+                                )
                             priority = next(
                                 (
                                     p
