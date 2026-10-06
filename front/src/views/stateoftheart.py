@@ -1,508 +1,579 @@
-import json
-from typing import Any, Dict
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
-import pandas
 import requests
 import streamlit as st
-from core.explorer import generate_query_description, run_streaming_search, search_engine
-from core.stateoftheart import (
-    format_APA,
-    format_BibTeX,
-    format_Vancouver,
-    get_reference_from_title,
-)
 from stqdm import stqdm
+
+from core.bibliography import bibtex_citations
+from core.explorer import (
+    generate_query_description,
+    run_streaming_search,
+    search_engine,
+)
+from core.library_transfer import render_transfer_buttons
+from core.reference_lookup import fetch_online_info
+from core.stateoftheart import (
+    BACK_URL,
+    REQUEST_TIMEOUT_SECONDS,
+    SORT_OPTIONS,
+    STATUS_ALL,
+    STATUS_FILTERS,
+    STATUS_MISSING,
+    STATUS_TO_REVIEW,
+    STATUS_VALIDATED,
+    Paper,
+    PaperInfo,
+    filter_papers,
+    format_APA,
+    format_Vancouver,
+    load_paper_info,
+    save_paper_info,
+    short_authors,
+)
+from pages import PAGE_VIEWER
 from utils import toast_for_rerun
 
+SELECTION_PREFIX = "sota_sel::"
+TAB_LABELS = [":material/library_books: Library", ":material/hub: Citation Map", ":material/radar: Literature Watch"]
+MARKDOWN_SPECIAL_CHARS = "\\`*_[]$~<>#|"
+STATUS_BADGES: Dict[str, str] = {
+    STATUS_VALIDATED: ":green-badge[:material/verified: Validated]",
+    STATUS_TO_REVIEW: ":orange-badge[:material/rate_review: To review]",
+    STATUS_MISSING: ":red-badge[:material/error: Missing info]",
+}
 
-def create_table_line(
-    file: str, select_default_value: bool, display_projects: bool, display_tags: bool
-) -> Dict[str, Any]:
-    file_name = file.split("/")[-1]
-    file_date = file.split("/")[2]
-    stockpile_info = requests.get(
-        f"http://back:80/stockpile/get/sota_info_{file_date}_{file_name}"
+
+@dataclass(frozen=True)
+class CitationStyle:
+    """Citation export format."""
+
+    formatter: Callable[[List[Dict[str, Any]]], str]
+    language: Optional[str]
+    file_name: str
+
+
+CITATION_STYLES: Dict[str, CitationStyle] = {
+    "APA": CitationStyle(format_APA, None, "references_apa.txt"),
+    "Vancouver": CitationStyle(format_Vancouver, None, "references_vancouver.txt"),
+    "BibTeX": CitationStyle(bibtex_citations, "latex", "references.bib"),
+}
+
+
+def escape_markdown(text: str) -> str:
+    """
+    Escape characters Streamlit markdown would interpret
+
+    Args:
+        text (str): raw text
+    Returns:
+        str: escaped text
+    """
+    return "".join(f"\\{c}" if c in MARKDOWN_SPECIAL_CHARS else c for c in text)
+
+
+def selection_key(paper: Paper) -> str:
+    """
+    Return session-state key of paper selection checkbox
+
+    Args:
+        paper (Paper): paper
+    Returns:
+        str: widget key
+    """
+    return f"{SELECTION_PREFIX}{paper.path}"
+
+
+def ensure_papers_loaded(files: List[str]) -> List[Paper]:
+    """
+    Load metadata of found files once per search result
+
+    Args:
+        files (List[str]): file paths of search result
+    Returns:
+        List[Paper]: papers with metadata
+    """
+    if st.session_state.get("sota_loaded_for") != files:
+        st.session_state.sota_papers = {
+            path: Paper(path=path, info=load_paper_info(path))
+            for path in stqdm(files, desc="Loading references")
+        }
+        st.session_state.sota_loaded_for = list(files)
+    papers: Dict[str, Paper] = st.session_state.sota_papers
+    return list(papers.values())
+
+
+def selected_papers(papers: List[Paper]) -> List[Paper]:
+    """
+    Return papers whose checkbox is ticked
+
+    Args:
+        papers (List[Paper]): candidate papers
+    Returns:
+        List[Paper]: selected papers
+    """
+    return [p for p in papers if st.session_state.get(selection_key(p), False)]
+
+
+def set_selection(papers: List[Paper], is_selected: bool) -> None:
+    """
+    Tick or untick selection checkbox of papers
+
+    Args:
+        papers (List[Paper]): papers to update
+        is_selected (bool): new checkbox value
+    Returns:
+        None
+    """
+    for paper in papers:
+        st.session_state[selection_key(paper)] = is_selected
+
+
+def persist_papers(papers: List[Paper], success_message: str) -> None:
+    """
+    Save papers metadata and queue result toast
+
+    Args:
+        papers (List[Paper]): papers to save
+        success_message (str): toast shown when all saves succeed
+    Returns:
+        None
+    """
+    failed = [p.file_name for p in papers if not save_paper_info(p)]
+    if failed:
+        toast_for_rerun(f"Could not save: {', '.join(failed)}", "⚠️")
+        return
+    toast_for_rerun(success_message, "✅")
+
+
+def set_validated(papers: List[Paper], is_validated: bool) -> None:
+    """
+    Mark papers as validated or not and save them
+
+    Args:
+        papers (List[Paper]): papers to update
+        is_validated (bool): new validation flag
+    Returns:
+        None
+    """
+    for paper in papers:
+        paper.info.validated = is_validated
+    label = "validated" if is_validated else "marked to review"
+    persist_papers(papers, f"{len(papers)} paper(s) {label}.")
+
+
+def find_online_info(papers: List[Paper]) -> None:
+    """
+    Fill papers metadata from arXiv / PubMed / CrossRef and save them
+
+    Args:
+        papers (List[Paper]): papers to look up
+    Returns:
+        None
+    """
+    found: List[Paper] = []
+    missing: List[str] = []
+    for paper in stqdm(papers, desc="Searching references online"):
+        info = fetch_online_info(paper)
+        if info is None:
+            missing.append(paper.file_name)
+            continue
+        paper.info = info
+        found.append(paper)
+    if found:
+        persist_papers(found, f"Metadata found for {len(found)} paper(s).")
+    if missing:
+        toast_for_rerun(f"Nothing found for: {', '.join(missing)}", "🔍")
+
+
+def open_paper(paper: Paper) -> None:
+    """
+    Open paper file in document viewer
+
+    Args:
+        paper (Paper): paper to open
+    Returns:
+        None
+    """
+    st.session_state.file_to_see = paper.path
+    st.switch_page(PAGE_VIEWER)
+
+
+@st.dialog("✏️ Edit reference", width="large")
+def edit_paper_dialog(paper: Paper) -> None:
+    """
+    Show form editing metadata of one paper
+
+    Args:
+        paper (Paper): paper to edit
+    Returns:
+        None
+    """
+    info = paper.info
+    st.caption(f"📄 {paper.file_name} · added {paper.upload_date}")
+    with st.form(f"sota_edit_{paper.path}", border=False):
+        title = st.text_input("Title", value=info.title)
+        authors = st.text_input(
+            "Authors", value=info.authors, help="Separate authors with `|`, e.g. `Doe, John | Smith, Ann`"
+        )
+        year_col, journal_col = st.columns([1, 3])
+        year = year_col.text_input("Year", value=info.year)
+        journal = journal_col.text_input("Journal", value=info.journal)
+        volume_col, issue_col, pages_col = st.columns(3)
+        volume = volume_col.text_input("Volume", value=info.volume)
+        issue = issue_col.text_input("Issue", value=info.issue)
+        pages = pages_col.text_input("Pages", value=info.pages)
+        doi_col, url_col = st.columns(2)
+        doi = doi_col.text_input("DOI", value=info.doi)
+        url = url_col.text_input("URL", value=info.url)
+        save_col, validate_col = st.columns(2)
+        is_saved = save_col.form_submit_button("Save", icon=":material/save:", use_container_width=True)
+        is_validated = validate_col.form_submit_button(
+            "Save & validate", icon=":material/verified:", type="primary", use_container_width=True
+        )
+    if not (is_saved or is_validated):
+        return
+    paper.info = PaperInfo(
+        title=title, authors=authors, year=year, journal=journal, url=url, doi=doi,
+        volume=volume, issue=issue, pages=pages, source=info.source,
+        validated=is_validated or info.validated,
     )
-    if stockpile_info.status_code == 200:
-        try:
-            info = json.loads(stockpile_info.json())
-        except Exception:
-            info = {}
+    persist_papers([paper], "Reference saved.")
+    st.rerun()
+
+
+@st.dialog("📚 Export citations", width="large")
+def citation_dialog(papers: List[Paper]) -> None:
+    """
+    Show papers formatted in every citation style
+
+    Args:
+        papers (List[Paper]): papers to cite
+    Returns:
+        None
+    """
+    st.caption(f"{len(papers)} reference(s)")
+    references = [p.info.to_dict() for p in papers]
+    for tab, (style_name, style) in zip(st.tabs(list(CITATION_STYLES)), CITATION_STYLES.items()):
+        with tab:
+            text = style.formatter(references)
+            st.code(text, language=style.language, wrap_lines=True)
+            st.download_button(
+                f"Download {style_name}",
+                data=text,
+                file_name=style.file_name,
+                icon=":material/download:",
+                use_container_width=True,
+                key=f"sota_download_{style_name}",
+            )
+
+
+def on_sota_tag_change() -> None:
+    """
+    Save chosen SOTA tag and drop previous search result
+
+    Args:
+        None
+    Returns:
+        None
+    """
+    selected_tag = st.session_state.sota_tag_selection
+    if selected_tag is None:
+        requests.delete(f"{BACK_URL}/stockpile/delete/sota_tag", timeout=REQUEST_TIMEOUT_SECONDS)
     else:
-        info = {}
-
-    # Ensure 'validated' is present, defaulting to False
-    if "validated" not in info:
-        info["validated"] = False
-
-    return {
-        "select": select_default_value,
-        "validated": info.get("validated", False),
-        "Filename": file.split("/")[-1],
-        "Upload Date": file.split("/")[2],
-        **(
-            {
-                "Projects": [
-                    p["name"]
-                    for p in requests.get(f"http://back:80/projects_of/{file}").json()
-                ]
-            }
-            if display_projects
-            else {}
-        ),
-        **(
-            {
-                "Tags": [
-                    t["name"]
-                    for t in requests.get(f"http://back:80/tags_of/{file}").json()
-                ]
-            }
-            if display_tags
-            else {}
-        ),
-        **{k: v for k, v in info.items() if k != "validated"},
-    }
+        requests.post(
+            f"{BACK_URL}/stockpile/set/sota_tag",
+            params={"value": selected_tag},
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
+    st.session_state.pop("sota_files", None)
+    toast_for_rerun("SOTA tag updated.", "✅")
 
 
-@st.dialog("📈 State-of-the-art Management", width="large")
-def edit_stateoftheart_dialog():
-    def update_sota_info():
-        # Keys that are NOT SOTA info but are metadata needed for the API call or display
-        METADATA_KEYS = [
-            "select",
-            "Filename",
-            "Upload Date",
-            "Projects",
-            "Tags",
-        ]
+def render_sota_tag_selector() -> Optional[str]:
+    """
+    Render sidebar SOTA tag selector
 
-        for i, file_data in enumerate(st.session_state.sota_selected_files_copy):
-            # Ensure Filename and Upload Date are present before proceeding
-            if "Filename" not in file_data or "Upload Date" not in file_data:
-                st.toast(
-                    f"Missing metadata for file at index {i}.",
-                    icon="⚠️",
-                )
-                return
-
-            file_name = file_data["Filename"]
-            file_date = file_data["Upload Date"]
-            file_key = f"{file_date}_{file_name}"
-
-            # Filter file_data to only include SOTA info fields for saving
-            sota_info_to_save = {
-                k: v for k, v in file_data.items() if k not in METADATA_KEYS
-            }
-
-            # --- START OF FIX ---
-            # Explicitly cast the 'validated' field (which might be numpy.bool_)
-            # to a standard Python bool, which is JSON serializable.
-            if "validated" in sota_info_to_save:
-                sota_info_to_save["validated"] = bool(sota_info_to_save["validated"])
-            # --- END OF FIX ---
-
-            result = requests.post(
-                # Use the filtered dictionary for saving
-                f"http://back:80/stockpile/set/sota_info_{file_key}?value={json.dumps(sota_info_to_save)}",
-            )
-            if result.status_code != 200:
-                st.toast(
-                    f"Error while saving SOTA info for file {file_name}.",
-                    icon="⚠️",
-                )
-                return  # Stop on first error
-        del st.session_state.sota_selected_files_copy
-        toast_for_rerun("SOTA info updated.", "✅")
-        st.rerun()
-
-    if "sota_selected_files_copy" not in st.session_state:
-        st.session_state.sota_selected_files_copy = st.session_state.sota_selected_files
-    if st.button("Save Changes", use_container_width=True, key="top_save_button", type="primary"):
-        update_sota_info()
-    for i, file_data in enumerate(st.session_state.sota_selected_files_copy):
-        with st.expander(f"Edit File {i + 1}: {file_data['Filename']}", expanded=True):
-            file_data["title"] = st.text_input(
-                "Title",
-                value=file_data.get("title", ""),
-                key=f"title_{i}",
-            )
-            file_data["authors"] = st.text_input(
-                "Authors",
-                value=file_data.get("authors", ""),
-                key=f"authors_{i}",
-            )
-            cols = st.columns(2)
-            with cols[0]:
-                # Note: `st.number_input` returns float by default, but you are saving it as part of a JSON string.
-                # It is likely better to save it as an int, but the existing code uses `step=1.`.
-                file_data["year"] = st.text_input(
-                    "Year",
-                    # Ensure the default value is present or correctly cast
-                    value=file_data.get("year", "2023"),
-                    key=f"year_{i}",
-                )
-            with cols[1]:
-                file_data["source"] = st.text_input(
-                    "Source",
-                    value=file_data.get("source", ""),
-                    key=f"source_{i}",
-                )
-            cols = st.columns(2)
-            with cols[0]:
-                file_data["url"] = st.text_input(
-                    "URL",
-                    value=file_data.get("url", ""),
-                    key=f"url_{i}",
-                )
-            with cols[1]:
-                file_data["doi"] = st.text_input(
-                    "DOI",
-                    value=file_data.get("doi", ""),
-                    key=f"doi_{i}",
-                )
-            cols = st.columns(3)
-            with cols[0]:
-                file_data["volume"] = st.text_input(
-                    "Volume",
-                    value=file_data.get("volume", ""),
-                    key=f"volume_{i}",
-                )
-            with cols[1]:
-                file_data["issue"] = st.text_input(
-                    "Issue",
-                    value=file_data.get("issue", ""),
-                    key=f"issue_{i}",
-                )
-            with cols[2]:
-                file_data["pages"] = st.text_input(
-                    "Pages",
-                    value=file_data.get("pages", ""),
-                    key=f"pages_{i}",
-                )
-    if st.button("Save Changes", use_container_width=True, key="bottom_save_button", type="primary"):
-        update_sota_info()
-
-
-def stateoftheart():
-    tags = requests.get("http://back:80/tags").json()
-    tags_name = [x["name"] for x in tags]
-    sota_tag = requests.get("http://back:80/stockpile/get/sota_tag")
-
-    if sota_tag.status_code != 200:
-        sota_tag = None
-    else:
-        sota_tag = sota_tag.json()
-
-    def update_sota_tag():
-        selected_tag = st.session_state.sota_tag_selection
-        if selected_tag is not None:
-            requests.post(
-                f"http://back:80/stockpile/set/sota_tag?value={selected_tag}",
-            )
-        else:
-            requests.delete("http://back:80/stockpile/delete/sota_tag")
-        toast_for_rerun("SOTA tag updated.", "✅")
-
-    # --- Helper function for bulk validation update ---
-    def update_validation_status(set_validated: bool):
-        selected = (
-            st.session_state.sota_selected_files
-        )  # Use the previously calculated selection list
-
-        if not selected:
-            st.toast("No files selected to update.", icon="⚠️")
-            return
-
-        for file_data in stqdm(selected, desc=f"Setting validated to {set_validated}"):
-            file_name = file_data["Filename"]
-            file_date = file_data["Upload Date"]
-            file_key = f"{file_date}_{file_name}"
-
-            # Fetch existing info
-            stockpile_info_req = requests.get(
-                f"http://back:80/stockpile/get/sota_info_{file_date}_{file_name}"
-            )
-            existing_info = {}
-            if stockpile_info_req.status_code == 200:
-                try:
-                    existing_info = json.loads(stockpile_info_req.json())
-                except Exception:
-                    pass
-
-            # Update the validated status
-            updated_info = {**existing_info, "validated": set_validated}
-
-            result = requests.post(
-                f"http://back:80/stockpile/set/sota_info_{file_key}?value={json.dumps(updated_info)}",
-            )
-            if result.status_code != 200:
-                st.toast(
-                    f"Error while saving SOTA info for file {file_name}.",
-                    icon="⚠️",
-                )
-                return  # Stop on first error
-
-        toast_for_rerun(f"Validation status updated to {set_validated}.", "✅")
-        st.rerun()
-
-    # --- Sidebar setup ---
+    Args:
+        None
+    Returns:
+        Optional[str]: current SOTA tag, None when unset
+    """
+    tags_name = [t["name"] for t in requests.get(f"{BACK_URL}/tags", timeout=REQUEST_TIMEOUT_SECONDS).json()]
+    response = requests.get(f"{BACK_URL}/stockpile/get/sota_tag", timeout=REQUEST_TIMEOUT_SECONDS)
+    sota_tag: Optional[str] = response.json() if response.status_code == 200 else None
     st.sidebar.selectbox(
         "SOTA Tag",
         options=tags_name,
-        on_change=update_sota_tag,
-        index=None
-        if sota_tag is None or sota_tag not in tags_name
-        else tags_name.index(sota_tag),
+        index=tags_name.index(sota_tag) if sota_tag in tags_name else None,
+        on_change=on_sota_tag_change,
         key="sota_tag_selection",
-        help="Select the tag corresponding to the State-of-the-art files.",
+        help="Tag marking your State-of-the-art papers.",
+    )
+    return sota_tag
+
+
+def render_search(sota_tag: str) -> None:
+    """
+    Render collapsible search form restricted to SOTA tag
+
+    Args:
+        sota_tag (str): SOTA tag forced in search
+    Returns:
+        None
+    """
+    has_results = "sota_files" in st.session_state
+    with st.expander("Search library", icon=":material/search:", expanded=not has_results):
+        search_params = search_engine(force_tags=[sota_tag], streaming=True)
+    if search_params is not None:
+        st.session_state.sota_files = run_streaming_search(search_params)
+    if "sota_files" in st.session_state:
+        st.caption(generate_query_description(st.session_state.sota_files))
+
+
+def render_progress(papers: List[Paper]) -> None:
+    """
+    Render validation progress bar
+
+    Args:
+        papers (List[Paper]): all papers
+    Returns:
+        None
+    """
+    counts = {s: sum(p.status == s for p in papers) for s in STATUS_BADGES}
+    st.progress(
+        counts[STATUS_VALIDATED] / len(papers),
+        text=f"**{counts[STATUS_VALIDATED]} / {len(papers)}** references validated · "
+        f"{counts[STATUS_TO_REVIEW]} to review · {counts[STATUS_MISSING]} missing info",
     )
 
-    # --- Main Application Logic ---
-    if sota_tag is None:
-        st.warning("Please select a tag for State-of-the-art files.")
-    else:
-        search_params = search_engine(force_tags=[sota_tag], streaming=True)
-        if search_params is not None:
-            st.session_state.sota_files = run_streaming_search(search_params)
 
-        if "sota_files" in st.session_state:
-            query_str = generate_query_description(st.session_state.sota_files)
-            st.caption(query_str)
+def render_toolbar() -> Tuple[str, str, str]:
+    """
+    Render status filter, text filter and sort selector
 
-            if len(st.session_state.sota_files["files"]) == 0:
-                st.write("No files found in the system.")
-            else:
-                with st.sidebar:
-                    st.divider()
+    Args:
+        None
+    Returns:
+        Tuple[str, str, str]: status filter, text query, sort option
+    """
+    status_col, query_col, sort_col = st.columns([3, 2, 1], vertical_alignment="bottom")
+    status = status_col.segmented_control(
+        "Status", options=STATUS_FILTERS, default=STATUS_ALL, key="sota_status_filter",
+        label_visibility="collapsed",
+    )
+    query = query_col.text_input(
+        "Filter", placeholder="Filter by title, author, journal…", key="sota_query",
+        label_visibility="collapsed",
+    )
+    sort = sort_col.selectbox(
+        "Sort", options=list(SORT_OPTIONS), key="sota_sort", label_visibility="collapsed"
+    )
+    return status or STATUS_ALL, query, sort
 
-                    select_default_value = st.toggle(
-                        "Select all by default",
-                        value=False,
-                        help="If enabled, all files will be selected by default in the table below.",
-                    )
-                    display_projects = st.toggle(
-                        "Display projects",
-                        value=False,
-                        help="If enabled, the projects associated with each file will be displayed.",
-                    )
-                    display_tags = st.toggle(
-                        "Display tags",
-                        value=False,
-                        help="If enabled, the tags associated with each file will be displayed.",
-                    )
 
-                files = st.session_state.sota_files["files"]
-                data_table = pandas.DataFrame.from_dict(
-                    [
-                        create_table_line(
-                            f, select_default_value, display_projects, display_tags
-                        )
-                        for f in files
-                    ]
-                )
+def render_bulk_bar(visible: List[Paper], selected: List[Paper]) -> None:
+    """
+    Render selection summary and bulk actions
 
-                # Determine the columns that contain SOTA info (editable/savable fields)
-                info_columns = [
-                    k
-                    for k in data_table.columns
-                    if k
-                    not in ["select", "Filename", "Upload Date", "Projects", "Tags"]
-                ]
-
-                table = st.data_editor(
-                    data_table,
-                    column_config={
-                        "select": st.column_config.CheckboxColumn(
-                            "✏️",
-                            width="small",
-                            default=select_default_value,
-                        ),
-                        "validated": st.column_config.CheckboxColumn(  # MOVED: Now the second column
-                            "✅",
-                            width="small",
-                            default=False,
-                            help="Manual check to confirm information is correct.",
-                        ),
-                        "url": st.column_config.LinkColumn(
-                            "URL",
-                            width="small",
-                            help="Link to the publication.",
-                        ),
-                        # "Upload Date": st.column_config.DateColumn(
-                        #     "Upload Date",
-                        #     width="small",
-                        #     format="YYYY-MM-DD",
-                        # ),
-                        # "authors": st.column_config.TextColumn(
-                        #     "Authors",
-                        #     width="medium",
-                        # ),
-                        "year": st.column_config.NumberColumn(
-                            "Year",
-                            width="small",
-                        ),
-                    },
-                    use_container_width=True,
-                    hide_index=True,
-                    # Ensure 'validated' is NOT in the disabled list
-                    disabled=[
-                        "Filename",
-                        "Upload Date",
-                        "Projects",
-                        "Tags",
-                    ],
-                    key="sota_data_editor",
-                )
-
-                row_update = False
-                for i in range(len(table)):
-                    # Get the columns that represent the SOTA info for comparison and saving
-                    original_series = data_table.iloc[i][info_columns]
-                    edited_series = table.iloc[i][info_columns]
-                    if not original_series.equals(edited_series):
-                        edited_columns = [
-                            k
-                            for k in info_columns
-                            if original_series.get(k) != edited_series.get(k)
-                        ]
-                        edited_changes = {
-                            k: (original_series.get(k), edited_series.get(k))
-                            for k in edited_columns
-                        }
-                        st.info(
-                            f"Row {i + 1} has been modified. Saving changes... edited columns: {edited_columns} changes: {edited_changes}"
-                        )
-                        row_update = True
-                        file = files[i]
-                        file_name = file.split("/")[-1]
-                        file_date = file.split("/")[2]
-                        file_key = f"{file_date}_{file_name}"
-
-                        result = requests.post(
-                            f"http://back:80/stockpile/set/sota_info_{file_key}?value={json.dumps(edited_series.to_dict())}",
-                        )
-                        if result.status_code != 200:
-                            st.error(f"Error while saving SOTA info for file {file}.")
-                            st.stop()
-
-                if row_update:
-                    toast_for_rerun("SOTA updated.", "✅")
-                    st.rerun()
-
-                selected_table = table.query("select == True")
-                st.caption(f"{len(selected_table)} files selected.")
-
-                selected_files_data = [
-                    {k: selected_table[k][i] for k in selected_table.columns}
-                    for i in selected_table.index
-                ]
-                # Save selected data to session state for use by sidebar buttons
-                st.session_state.sota_selected_files = selected_files_data
-
-                with st.sidebar:
-                    st.divider()
-                    button_search = st.button(
-                        "🔍 Find info",
-                        use_container_width=True,
-                        disabled=not selected_files_data,
-                        type="primary",
-                    )
-                    button_format_apa = st.button(
-                        "📚 Format APA",
-                        use_container_width=True,
-                        disabled=not selected_files_data,
-                    )
-                    button_format_vancouver = st.button(
-                        "📚 Format Vancouver",
-                        use_container_width=True,
-                        disabled=not selected_files_data,
-                    )
-                    button_format_bibtex = st.button(
-                        "📚 Format BibTeX",
-                        use_container_width=True,
-                        disabled=not selected_files_data,
-                    )
-
-                if button_search:
-                    for file_data in stqdm(
-                        selected_files_data, desc="Fetching SOTA info"
-                    ):
-                        file_name = file_data["Filename"]
-                        file_date = file_data["Upload Date"]
-                        file_key = f"{file_date}_{file_name}"
-                        founded = get_reference_from_title(file_name)
-
-                        if founded is not None:
-                            # Fetch existing info to preserve any manual edits (e.g., custom fields)
-                            stockpile_info_req = requests.get(
-                                f"http://back:80/stockpile/get/sota_info_{file_date}_{file_name}"
-                            )
-                            existing_info = {}
-                            if stockpile_info_req.status_code == 200:
-                                try:
-                                    existing_info = json.loads(
-                                        stockpile_info_req.json()
-                                    )
-                                except Exception:
-                                    pass
-
-                            # Merge new data (founded) into existing data, and explicitly reset validation flag.
-                            updated_info = {
-                                **existing_info,
-                                **founded,
-                                "validated": False,
-                            }
-
-                            result = requests.post(
-                                f"http://back:80/stockpile/set/sota_info_{file_key}?value={json.dumps(updated_info)}",
-                            )
-                            if result.status_code != 200:
-                                st.toast(
-                                    f"Error while saving SOTA info for file {file_name}.",
-                                    icon="⚠️",
-                                )
-
-                    toast_for_rerun("SOTA info updated.", "✅")
-                    st.rerun()
-                if button_format_apa:
-                    st.code(format_APA(selected_files_data))
-                if button_format_vancouver:
-                    st.code(format_Vancouver(selected_files_data))
-                if button_format_bibtex:
-                    st.code(format_BibTeX(selected_files_data))
-                st.sidebar.divider()
-
-            with st.sidebar:
-                if st.button(
-                    "✏️ Edit Selected",
-                    use_container_width=True,
-                    disabled="sota_selected_files" not in st.session_state
-                    or not st.session_state.sota_selected_files,
-                    help="Manually edit SOTA information for all selected papers.",
-                ):
-                    if "sota_selected_files_copy" in st.session_state:
-                        del st.session_state.sota_selected_files_copy
-                    edit_stateoftheart_dialog()
-                st.button(
-                    "✅ Validate Selected",
-                    on_click=update_validation_status,
-                    args=(True,),
-                    use_container_width=True,
-                    disabled="sota_selected_files" not in st.session_state
-                    or not st.session_state.sota_selected_files,
-                    help="Manually mark all selected papers as validated.",
-                )
-                st.button(
-                    "❌ Unvalidate Selected",
-                    on_click=update_validation_status,
-                    args=(False,),
-                    use_container_width=True,
-                    disabled="sota_selected_files" not in st.session_state
-                    or not st.session_state.sota_selected_files,
-                    help="Manually mark all selected papers as NOT validated.",
-                )
+    Args:
+        visible (List[Paper]): papers matching current filters
+        selected (List[Paper]): selected papers
+    Returns:
+        None
+    """
+    has_selection = bool(selected)
+    cite_targets = selected if has_selection else visible
+    lookup_targets = [p for p in selected if not p.info.validated]
+    with st.container(border=True):
+        cols = st.columns([2, 1, 1, 1, 1, 1], vertical_alignment="center")
+        cols[0].markdown(f"**{len(selected)}** selected · {len(visible)} shown")
+        if has_selection:
+            cols[1].button("Clear", icon=":material/deselect:", on_click=set_selection,
+                           args=(selected, False), use_container_width=True, type="tertiary")
         else:
-            st.info("Search for files first :)")
+            cols[1].button("Select all", icon=":material/select_all:", on_click=set_selection,
+                           args=(visible, True), use_container_width=True, type="tertiary")
+        is_finding = cols[2].button("Find info", icon=":material/travel_explore:", disabled=not lookup_targets,
+                                    use_container_width=True,
+                                    help="Read PDF header with GROBID, then match on CrossRef, PubMed and arXiv. "
+                                    "Validated papers are skipped.")
+        cols[3].button("Validate", icon=":material/verified:", on_click=set_validated, args=(selected, True),
+                       disabled=not has_selection, use_container_width=True)
+        cols[4].button("Unvalidate", icon=":material/undo:", on_click=set_validated, args=(selected, False),
+                       disabled=not has_selection, use_container_width=True)
+        is_citing = cols[5].button("Cite" if has_selection else "Cite all", icon=":material/format_quote:",
+                                   type="primary", disabled=not cite_targets, use_container_width=True)
+    if is_finding:
+        find_online_info(lookup_targets)
+        st.rerun()
+    if is_citing:
+        citation_dialog(cite_targets)
+
+
+def reference_line(paper: Paper) -> str:
+    """
+    Build "authors · year · journal" caption of paper
+
+    Args:
+        paper (Paper): paper
+    Returns:
+        str: escaped markdown line
+    """
+    parts = [short_authors(paper.info.authors), paper.info.year, paper.info.journal]
+    details = [escape_markdown(p.strip()) for p in parts if p and p.strip()]
+    return " · ".join(details) if details else "_No reference information yet_"
+
+
+def links_line(paper: Paper) -> str:
+    """
+    Build status badge and external links line
+
+    Args:
+        paper (Paper): paper
+    Returns:
+        str: markdown line
+    """
+    items = [STATUS_BADGES[paper.status]]
+    if paper.info.doi:
+        items.append(f"[:material/link: DOI](https://doi.org/{paper.info.doi})")
+    if paper.info.url:
+        items.append(f"[:material/open_in_new: Publication]({paper.info.url})")
+    items.append(f":gray[:material/description: {escape_markdown(paper.file_name)}]")
+    if paper.info.source:
+        items.append(f":gray[:material/database: {escape_markdown(paper.info.source)}]")
+    return " &nbsp; ".join(items)
+
+
+def label_badges(paper: Paper) -> List[str]:
+    """
+    Fetch projects and tags of paper as markdown badges
+
+    Args:
+        paper (Paper): paper
+    Returns:
+        List[str]: project badges followed by tag badges
+    """
+    projects = requests.get(f"{BACK_URL}/projects_of/{paper.path}", timeout=REQUEST_TIMEOUT_SECONDS).json()
+    tags = requests.get(f"{BACK_URL}/tags_of/{paper.path}", timeout=REQUEST_TIMEOUT_SECONDS).json()
+    return [f":blue-badge[{escape_markdown(p['name'])}]" for p in projects] + [
+        f":violet-badge[{escape_markdown(t['name'])}]" for t in tags
+    ]
+
+
+def render_card_actions(paper: Paper) -> None:
+    """
+    Render open / edit / lookup / validate icon buttons of card, no lookup once validated
+
+    Args:
+        paper (Paper): paper
+    Returns:
+        None
+    """
+    open_col, edit_col, find_col, validate_col = st.columns(4)
+    key = paper.path
+    if open_col.button("", icon=":material/visibility:", key=f"sota_open_{key}", type="tertiary", help="Open document"):
+        open_paper(paper)
+    if edit_col.button("", icon=":material/edit:", key=f"sota_edit_{key}", type="tertiary", help="Edit reference"):
+        edit_paper_dialog(paper)
+    is_validated = paper.info.validated
+    if not is_validated and find_col.button(
+        "", icon=":material/travel_explore:", key=f"sota_find_{key}", type="tertiary", help="Find reference online"
+    ):
+        find_online_info([paper])
+        st.rerun()
+    validate_col.button(
+        "", icon=":material/undo:" if is_validated else ":material/check_circle:", key=f"sota_validate_{key}",
+        type="tertiary", on_click=set_validated, args=([paper], not is_validated),
+        help="Mark to review" if is_validated else "Validate reference",
+    )
+
+
+def render_paper_card(paper: Paper, show_labels: bool) -> None:
+    """
+    Render one paper as bordered card
+
+    Args:
+        paper (Paper): paper
+        show_labels (bool): show projects and tags badges
+    Returns:
+        None
+    """
+    with st.container(border=True):
+        check_col, body_col, actions_col = st.columns([0.04, 0.74, 0.22], vertical_alignment="center")
+        check_col.checkbox("Select", key=selection_key(paper), label_visibility="collapsed")
+        with body_col:
+            st.markdown(f"**{escape_markdown(paper.display_title)}**  \n:gray[{reference_line(paper)}]")
+            labels = label_badges(paper) if show_labels else []
+            st.markdown("  \n".join([links_line(paper), " &nbsp; ".join(labels)] if labels else [links_line(paper)]))
+        with actions_col:
+            render_card_actions(paper)
+
+
+def render_library(papers: List[Paper], show_labels: bool) -> Tuple[List[Paper], List[Paper]]:
+    """
+    Render progress, toolbar, bulk actions and paper cards
+
+    Args:
+        papers (List[Paper]): all papers
+        show_labels (bool): show projects and tags badges on cards
+    Returns:
+        Tuple[List[Paper], List[Paper]]: selected papers, papers shown
+    """
+    render_progress(papers)
+    status, query, sort = render_toolbar()
+    visible = SORT_OPTIONS[sort](filter_papers(papers, status, query))
+    selected = selected_papers(papers)
+    render_bulk_bar(visible, selected)
+    if not visible:
+        st.info("No reference matches these filters.", icon=":material/filter_alt_off:")
+    for paper in visible:
+        render_paper_card(paper, show_labels)
+    return selected, visible
+
+
+def render_results(show_labels: bool) -> Tuple[List[Paper], List[Paper]]:
+    """
+    Render search results library, or hint when none
+
+    Args:
+        show_labels (bool): show projects and tags badges on cards
+    Returns:
+        Tuple[List[Paper], List[Paper]]: selected papers, papers shown
+    """
+    if "sota_files" not in st.session_state:
+        st.info("Search your library to list references.", icon=":material/search:")
+        return [], []
+    files: List[str] = st.session_state.sota_files["files"]
+    if not files:
+        st.info("No file found with this tag.", icon=":material/inbox:")
+        return [], []
+    return render_library(ensure_papers_loaded(files), show_labels)
+
+
+def stateoftheart() -> None:
+    """
+    Render State-of-the-art page
+
+    Args:
+        None
+    Returns:
+        None
+    """
+    sota_tag = render_sota_tag_selector()
+    show_labels = st.sidebar.toggle("Show projects & tags", value=True)
+    if sota_tag is None:
+        st.warning("Pick the tag marking your State-of-the-art papers in the sidebar.", icon=":material/sell:")
+        return
+    render_search(sota_tag)
+    library_tab, citation_map_tab, watch_tab = st.tabs(TAB_LABELS)
+    with library_tab:
+        selected, shown = render_results(show_labels)
+    with citation_map_tab:
+        st.info("Coming soon.", icon=":material/construction:")
+    with watch_tab:
+        st.info("Coming soon.", icon=":material/construction:")
+    render_transfer_buttons(sota_tag, selected, shown)
 
 
 if __name__ == "__main__":

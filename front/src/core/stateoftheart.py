@@ -1,254 +1,273 @@
+import json
+import logging
 import re
-import xml.etree.ElementTree as ET
-from typing import Any, Dict, List
+from dataclasses import asdict, dataclass, fields
+from typing import Any, Callable, Dict, List
 
 import requests
-import streamlit as st
 
-# ---------- LOW-LEVEL SEARCHES ----------
+BACK_URL = "http://back:80"
+STOCKPILE_PREFIX = "sota_info_"
+REQUEST_TIMEOUT_SECONDS = 10
+MAX_DISPLAYED_AUTHORS = 3
+PATH_DATE_INDEX = 2
 
+STATUS_VALIDATED = "Validated"
+STATUS_TO_REVIEW = "To review"
+STATUS_MISSING = "Missing info"
+STATUS_ALL = "All"
+STATUS_FILTERS = [STATUS_ALL, STATUS_TO_REVIEW, STATUS_VALIDATED, STATUS_MISSING]
 
-def _search_crossref_by_title_raw(title: str) -> Dict[str, Any]:
-    """Query CrossRef with a title and return the best matching raw record."""
-    url = "https://api.crossref.org/works"
-    params = {
-        "query.bibliographic": title,
-        "rows": 1,
-        "sort": "score",
-        "order": "desc",
-    }
-    r = requests.get(url, params=params, timeout=10)
-    r.raise_for_status()
-    data = r.json()
-    items = data.get("message", {}).get("items", [])
-    if not items:
-        raise ValueError(f"No result found in CrossRef for title: {title}")
-    return items[0]
+logger = logging.getLogger(__name__)
 
 
-def _search_pubmed_by_title(title: str) -> Dict[str, Any]:
+@dataclass
+class PaperInfo:
+    """Bibliographic metadata of a state-of-the-art paper."""
+
+    title: str = ""
+    authors: str = ""
+    year: str = ""
+    journal: str = ""
+    url: str = ""
+    doi: str = ""
+    volume: str = ""
+    issue: str = ""
+    pages: str = ""
+    source: str = ""
+    validated: bool = False
+
+    @classmethod
+    def from_dict(cls, raw: Dict[str, Any]) -> "PaperInfo":
+        """
+        Build PaperInfo from stored dict, ignoring unknown keys
+
+        Args:
+            raw (Dict[str, Any]): stored metadata
+        Returns:
+            PaperInfo: parsed metadata
+        """
+        known = {f.name for f in fields(cls)}
+        values: Dict[str, Any] = {}
+        for key, value in raw.items():
+            if key not in known or value is None:
+                continue
+            values[key] = bool(value) if key == "validated" else str(value)
+        return cls(**values)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Convert metadata to JSON-serializable dict
+
+        Args:
+            None
+        Returns:
+            Dict[str, Any]: metadata dict
+        """
+        return asdict(self)
+
+
+@dataclass
+class Paper:
+    """State-of-the-art file with its metadata."""
+
+    path: str
+    info: PaperInfo
+
+    @property
+    def file_name(self) -> str:
+        """
+        Return file name from path
+
+        Args:
+            None
+        Returns:
+            str: file name
+        """
+        return self.path.split("/")[-1]
+
+    @property
+    def upload_date(self) -> str:
+        """
+        Return upload date folder from path
+
+        Args:
+            None
+        Returns:
+            str: upload date (YYYY-MM-DD)
+        """
+        parts = self.path.split("/")
+        return parts[PATH_DATE_INDEX] if len(parts) > PATH_DATE_INDEX else ""
+
+    @property
+    def stockpile_key(self) -> str:
+        """
+        Return stockpile key storing metadata of this paper
+
+        Args:
+            None
+        Returns:
+            str: stockpile key
+        """
+        return f"{STOCKPILE_PREFIX}{self.upload_date}_{self.file_name}"
+
+    @property
+    def display_title(self) -> str:
+        """
+        Return title, or file name without extension when title missing
+
+        Args:
+            None
+        Returns:
+            str: title to display
+        """
+        if self.info.title.strip():
+            return self.info.title.strip()
+        return self.file_name.rsplit(".", 1)[0]
+
+    @property
+    def status(self) -> str:
+        """
+        Return review status of paper
+
+        Args:
+            None
+        Returns:
+            str: one of STATUS_VALIDATED, STATUS_TO_REVIEW, STATUS_MISSING
+        """
+        if self.info.validated:
+            return STATUS_VALIDATED
+        if not self.info.title.strip() or not self.info.authors.strip():
+            return STATUS_MISSING
+        return STATUS_TO_REVIEW
+
+
+def short_authors(authors: str) -> str:
     """
-    Query PubMed (NCBI E-utilities) with a title and return a normalized record.
+    Shorten pipe-separated author list to family names, "et al." past limit
+
+    Args:
+        authors (str): authors as "Family, Given | Family, Given"
+    Returns:
+        str: short author string
     """
-    # 1) ESearch: find the best PMID
-    esearch_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
-    params = {
-        "db": "pubmed",
-        "term": f"{title}[Title]",
-        "retmax": 1,
-        "sort": "relevance",
-        "retmode": "json",
-    }
-    r = requests.get(esearch_url, params=params, timeout=10)
-    r.raise_for_status()
-    data = r.json()
-    idlist = data.get("esearchresult", {}).get("idlist", [])
-    if not idlist:
-        raise ValueError(f"No result found in PubMed for title: {title}")
-    pmid = idlist[0]
-
-    # 2) ESummary: get metadata
-    esummary_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
-    params = {
-        "db": "pubmed",
-        "id": pmid,
-        "retmode": "json",
-    }
-    r = requests.get(esummary_url, params=params, timeout=10)
-    r.raise_for_status()
-    data = r.json()
-    result = data.get("result", {})
-    summary = result.get(pmid, {})
-
-    raw_title = (summary.get("title") or "").strip()
-    raw_title = " ".join(raw_title.split())  # collapse whitespace
-
-    # Authors -> 'Family, Given'
-    raw_authors: str = ""
-    for a in summary.get("authors", []):
-        name = (a.get("name") or "").strip()  # usually "Surname Initials"
-        if not name:
-            continue
-        # Split "Surname Initials" into "Surname, I."
-        parts = name.split()
-        raw_authors += " | "
-        if len(parts) >= 2:
-            family = parts[0]
-            given = " ".join(parts[1:])
-            raw_authors += f"{family}, {given}"
-        else:
-            raw_authors += name
-    raw_authors = raw_authors.lstrip(" | ")
-
-    # Year
-    pubdate = (summary.get("pubdate") or "").strip()
-    m = re.search(r"\b(\d{4})\b", pubdate)
-    year = m.group(1) if m else "n.d."
-
-    journal = (summary.get("fulljournalname") or summary.get("source") or "").strip()
-    volume = (summary.get("volume") or "").strip()
-    issue = (summary.get("issue") or "").strip()
-    pages = (summary.get("pages") or "").strip()
-
-    # DOI
-    doi = ""
-    for aid in summary.get("articleids", []):
-        if aid.get("idtype") == "doi" and aid.get("value"):
-            doi = aid["value"].strip()
-            break
-
-    url = f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
-
-    return {
-        "title": raw_title,
-        "authors": raw_authors,
-        "year": year,
-        "journal": journal,
-        "url": url,
-        "doi": doi,
-        "volume": volume,
-        "issue": issue,
-        "pages": pages,
-        "source": "pubmed",
-    }
+    names = [a.strip().split(",")[0].strip() for a in authors.split("|") if a.strip()]
+    if len(names) > MAX_DISPLAYED_AUTHORS:
+        return f"{', '.join(names[:MAX_DISPLAYED_AUTHORS])} et al."
+    return ", ".join(names)
 
 
-def _search_arxiv_by_title(title: str) -> Dict[str, Any]:
+def matches_query(paper: Paper, query: str) -> bool:
     """
-    Query arXiv with a title and return a normalized record.
-    Uses the public Atom API.
+    Check whether paper title, authors, journal or file name contain query
+
+    Args:
+        paper (Paper): paper to test
+        query (str): case-insensitive text
+    Returns:
+        bool: True when query empty or found
     """
-    base_url = "http://export.arxiv.org/api/query"
-    # search by title, phrase match
-    params = {
-        "search_query": f'ti:"{title}"',
-        "start": 0,
-        "max_results": 1,
-    }
-    r = requests.get(base_url, params=params, timeout=10)
-    r.raise_for_status()
-    text = r.text
-
-    ns = {
-        "atom": "http://www.w3.org/2005/Atom",
-        "arxiv": "http://arxiv.org/schemas/atom",
-    }
-    root = ET.fromstring(text)
-    entry = root.find("atom:entry", ns)
-    if entry is None:
-        raise ValueError(f"No result found in arXiv for title: {title}")
-
-    raw_title = (entry.findtext("atom:title", default="", namespaces=ns) or "").strip()
-    raw_title = " ".join(raw_title.split())  # collapse whitespace
-
-    # authors -> list of "Family, Given" (best effort from 'Given Family' strings)
-    raw_authors = ""
-    for a in entry.findall("atom:author", ns):
-        name = (a.findtext("atom:name", default="", namespaces=ns) or "").strip()
-        if not name:
-            continue
-        parts = name.split()
-        if len(parts) >= 2:
-            family = parts[-1]
-            given = " ".join(parts[:-1])
-            raw_authors += f"{family}, {given}"
-        else:
-            raw_authors += name
-    raw_authors = raw_authors.lstrip(" | ")
-
-    published = entry.findtext("atom:published", default="", namespaces=ns) or ""
-    year = published[:4] if len(published) >= 4 else "n.d."
-
-    url = (entry.findtext("atom:id", default="", namespaces=ns) or "").strip()
-
-    doi_elem = entry.find("arxiv:doi", ns)
-    doi = doi_elem.text.strip() if doi_elem is not None and doi_elem.text else ""
-
-    jr = entry.find("arxiv:journal_ref", ns)
-    journal = jr.text.strip() if jr is not None and jr.text else ""
-
-    return {
-        "title": raw_title,
-        "authors": raw_authors,
-        "year": year,
-        "journal": journal or "arXiv",
-        "url": url or (f"https://doi.org/{doi}" if doi else ""),
-        "doi": doi,
-        "volume": "",
-        "issue": "",
-        "pages": "",
-        "source": "arxiv",
-    }
+    needle = query.strip().lower()
+    if not needle:
+        return True
+    haystack = f"{paper.info.title} {paper.info.authors} {paper.info.journal} {paper.file_name}".lower()
+    return needle in haystack
 
 
-# ---------- NORMALIZATION & FORMATTING ----------
+def filter_papers(papers: List[Paper], status: str, query: str) -> List[Paper]:
+    """
+    Keep papers matching status filter and text query
+
+    Args:
+        papers (List[Paper]): all papers
+        status (str): one of STATUS_FILTERS
+        query (str): free-text filter
+    Returns:
+        List[Paper]: filtered papers
+    """
+    return [
+        p
+        for p in papers
+        if (status == STATUS_ALL or p.status == status) and matches_query(p, query)
+    ]
 
 
-def _normalize_crossref_item(item: Dict[str, Any]) -> Dict[str, Any]:
-    raw_title = item.get("title", [""])[0]
-    authors = item.get("author", []) or []
-    container = item.get("container-title", [""])
-    journal = container[0] if container else ""
-    doi = item.get("DOI", "")
-    url = item.get("URL", "") or (f"https://doi.org/{doi}" if doi else "")
+def _year_key(paper: Paper) -> int:
+    """
+    Return numeric year for sorting, 0 when unknown
 
-    # Year
-    year = None
-    for date_key in ["published-print", "published-online", "issued"]:
-        if (
-            date_key in item
-            and "date-parts" in item[date_key]
-            and item[date_key]["date-parts"]
-        ):
-            year = str(item[date_key]["date-parts"][0][0])
-            break
-    if year is None:
-        year = "n.d."
+    Args:
+        paper (Paper): paper
+    Returns:
+        int: year or 0
+    """
+    match = re.search(r"\d{4}", paper.info.year)
+    return int(match.group(0)) if match else 0
 
-    volume = item.get("volume", "") or ""
-    issue = item.get("issue", "") or ""
-    pages = item.get("page", "") or ""
 
-    authors_list: str = ""
-    for a in authors:
-        fam = (a.get("family") or "").strip()
-        giv = (a.get("given") or "").strip()
-        if fam and giv:
-            authors_list += f"{fam}, {giv}"
-        elif fam:
-            authors_list += fam
-        elif giv:
-            authors_list += giv
-        authors_list += " | "
-    authors_list = authors_list.rstrip(" | ")
+SORT_OPTIONS: Dict[str, Callable[[List[Paper]], List[Paper]]] = {
+    "Newest first": lambda ps: sorted(ps, key=_year_key, reverse=True),
+    "Oldest first": lambda ps: sorted(ps, key=_year_key),
+    "Title A → Z": lambda ps: sorted(ps, key=lambda p: p.display_title.lower()),
+    "Recently added": lambda ps: sorted(ps, key=lambda p: p.upload_date, reverse=True),
+}
 
-    return {
-        "title": raw_title,
-        "authors": authors_list,
-        "year": year,
-        "journal": journal,
-        "url": url,
-        "doi": doi,
-        "volume": volume,
-        "issue": issue,
-        "pages": pages,
-        "source": "crossref",
-    }
+
+def load_paper_info(path: str) -> PaperInfo:
+    """
+    Fetch stored metadata of file from backend stockpile
+
+    Args:
+        path (str): file path (/shared/<date>/<subfolder>/<name>)
+    Returns:
+        PaperInfo: stored metadata, empty when none or unreadable
+    """
+    key = Paper(path=path, info=PaperInfo()).stockpile_key
+    response = requests.get(
+        f"{BACK_URL}/stockpile/get/{key}", timeout=REQUEST_TIMEOUT_SECONDS
+    )
+    if response.status_code != 200:
+        return PaperInfo()
+    try:
+        raw = json.loads(response.json())
+    except (json.JSONDecodeError, TypeError) as error:
+        logger.warning("Unreadable SOTA info for %s: %s", path, error)
+        return PaperInfo()
+    if not isinstance(raw, dict):
+        return PaperInfo()
+    return PaperInfo.from_dict(raw)
+
+
+def save_paper_info(paper: Paper) -> bool:
+    """
+    Store paper metadata in backend stockpile
+
+    Args:
+        paper (Paper): paper to save
+    Returns:
+        bool: True on success
+    """
+    response = requests.post(
+        f"{BACK_URL}/stockpile/set/{paper.stockpile_key}",
+        params={"value": json.dumps(paper.info.to_dict())},
+        timeout=REQUEST_TIMEOUT_SECONDS,
+    )
+    return response.status_code == 200
 
 
 def format_APA(files: List[Dict[str, Any]]) -> str:
     """Format a reference in APA style."""
 
     def format_APA_authors(authors: str) -> str:
-        authors = [a.strip() for a in authors.split("|") if a.strip()]
-        if len(authors) == 0:
+        names = [a.strip() for a in authors.split("|") if a.strip()]
+        if len(names) == 0:
             return ""
-        elif len(authors) == 1:
-            return authors[0]
-        elif len(authors) <= 7:
-            return ", ".join(authors[:-1]) + ", & " + authors[-1]
+        elif len(names) == 1:
+            return names[0]
+        elif len(names) <= 7:
+            return ", ".join(names[:-1]) + ", & " + names[-1]
         else:
-            return ", ".join(authors[:6]) + ", ... " + authors[-1]
+            return ", ".join(names[:6]) + ", ... " + names[-1]
 
     result = ""
     for file in files:
@@ -274,73 +293,17 @@ def format_APA(files: List[Dict[str, Any]]) -> str:
     return result.strip()
 
 
-def get_reference_from_title(title: str) -> Dict[str, Any]:
-    """
-    Given an article title, search on CrossRef, then arXiv,
-    and return a dict with core fields + formatted strings.
-
-    Output dict contains at least:
-      - title
-      - authors (list of 'Family, Given')
-      - year
-      - journal
-      - url
-      - doi
-      - volume
-      - issue
-      - pages
-      - 'source' (crossref | arxiv)
-    """
-    last_error = None
-    meta: Dict[str, Any] | None = None
-    title = title.strip()
-    if title.endswith(".pdf"):
-        title = title[:-4]
-
-    if meta is None:
-        try:
-            meta = _search_arxiv_by_title(title)
-        except Exception as e:
-            last_error = e
-            # st.error(f"arXiv search error: {str(e)}")
-
-    if meta is None:
-        try:
-            meta = _search_pubmed_by_title(title)
-        except Exception as e:
-            last_error = e
-            # st.error(f"PubMed search error: {str(e)}")
-
-    if meta is None:
-        try:
-            cr_item = _search_crossref_by_title_raw(title)
-            meta = _normalize_crossref_item(cr_item)
-        except Exception as e:
-            last_error = e
-            # st.error(f"CrossRef search error: {str(e)}")
-
-    if meta is None:
-        raise RuntimeError(
-            f"Could not retrieve metadata for title '{title}'. Last error: {last_error}"
-        )
-
-    return meta
-
-
-# ---------- FORMATTING HELPERS ----------
-
-
 def format_Vancouver(files: List[Dict[str, Any]]) -> str:
     """Format a reference in Vancouver style."""
 
     def format_Vancouver_authors(authors: str) -> str:
-        authors = [a.strip() for a in authors.split("|") if a.strip()]
-        if len(authors) == 0:
+        names = [a.strip() for a in authors.split("|") if a.strip()]
+        if len(names) == 0:
             return ""
-        elif len(authors) <= 6:
-            return ", ".join(authors)
+        elif len(names) <= 6:
+            return ", ".join(names)
         else:
-            return ", ".join(authors[:6]) + ", et al."
+            return ", ".join(names[:6]) + ", et al."
 
     result = ""
     for file in files:
@@ -363,35 +326,4 @@ def format_Vancouver(files: List[Dict[str, Any]]) -> str:
         if doi:
             reference += f" doi: https://doi.org/{doi}"
         result += reference + "\n\n"
-    return result.strip()
-
-
-def format_BibTeX(files: List[Dict[str, Any]]) -> str:
-    """Format a reference in BibTeX style."""
-    result = ""
-    for idx, file in enumerate(files):
-        authors = " and ".join(file.get("authors", "").split("|"))
-        year = file.get("year", "n.d.")
-        title = file.get("title", "")
-        journal = file.get("journal", "")
-        volume = file.get("volume", "")
-        issue = file.get("issue", "")
-        pages = file.get("pages", "")
-        doi = file.get("doi", "")
-        refid = f"{authors.split(',')[0].split()[0]}{year}{title.split()[0]}"
-        bibtex_entry = f"@article{{{refid},\n"
-        bibtex_entry += f"  author = {{{authors}}},\n"
-        bibtex_entry += f"  title = {{{title}}},\n"
-        bibtex_entry += f"  journal = {{{journal}}},\n"
-        if volume:
-            bibtex_entry += f"  volume = {{{volume}}},\n"
-        if issue:
-            bibtex_entry += f"  number = {{{issue}}},\n"
-        if pages:
-            bibtex_entry += f"  pages = {{{pages}}},\n"
-        bibtex_entry += f"  year = {{{year}}},\n"
-        if doi:
-            bibtex_entry += f"  doi = {{{doi}}},\n"
-        bibtex_entry += "}\n\n"
-        result += bibtex_entry
     return result.strip()

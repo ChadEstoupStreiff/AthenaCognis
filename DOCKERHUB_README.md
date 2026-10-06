@@ -28,7 +28,7 @@ Source, issue tracker, and full documentation:
 ## About these images
 
 AthenaCognis runs as two custom images working together, plus off-the-shelf
-`mariadb`, `phpmyadmin`, and `ollama` containers. You need **both** custom images
+`mariadb`, `phpmyadmin`, `ollama`, and `grobid` containers. You need **both** custom images
 to run the app:
 
 | Image | Role |
@@ -76,7 +76,7 @@ services:
       - .env:/.env
 ```
 
-(`back_db`, `pma`, and `ollama` services and the rest of `.env` are covered in
+(`back_db`, `pma`, `ollama`, and `grobid` services and the rest of `.env` are covered in
 [DEPLOYMENT.md](https://github.com/ChadEstoupStreiff/athenacognis/blob/main/DEPLOYMENT.md).)
 
 ## Tech stack
@@ -87,6 +87,7 @@ services:
 | Frontend | Streamlit |
 | Database | MariaDB 10.6 |
 | Local LLM inference | Ollama |
+| Scientific PDF metadata | GROBID |
 | Cloud AI | OpenAI, Mistral AI, Google Gemini, Groq, Anthropic Claude |
 | OCR | PaddleOCR |
 | Transcription | Faster-Whisper (local), OpenAI Whisper API, Groq |

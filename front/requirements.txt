@@ -9,3 +9,4 @@ streamlit-agraph
 streamlit_elements
 SPARQLWrapper
 stqdm
+bibtexparser==1.4.*

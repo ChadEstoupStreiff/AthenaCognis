@@ -46,6 +46,17 @@ services:
     networks:
       - appnet
 
+  grobid:
+    image: grobid/grobid:0.9.1-crf
+    container_name: grobid
+    restart: unless-stopped
+    init: true
+    ulimits:
+      core: 0
+    hostname: grobid
+    networks:
+      - appnet
+
   back:
     build: ./back
     container_name: back
