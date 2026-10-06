@@ -17,6 +17,11 @@ STATUS_TO_REVIEW = "To review"
 STATUS_MISSING = "Missing info"
 STATUS_ALL = "All"
 STATUS_FILTERS = [STATUS_ALL, STATUS_TO_REVIEW, STATUS_VALIDATED, STATUS_MISSING]
+STATUS_BADGES: Dict[str, str] = {
+    STATUS_VALIDATED: ":green-badge[:material/verified: Validated]",
+    STATUS_TO_REVIEW: ":orange-badge[:material/rate_review: To review]",
+    STATUS_MISSING: ":red-badge[:material/error: Missing info]",
+}
 
 logger = logging.getLogger(__name__)
 

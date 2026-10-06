@@ -13,11 +13,13 @@ from core.explorer import (
 )
 from core.library_transfer import render_transfer_buttons
 from core.reference_lookup import fetch_online_info
+from core.relation_map import render_relation_map
 from core.stateoftheart import (
     BACK_URL,
     REQUEST_TIMEOUT_SECONDS,
     SORT_OPTIONS,
     STATUS_ALL,
+    STATUS_BADGES,
     STATUS_FILTERS,
     STATUS_MISSING,
     STATUS_TO_REVIEW,
@@ -35,13 +37,8 @@ from pages import PAGE_VIEWER
 from utils import toast_for_rerun
 
 SELECTION_PREFIX = "sota_sel::"
-TAB_LABELS = [":material/library_books: Library", ":material/hub: Citation Map", ":material/radar: Literature Watch"]
+TAB_LABELS = [":material/library_books: Library", ":material/hub: Citation & Relation Map", ":material/radar: Literature Watch"]
 MARKDOWN_SPECIAL_CHARS = "\\`*_[]$~<>#|"
-STATUS_BADGES: Dict[str, str] = {
-    STATUS_VALIDATED: ":green-badge[:material/verified: Validated]",
-    STATUS_TO_REVIEW: ":orange-badge[:material/rate_review: To review]",
-    STATUS_MISSING: ":red-badge[:material/error: Missing info]",
-}
 
 
 @dataclass(frozen=True)
@@ -532,11 +529,26 @@ def render_library(papers: List[Paper], show_labels: bool) -> Tuple[List[Paper],
     return selected, visible
 
 
-def render_results(show_labels: bool) -> Tuple[List[Paper], List[Paper]]:
+def search_papers() -> List[Paper]:
+    """
+    Return papers of current search, empty before any search
+
+    Args:
+        None
+    Returns:
+        List[Paper]: papers with metadata
+    """
+    if "sota_files" not in st.session_state:
+        return []
+    return ensure_papers_loaded(st.session_state.sota_files["files"])
+
+
+def render_results(papers: List[Paper], show_labels: bool) -> Tuple[List[Paper], List[Paper]]:
     """
     Render search results library, or hint when none
 
     Args:
+        papers (List[Paper]): papers of current search
         show_labels (bool): show projects and tags badges on cards
     Returns:
         Tuple[List[Paper], List[Paper]]: selected papers, papers shown
@@ -544,11 +556,10 @@ def render_results(show_labels: bool) -> Tuple[List[Paper], List[Paper]]:
     if "sota_files" not in st.session_state:
         st.info("Search your library to list references.", icon=":material/search:")
         return [], []
-    files: List[str] = st.session_state.sota_files["files"]
-    if not files:
+    if not papers:
         st.info("No file found with this tag.", icon=":material/inbox:")
         return [], []
-    return render_library(ensure_papers_loaded(files), show_labels)
+    return render_library(papers, show_labels)
 
 
 def stateoftheart() -> None:
@@ -566,11 +577,12 @@ def stateoftheart() -> None:
         st.warning("Pick the tag marking your State-of-the-art papers in the sidebar.", icon=":material/sell:")
         return
     render_search(sota_tag)
-    library_tab, citation_map_tab, watch_tab = st.tabs(TAB_LABELS)
+    papers = search_papers()
+    library_tab, relation_map_tab, watch_tab = st.tabs(TAB_LABELS)
     with library_tab:
-        selected, shown = render_results(show_labels)
-    with citation_map_tab:
-        st.info("Coming soon.", icon=":material/construction:")
+        selected, shown = render_results(papers, show_labels)
+    with relation_map_tab:
+        render_relation_map(papers, selected)
     with watch_tab:
         st.info("Coming soon.", icon=":material/construction:")
     render_transfer_buttons(sota_tag, selected, shown)
