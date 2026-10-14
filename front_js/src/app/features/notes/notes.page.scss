@@ -1,0 +1,157 @@
+.notes {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 16px;
+  height: calc(100vh - 52px);
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  overflow-y: auto;
+
+  ::ng-deep .day-picker {
+    width: 100%;
+    min-width: 0;
+    padding: 4px;
+
+    .p-datepicker-panel {
+      min-width: 0;
+    }
+
+    .p-datepicker-day {
+      width: 2rem;
+      height: 2rem;
+    }
+
+    .p-datepicker-day-cell {
+      padding: 1px;
+    }
+  }
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.note-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  color: var(--p-text-color);
+  text-decoration: none;
+  cursor: pointer;
+
+  i {
+    color: var(--ac-muted);
+  }
+
+  &:hover {
+    background: var(--p-content-hover-background);
+  }
+
+  &.active {
+    background: color-mix(in srgb, var(--p-primary-color) 12%, transparent);
+    color: var(--p-primary-color);
+  }
+}
+
+.empty {
+  margin: 0;
+  font-size: 13px;
+}
+
+.workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  .name {
+    width: min(360px, 100%);
+    font-weight: 600;
+  }
+
+  .spacer {
+    flex: 1;
+  }
+}
+
+.panes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+
+  &[data-layout='edit'],
+  &[data-layout='preview'] {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pane {
+  min-height: 0;
+  overflow: auto;
+}
+
+.editor-pane {
+  padding: 0 4px;
+}
+
+.preview-pane {
+  padding: 16px 20px;
+
+  pre {
+    margin: 0;
+    white-space: pre-wrap;
+  }
+}
+
+.intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 48px 16px;
+  text-align: center;
+
+  > i {
+    font-size: 2rem;
+    color: var(--p-primary-color);
+  }
+
+  h2 {
+    margin: 0;
+    font-size: 18px;
+  }
+
+  p {
+    margin: 0;
+    max-width: 440px;
+  }
+}
+
+@media (max-width: 960px) {
+  .notes {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+  }
+
+  .panes {
+    grid-template-columns: 1fr;
+    min-height: 60vh;
+  }
+}

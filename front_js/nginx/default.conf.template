@@ -1,0 +1,108 @@
+# AthenaCognis front_js — static Angular build + same-origin proxy to the backend.
+# ${BACKEND_HOST} / ${GROBID_HOST} / ${TELEMETRY_UPSTREAM} are substituted at container start (nginx image templates).
+
+# Strip /api and keep the raw (still-encoded) URI: file paths are sent as %2Fshared%2F... segments
+# and must reach FastAPI byte-for-byte (nginx would otherwise decode them and merge slashes).
+map $request_uri $api_uri {
+    ~^/api(?<rest>/.*)$ $rest;
+    default /;
+}
+
+map $request_uri $grobid_uri {
+    ~^/grobid(?<rest>/.*)$ $rest;
+    default /;
+}
+
+map $request_uri $telemetry_uri {
+    ~^/telemetry(?<rest>/.*)$ $rest;
+    default /;
+}
+
+map $request_uri $arxiv_uri {
+    ~^/arxiv(?<rest>/.*)$ $rest;
+    default /;
+}
+
+# Files that could run script on our origin are sandboxed when opened from /raw (opaque origin:
+# no access to the app, its storage or API responses). `?scripts=1` (the viewer's "Run scripts")
+# lets an HTML page run its own scripts, still inside that sandbox.
+map "$uri:$arg_scripts" $raw_csp {
+    "~*\.(html?|xhtml):1$" "sandbox allow-scripts allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox";
+    "~*\.(html?|xhtml|svgz?|xml):" "sandbox";
+    default "";
+}
+
+server {
+    listen 80;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Docker's embedded DNS: upstreams are resolved per request, so nginx starts even if they are down.
+    resolver 127.0.0.11 valid=30s ipv6=off;
+    set $backend ${BACKEND_HOST};
+    set $grobid ${GROBID_HOST};
+    set $telemetry "${TELEMETRY_UPSTREAM}";
+
+    client_max_body_size 0;
+    # Notes and long texts travel in query strings (backend API design).
+    large_client_header_buffers 8 2m;
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    location /api/ {
+        proxy_pass http://$backend$api_uri;
+        proxy_http_version 1.1;
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_read_timeout 1800s;
+        proxy_send_timeout 1800s;
+    }
+
+    # Paper metadata extraction (State of the Art library).
+    location /grobid/ {
+        proxy_pass http://$grobid$grobid_uri;
+        proxy_http_version 1.1;
+        proxy_read_timeout 300s;
+    }
+
+    # Optional usage statistics server (TELEMETRY_SERVER_URL): same-origin, so no CORS setup is needed.
+    location /telemetry/ {
+        if ($telemetry = "") {
+            return 404;
+        }
+        proxy_pass $telemetry$telemetry_uri;
+        proxy_ssl_server_name on;
+        proxy_read_timeout 60s;
+    }
+
+    # arXiv metadata API (no CORS headers upstream).
+    location /arxiv/ {
+        proxy_pass https://export.arxiv.org$arxiv_uri;
+        proxy_ssl_server_name on;
+        proxy_set_header Host export.arxiv.org;
+        proxy_read_timeout 60s;
+    }
+
+    # Read-only /shared mount: inline display with Range support (video seeking, PDF, text heads).
+    location /raw/ {
+        alias /shared/;
+        add_header X-Content-Type-Options nosniff always;
+        add_header Content-Security-Policy $raw_csp always;
+    }
+
+    location = /config.json {
+        add_header Cache-Control "no-store" always;
+    }
+
+    # Hashed build assets never change.
+    location ~* "-[A-Z0-9]{8}\.(js|css)$" {
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+    }
+
+    location / {
+        add_header Cache-Control "no-cache" always;
+        try_files $uri $uri/ /index.html;
+    }
+}

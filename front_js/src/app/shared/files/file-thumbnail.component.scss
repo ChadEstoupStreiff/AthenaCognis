@@ -1,0 +1,83 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.thumb {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 100%;
+  overflow: hidden;
+  background: var(--ac-code-background);
+  color: var(--ac-muted);
+
+  i {
+    font-size: 2rem;
+    opacity: 0.6;
+  }
+}
+
+img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+
+  /* Drawings are shown whole, on a checkerboard so transparent ones stay visible. */
+  &.drawing {
+    padding: 12px;
+    object-fit: contain;
+    object-position: center;
+    background: repeating-conic-gradient(#e5e7eb 0% 25%, #fff 0% 50%) 50% / 16px 16px;
+  }
+}
+
+.snippet {
+  margin: 0;
+  padding: 10px 12px;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font:
+    11px/1.45 ui-monospace,
+    Menlo,
+    Consolas,
+    monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--p-text-color);
+  mask-image: linear-gradient(to bottom, black 70%, transparent);
+}
+
+/* Page laid out at 4x the box, then scaled down: a miniature of the real rendering. */
+.page {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 400%;
+  height: 400%;
+  border: none;
+  background: #fff;
+  transform: scale(0.25);
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+
+.markdown {
+  align-self: stretch;
+  height: 100%;
+  padding: 10px 12px;
+  overflow: hidden;
+  color: var(--p-text-color);
+  font-size: 10px;
+  line-height: 1.45;
+  mask-image: linear-gradient(to bottom, black 70%, transparent);
+}
+
+.pending {
+  font-size: 11px;
+}

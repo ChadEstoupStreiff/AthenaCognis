@@ -1,0 +1,82 @@
+<p-dialog
+  header="Import references"
+  [modal]="true"
+  [visible]="visible()"
+  (visibleChange)="$event ? null : reset()"
+  [style]="{ width: 'min(760px, 98vw)' }"
+>
+  <p class="ac-muted caption">{{ help }}</p>
+  <label
+    class="drop"
+    [class.over]="over()"
+    (dragover)="$event.preventDefault(); over.set(true)"
+    (dragleave)="over.set(false)"
+    (drop)="drop($event)"
+  >
+    <i class="pi pi-cloud-upload" aria-hidden="true"></i>
+    <strong>Drop a .bib, .ris, Zotero zip export or PDFs</strong>
+    <span class="ac-muted">or click to browse</span>
+    <input
+      type="file"
+      hidden
+      multiple
+      accept=".bib,.ris,.zip,.pdf"
+      (change)="pick($event)"
+      aria-label="Bibliography files"
+    />
+  </label>
+  @if (error(); as message) {
+    <p class="error">{{ message }}</p>
+  }
+  @if (plan().length > 0) {
+    <div class="summary">
+      <span class="badge" data-action="update">Update {{ counts().update }}</span>
+      <span class="badge" data-action="add">Add {{ counts().add }}</span>
+      <span class="badge" data-action="skip">Skip {{ counts().skip }}</span>
+    </div>
+    <div class="plan">
+      @for (item of plan(); track $index) {
+        <div class="plan-row">
+          <span class="badge" [attr.data-action]="item.action">{{ item.action }}</span>
+          <span>
+            {{ item.entry.info.title }}
+            <small>
+              @switch (item.action) {
+                @case ('update') {
+                  existing file {{ item.existing ? fileName(item.existing) : '' }}
+                }
+                @case ('add') {
+                  new file {{ item.pdfName }}
+                }
+                @default {
+                  no matching paper and no PDF provided
+                }
+              }
+            </small>
+          </span>
+        </div>
+      }
+    </div>
+    <p class="ac-muted caption">
+      Matched papers keep their file; non-empty imported fields replace current ones.
+    </p>
+    <label class="option">
+      <strong>Mark imported references as validated</strong>
+      <p-toggleswitch
+        [ngModel]="markValidated()"
+        (ngModelChange)="markValidated.set($event)"
+        ariaLabel="Mark as validated"
+      />
+    </label>
+  }
+  <ng-template #footer>
+    <p-button label="Cancel" severity="secondary" [text]="true" (onClick)="reset()" />
+    <p-button
+      [label]="'Import ' + actionable() + ' reference(s)'"
+      icon="pi pi-download"
+      [loading]="working()"
+      [disabled]="actionable() === 0"
+      (onClick)="run()"
+    />
+  </ng-template>
+</p-dialog>

@@ -1,0 +1,102 @@
+<section class="block">
+  <h3>Projects</h3>
+  <p-multiselect
+    [options]="projectOptions()"
+    [ngModel]="relations.value()?.projects ?? []"
+    (ngModelChange)="setRelations('projects', $event)"
+    [filter]="true"
+    display="chip"
+    placeholder="No project"
+    [fluid]="true"
+    appendTo="body"
+    ariaLabel="Projects"
+  >
+    <ng-template #item let-name><ac-tag-chip [name]="name" kind="project" /></ng-template>
+  </p-multiselect>
+  <h3>Tags</h3>
+  <p-multiselect
+    [options]="tagOptions()"
+    [ngModel]="relations.value()?.tags ?? []"
+    (ngModelChange)="setRelations('tags', $event)"
+    [filter]="true"
+    display="chip"
+    placeholder="No tag"
+    [fluid]="true"
+    appendTo="body"
+    ariaLabel="Tags"
+  >
+    <ng-template #item let-name><ac-tag-chip [name]="name" /></ng-template>
+  </p-multiselect>
+</section>
+
+<section class="block">
+  <h3>Location</h3>
+  <label class="field">
+    <span>Name</span>
+    <input
+      pInputText
+      [ngModel]="name()"
+      (ngModelChange)="name.set($event)"
+      (keydown.enter)="move()"
+    />
+  </label>
+  <div class="field-row">
+    <label class="field">
+      <span>Date</span>
+      <p-datepicker
+        [ngModel]="date()"
+        (ngModelChange)="date.set($event)"
+        dateFormat="yy-mm-dd"
+        [showIcon]="true"
+        [fluid]="true"
+        appendTo="body"
+      />
+    </label>
+    <label class="field">
+      <span>Folder</span>
+      <p-select
+        [options]="folderOptions()"
+        [ngModel]="folder()"
+        (ngModelChange)="folder.set($event)"
+        [fluid]="true"
+        appendTo="body"
+      />
+    </label>
+  </div>
+  @if (dirty()) {
+    <p-button
+      label="Move / rename"
+      icon="pi pi-check"
+      size="small"
+      [loading]="moving()"
+      (onClick)="move()"
+    />
+  }
+</section>
+
+@if (metadata(); as meta) {
+  <section class="block">
+    <h3>Details</h3>
+    <dl class="facts">
+      <dt>Size</dt>
+      <dd>{{ meta.size | bytes }}</dd>
+      <dt>Type</dt>
+      <dd>{{ meta.mime_type }}</dd>
+      <dt>Created</dt>
+      <dd>{{ meta.created.slice(0, 16).replace('T', ' ') }}</dd>
+      <dt>Modified</dt>
+      <dd>{{ meta.modified.slice(0, 16).replace('T', ' ') }}</dd>
+      <dt>Path</dt>
+      <dd class="path">
+        <code>{{ path() }}</code>
+        <p-button
+          icon="pi pi-copy"
+          [text]="true"
+          size="small"
+          ariaLabel="Copy path"
+          (onClick)="copyPath()"
+        />
+      </dd>
+    </dl>
+  </section>
+}

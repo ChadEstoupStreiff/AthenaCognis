@@ -1,0 +1,67 @@
+@if (count() > 0) {
+  <div class="bar" role="toolbar" aria-label="Selection actions">
+    <span class="count">{{ count() }} selected</span>
+    @if (allPaths().length > 0) {
+      <p-button
+        [label]="allSelected() ? 'Clear' : 'Select all (' + allPaths().length + ')'"
+        size="small"
+        [text]="true"
+        (onClick)="toggleAll()"
+      />
+    }
+    <span class="divider"></span>
+    <p-button
+      icon="pi pi-download"
+      size="small"
+      [text]="true"
+      pTooltip="Download as zip"
+      ariaLabel="Download as zip"
+      (onClick)="download()"
+    />
+    <p-button
+      icon="pi pi-tags"
+      size="small"
+      [text]="true"
+      pTooltip="Projects & tags"
+      ariaLabel="Projects and tags"
+      (onClick)="relationsOpen.set(true)"
+    />
+    <p-button
+      icon="pi pi-sparkles"
+      size="small"
+      [text]="true"
+      pTooltip="AI processing"
+      ariaLabel="AI processing"
+      (onClick)="aiOpen.set(true)"
+    />
+    <p-button
+      icon="pi pi-comments"
+      size="small"
+      [text]="true"
+      pTooltip="Chat about these files"
+      ariaLabel="Chat about these files"
+      (onClick)="chat()"
+    />
+    <p-button
+      icon="pi pi-trash"
+      size="small"
+      [text]="true"
+      severity="danger"
+      pTooltip="Delete"
+      ariaLabel="Delete"
+      [loading]="busy()"
+      (onClick)="remove()"
+    />
+    <p-button
+      icon="pi pi-times"
+      size="small"
+      [text]="true"
+      severity="secondary"
+      ariaLabel="Clear selection"
+      (onClick)="selection.set([])"
+    />
+  </div>
+}
+
+<ac-relations-dialog [(visible)]="relationsOpen" [paths]="selection()" />
+<ac-ai-actions-dialog [(visible)]="aiOpen" [paths]="selection()" />

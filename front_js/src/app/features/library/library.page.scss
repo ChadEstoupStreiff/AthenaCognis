@@ -1,0 +1,30 @@
+.library {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.title {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: min(360px, 100%);
+
+  h1 {
+    margin: 0;
+    font-size: 24px;
+    letter-spacing: -0.02em;
+  }
+}
+
+.search {
+  padding: 14px 16px;
+}

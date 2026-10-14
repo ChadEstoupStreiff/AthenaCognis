@@ -1,0 +1,44 @@
+.bar {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 10px 6px 16px;
+  border: 1px solid var(--ac-panel-border);
+  border-radius: 999px;
+  background: var(--ac-panel-background);
+  box-shadow: 0 8px 32px rgb(0 0 0 / 0.18);
+  transform: translateX(-50%);
+  animation: rise 0.18s ease-out;
+}
+
+.count {
+  font-weight: 600;
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
+.divider {
+  width: 1px;
+  height: 20px;
+  margin: 0 6px;
+  background: var(--ac-panel-border);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+}
+
+@media (max-width: 768px) {
+  .bar {
+    bottom: 76px;
+    max-width: calc(100vw - 16px);
+    overflow-x: auto;
+  }
+}

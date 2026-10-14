@@ -1,0 +1,67 @@
+<div class="toolbar">
+  <span class="label"><i class="pi pi-sparkles" aria-hidden="true"></i> AI</span>
+  @for (preset of presets; track preset.key) {
+    <p-button
+      [label]="preset.label"
+      size="small"
+      [text]="true"
+      [disabled]="busy() || text().trim() === ''"
+      (onClick)="run(preset.instruction)"
+    />
+  }
+  <p-button
+    label="Ask…"
+    size="small"
+    [text]="true"
+    [disabled]="busy()"
+    (onClick)="asking.set(!asking())"
+  />
+  @if (busy()) {
+    <i class="pi pi-spin pi-spinner busy" aria-label="Working"></i>
+  }
+  <span class="end"><ng-content select="[acToolbarEnd]" /></span>
+</div>
+
+@if (asking()) {
+  <form class="ask" (ngSubmit)="run(question())">
+    <input
+      pInputText
+      name="question"
+      placeholder="What should the AI do with this text?"
+      [ngModel]="question()"
+      (ngModelChange)="question.set($event)"
+      aria-label="Custom instruction"
+    />
+    <p-button
+      type="submit"
+      icon="pi pi-send"
+      size="small"
+      [disabled]="busy() || question().trim() === ''"
+      ariaLabel="Send"
+    />
+  </form>
+}
+
+@if (suggestion(); as text) {
+  <div class="suggestion">
+    <div class="suggestion-body"><ac-markdown-view [source]="text" /></div>
+    <div class="suggestion-actions">
+      <p-button label="Replace" icon="pi pi-check" size="small" (onClick)="accept()" />
+      <p-button
+        label="Copy"
+        icon="pi pi-copy"
+        size="small"
+        severity="secondary"
+        [outlined]="true"
+        (onClick)="copy()"
+      />
+      <p-button
+        label="Discard"
+        size="small"
+        severity="secondary"
+        [text]="true"
+        (onClick)="suggestion.set(null)"
+      />
+    </div>
+  </div>
+}

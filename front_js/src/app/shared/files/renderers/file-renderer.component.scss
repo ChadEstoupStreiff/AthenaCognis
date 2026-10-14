@@ -1,0 +1,78 @@
+:host {
+  display: block;
+}
+
+.view-switch {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.view-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+}
+
+.renderer {
+  display: flex;
+  justify-content: center;
+  min-height: 120px;
+
+  > * {
+    width: 100%;
+  }
+}
+
+video {
+  width: 100%;
+  max-height: 80vh;
+  border-radius: 8px;
+  background: #000;
+}
+
+audio {
+  width: 100%;
+  margin: 24px 0;
+}
+
+/* Hosts can resize compact previews through --ac-compact-pdf-height / --ac-compact-code-height. */
+.compact {
+  --pdf-height: var(--ac-compact-pdf-height, 60vh);
+  --code-max-height: var(--ac-compact-code-height, 55vh);
+}
+
+.fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--ac-muted);
+
+  > i {
+    font-size: 1.8rem;
+    color: var(--p-primary-color);
+  }
+
+  p {
+    margin: 0;
+  }
+}
+
+.fallback-thumb {
+  width: min(280px, 100%);
+  height: 200px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--ac-panel-border);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}

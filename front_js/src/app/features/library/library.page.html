@@ -1,0 +1,44 @@
+<div class="library">
+  <header class="toolbar">
+    <div class="title">
+      <h1>Library</h1>
+      <ac-search-status [search]="search" />
+    </div>
+    <p-selectbutton
+      [options]="viewOptions"
+      optionValue="value"
+      [allowEmpty]="false"
+      [ngModel]="view()"
+      (ngModelChange)="view.set($event)"
+      size="small"
+      ariaLabel="View"
+    >
+      <ng-template #item let-option>
+        <i [class]="option.icon" [attr.aria-label]="option.label"></i>
+      </ng-template>
+    </p-selectbutton>
+  </header>
+
+  <section class="search ac-panel" aria-label="Search and filters">
+    <ac-search-panel
+      layout="wide"
+      [value]="form()"
+      (valueChange)="updateForm($event)"
+      [filtersOpen]="filtersOpen()"
+      (filtersOpenChange)="setFiltersOpen($event)"
+      (submitted)="runNow()"
+    />
+  </section>
+
+  <ac-file-collection
+    [paths]="search.results()"
+    [mode]="view()"
+    [(selection)]="selection"
+    [emptyTitle]="search.running() ? 'Searching…' : 'No files match'"
+    [emptyMessage]="
+      search.running() ? null : 'Try another date range, fewer filters, or a deeper search mode.'
+    "
+  />
+</div>
+
+<ac-file-bulk-bar [(selection)]="selection" [allPaths]="search.results()" />

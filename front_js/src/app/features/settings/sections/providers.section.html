@@ -1,0 +1,115 @@
+<section class="group" id="providers">
+  <h2>Providers &amp; keys</h2>
+  <p class="ac-muted intro">
+    Keys are stored in the shared database (the Streamlit front uses the same ones). “Check” calls
+    the provider from this browser.
+  </p>
+  @for (item of keys; track item.key) {
+    <div class="row">
+      <div class="label">
+        <strong>{{ item.label }}</strong>
+        <a class="ac-muted" [href]="item.url" target="_blank" rel="noopener noreferrer"
+          >Get a key</a
+        >
+      </div>
+      <div class="inline key">
+        <p-password
+          [ngModel]="text(item.key)"
+          (ngModelChange)="save(item.key, $event)"
+          [feedback]="false"
+          [toggleMask]="true"
+          [fluid]="true"
+          autocomplete="off"
+          [ariaLabel]="item.label + ' API key'"
+        />
+        <p-button
+          label="Check"
+          size="small"
+          severity="secondary"
+          [outlined]="true"
+          [disabled]="text(item.key) === ''"
+          [loading]="checks()[item.key] === 'checking'"
+          (onClick)="check(item.key)"
+        />
+        @switch (checks()[item.key]) {
+          @case ('valid') {
+            <p-tag severity="success" value="Valid" />
+          }
+          @case ('invalid') {
+            <p-tag severity="danger" value="Invalid" />
+          }
+          @case ('unreachable') {
+            <p-tag severity="warn" value="Can't check from browser" />
+          }
+        }
+      </div>
+    </div>
+  }
+</section>
+
+<section class="group" id="ollama">
+  <h2>Ollama</h2>
+  <div class="row">
+    <div class="label">
+      <strong>Server URL</strong
+      ><small class="ac-muted">http://ollama:11434 for the bundled server.</small>
+    </div>
+    <div class="inline">
+      <input
+        pInputText
+        [ngModel]="text('ollama_server', 'http://ollama:11434')"
+        (ngModelChange)="setOllamaUrl($event)"
+        aria-label="Ollama URL"
+      />
+      @if (ollamaStatus.isLoading()) {
+        <p-tag severity="secondary" value="Checking…" />
+      } @else if (ollamaStatus.value()) {
+        <p-tag severity="success" value="Reachable" icon="pi pi-check" />
+      } @else {
+        <p-tag severity="danger" value="Unreachable" icon="pi pi-times" />
+      }
+    </div>
+  </div>
+  <div class="row">
+    <div class="label">
+      <strong>Install a model</strong>
+      <a
+        class="ac-muted"
+        href="https://ollama.com/library"
+        target="_blank"
+        rel="noopener noreferrer"
+        >Browse models</a
+      >
+    </div>
+    <form class="inline" (ngSubmit)="pull()">
+      <input
+        pInputText
+        name="pull"
+        placeholder="e.g. llama3.2:3b"
+        [ngModel]="pullName()"
+        (ngModelChange)="pullName.set($event)"
+        aria-label="Model to install"
+      />
+      <p-button
+        type="submit"
+        label="Install"
+        icon="pi pi-download"
+        size="small"
+        [disabled]="pullName().trim() === ''"
+      />
+    </form>
+  </div>
+  <div class="models">
+    @for (model of installed.value() ?? []; track model.name) {
+      <div class="model">
+        <i class="pi pi-box" aria-hidden="true"></i>
+        <strong>{{ model.name }}</strong>
+        @if (model.size) {
+          <span class="ac-muted">{{ model.size | bytes }}</span>
+        }
+      </div>
+    } @empty {
+      <p class="ac-muted">{{ installed.isLoading() ? 'Loading…' : 'No model installed.' }}</p>
+    }
+  </div>
+</section>

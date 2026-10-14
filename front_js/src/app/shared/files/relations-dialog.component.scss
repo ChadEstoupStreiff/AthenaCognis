@@ -1,0 +1,38 @@
+.intro {
+  margin: 0 0 10px;
+}
+
+.filter {
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  max-height: 50vh;
+  overflow: auto;
+}
+
+h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ac-muted);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+@media (max-width: 560px) {
+  .columns {
+    grid-template-columns: 1fr;
+  }
+}

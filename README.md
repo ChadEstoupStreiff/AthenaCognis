@@ -242,7 +242,7 @@ Each task selects its provider and model independently. Cloud providers require 
 | Layer | Technology |
 |-------|-----------|
 | Backend | Python 3, FastAPI, SQLAlchemy |
-| Frontend | Streamlit |
+| Frontend | Streamlit, and an Angular 21 + PrimeNG alternative ([front_js](front_js/README.md)) |
 | Database | MariaDB 10.6 |
 | Keyword search | Inline substring matching with smart normalisation, streamed via NDJSON |
 | Semantic search | `sentence-transformers` (`all-MiniLM-L6-v2`), cosine similarity, lazy embedding cache |
@@ -269,7 +269,7 @@ Each task selects its provider and model independently. Cloud providers require 
 
 ## 🏗️ Architecture
 
-The application runs as five Docker services on a shared internal network:
+The application runs as Docker services on a shared internal network:
 
 | Service | Image | Purpose | Host Port |
 |---------|-------|---------|-----------|
@@ -278,6 +278,7 @@ The application runs as five Docker services on a shared internal network:
 | `ollama` | `ollama/ollama` | Local LLM inference server; models stored in `DATA_PATH/ollama` |, (internal) |
 | `back` | Custom (FastAPI) | REST API + background AI daemons + file management | `BACK_PORT` |
 | `front` | Custom (Streamlit) | Web UI; communicates with the backend over the internal network | `FRONT_PORT` |
+| `front_js` | Custom (nginx + Angular build) | Alternative web UI, same backend and data; see [front_js/README.md](front_js/README.md) | `FRONT_JS_PORT` |
 
 **Background daemons** (run as threads inside the `back` container):
 
@@ -324,7 +325,8 @@ Open `.env` and fill in the values (see [Configuration](#%EF%B8%8F-configuration
 ./up.sh
 ```
 
-The frontend will be available at `http://localhost:<FRONT_PORT>`.
+The frontend will be available at `http://localhost:<FRONT_PORT>`, and the Angular front at
+`http://localhost:<FRONT_JS_PORT>` (both share the same data).
 
 > **Prefer double-clicking?** `start.sh` (Linux), `start.command` (macOS), and
 > `start.bat` (Windows) do the same thing, but also check that Docker is
@@ -384,6 +386,7 @@ All core configuration is done via the `.env` file:
 | `BACK_PORT` | ✅ | Host port for the FastAPI backend | `8400` |
 | `FRONT_PORT` | ✅ | Host port for the Streamlit frontend | `8401` |
 | `PMA_PORT` | ✅ | Host port for phpMyAdmin | `8402` |
+| `FRONT_JS_PORT` | | Host port for the Angular front (`front_js`) | `8405` |
 | `DATABASE_PASSWORD` | ✅ | MariaDB root password | `supersecret` |
 | `APP_PWD` | ☑️ optional | Password to protect the web UI; leave empty to disable authentication | `mypassword` |
 | `LOGIN_TIMEOUT` | ☑️ optional | Session duration in seconds when `APP_PWD` is set (default: 86400) | `86400` |

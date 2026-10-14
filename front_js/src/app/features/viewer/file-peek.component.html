@@ -1,0 +1,137 @@
+<p-drawer
+  position="right"
+  [visible]="row() !== null"
+  (visibleChange)="$event ? null : peek.close()"
+  [style]="{ width: 'min(1120px, 100vw)' }"
+  styleClass="file-peek"
+  [modal]="true"
+  [dismissible]="true"
+>
+  <ng-template #header>
+    @if (row(); as file) {
+      <div class="header">
+        <i [class]="file.icon" aria-hidden="true"></i>
+        <div class="titles">
+          <strong [title]="file.name">{{ file.name }}</strong>
+          <span class="ac-muted"
+            >{{ file.date | relativeDate }} · {{ file.folder }}
+            @if (metadata.value(); as meta) {
+              · {{ meta.size | bytes }}
+            }
+          </span>
+        </div>
+      </div>
+    }
+  </ng-template>
+
+  @if (row(); as file) {
+    <div class="actions">
+      <p-button label="Open" icon="pi pi-external-link" size="small" (onClick)="open()" />
+      @if (kind() === 'markdown') {
+        <p-button
+          label="Edit"
+          icon="pi pi-pen-to-square"
+          size="small"
+          severity="secondary"
+          [outlined]="true"
+          routerLink="/notes"
+          [queryParams]="{ path: file.path }"
+          (onClick)="peek.close()"
+        />
+      }
+      <span class="spacer"></span>
+      <p-button
+        icon="pi pi-thumbtack"
+        size="small"
+        [rounded]="true"
+        [text]="pinned.value() !== true"
+        [severity]="pinned.value() ? 'primary' : 'secondary'"
+        [pTooltip]="pinned.value() ? 'Unpin' : 'Pin to Home'"
+        [ariaLabel]="pinned.value() ? 'Unpin' : 'Pin'"
+        (onClick)="togglePin()"
+      />
+      <p-button
+        icon="pi pi-comments"
+        size="small"
+        [rounded]="true"
+        [text]="true"
+        severity="secondary"
+        pTooltip="Chat about this file"
+        ariaLabel="Chat about this file"
+        routerLink="/assistant"
+        [queryParams]="{ attach: file.path }"
+        (onClick)="peek.close()"
+      />
+      <p-button
+        icon="pi pi-download"
+        size="small"
+        [rounded]="true"
+        [text]="true"
+        severity="secondary"
+        pTooltip="Download"
+        ariaLabel="Download"
+        (onClick)="download()"
+      />
+    </div>
+
+    <div class="body">
+      <div class="preview">
+        <ac-file-renderer
+          [path]="file.path"
+          [compact]="true"
+          [metadata]="metadata.value() ?? null"
+          [ocrBoxes]="ocr().boxes"
+          [showBoxes]="showBoxes()"
+          [showScores]="showScores()"
+        />
+      </div>
+
+      <p-tabs [value]="tab()" (valueChange)="selectTab($event)" [scrollable]="true">
+        <p-tablist>
+          <p-tab value="overview">Overview</p-tab>
+          <p-tab value="ai">AI</p-tab>
+          <p-tab value="links">Links</p-tab>
+          <p-tab value="notes">Note</p-tab>
+        </p-tablist>
+        <p-tabpanels>
+          <p-tabpanel value="overview">
+            @if (tab() === 'overview') {
+              <div class="overview">
+                <ac-summary-block [path]="file.path" [collapsedLines]="8" />
+                <ac-info-tab
+                  [path]="file.path"
+                  [metadata]="metadata.value() ?? null"
+                  [navigateOnMove]="false"
+                  (moved)="peek.open($event)"
+                />
+                <ac-people-tab [path]="file.path" />
+              </div>
+            }
+          </p-tabpanel>
+          <p-tabpanel value="ai">
+            @if (tab() === 'ai') {
+              <ac-ai-tab
+                [path]="file.path"
+                [kind]="kind()"
+                [ocrRecord]="ocrRecord.value() ?? null"
+                [ocr]="ocr()"
+                [(showBoxes)]="showBoxes"
+                [(showScores)]="showScores"
+              />
+            }
+          </p-tabpanel>
+          <p-tabpanel value="links">
+            @if (tab() === 'links') {
+              <ac-links-tab [path]="file.path" />
+            }
+          </p-tabpanel>
+          <p-tabpanel value="notes">
+            @if (tab() === 'notes') {
+              <ac-notes-tab [path]="file.path" />
+            }
+          </p-tabpanel>
+        </p-tabpanels>
+      </p-tabs>
+    </div>
+  }
+</p-drawer>

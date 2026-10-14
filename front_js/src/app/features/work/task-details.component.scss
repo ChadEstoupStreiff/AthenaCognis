@@ -1,0 +1,153 @@
+.details {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  h2 {
+    margin: 0;
+    font-size: 20px;
+    letter-spacing: -0.01em;
+    overflow-wrap: anywhere;
+
+    &.done {
+      text-decoration: line-through;
+      color: var(--ac-muted);
+    }
+  }
+}
+
+.badges,
+.chips,
+.people,
+.files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tone) 14%, transparent);
+  color: var(--tone);
+  font-size: 12px;
+  font-weight: 600;
+
+  i {
+    font-size: 11px;
+  }
+}
+
+h3 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ac-muted);
+}
+
+.empty {
+  margin: 0;
+}
+
+.dates {
+  display: flex;
+  gap: 32px;
+  margin: 0;
+
+  dt {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ac-muted);
+  }
+
+  dd {
+    margin: 2px 0 0;
+    font-variant-numeric: tabular-nums;
+
+    &.overdue {
+      color: var(--p-red-500);
+      font-weight: 600;
+    }
+
+    small {
+      margin-left: 4px;
+      font-weight: 500;
+    }
+  }
+}
+
+.person,
+.file {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 4px;
+  border: 1px solid var(--ac-panel-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--p-text-color);
+  font: inherit;
+  font-size: 13px;
+  text-decoration: none;
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--p-primary-color);
+  }
+}
+
+.file {
+  padding-left: 10px;
+
+  i {
+    color: var(--ac-muted);
+  }
+}
+
+.relations {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+
+  ul {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+
+    i {
+      color: var(--p-orange-500);
+      font-size: 12px;
+    }
+
+    &.done {
+      color: var(--ac-muted);
+
+      i {
+        color: var(--p-green-500);
+      }
+    }
+  }
+}

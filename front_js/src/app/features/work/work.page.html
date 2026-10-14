@@ -1,0 +1,375 @@
+<header class="toolbar">
+  <div class="titles">
+    <h1>Work</h1>
+    <div class="board-select">
+      <p-select
+        [options]="boardOptions()"
+        optionLabel="name"
+        optionValue="id"
+        [ngModel]="boardId()"
+        (ngModelChange)="navigate({ board: $event })"
+        placeholder="No board yet"
+        size="small"
+        ariaLabel="Board"
+      />
+      <p-button
+        icon="pi pi-plus"
+        [text]="true"
+        size="small"
+        pTooltip="New board"
+        ariaLabel="New board"
+        (onClick)="boardDialog.set({ id: null, name: '', description: '' })"
+      />
+      @if (current.value(); as board) {
+        <p-button
+          icon="pi pi-pencil"
+          [text]="true"
+          size="small"
+          pTooltip="Edit board"
+          ariaLabel="Edit board"
+          (onClick)="
+            boardDialog.set({
+              id: board.id,
+              name: board.name,
+              description: board.description ?? '',
+            })
+          "
+        />
+        <p-button
+          icon="pi pi-trash"
+          [text]="true"
+          size="small"
+          severity="danger"
+          pTooltip="Delete board"
+          ariaLabel="Delete board"
+          (onClick)="deleteBoard()"
+        />
+      }
+    </div>
+  </div>
+  <div class="filters">
+    <p-multiselect
+      [options]="projectOptions()"
+      [ngModel]="filters().projects"
+      (ngModelChange)="filter({ projects: $event })"
+      placeholder="Projects"
+      display="chip"
+      [filter]="true"
+      size="small"
+      appendTo="body"
+      ariaLabel="Filter projects"
+    />
+    <p-multiselect
+      [options]="tagOptions()"
+      [ngModel]="filters().tags"
+      (ngModelChange)="filter({ tags: $event })"
+      placeholder="Tags"
+      display="chip"
+      [filter]="true"
+      size="small"
+      appendTo="body"
+      ariaLabel="Filter tags"
+    />
+    <p-multiselect
+      [options]="priorities"
+      optionLabel="label"
+      optionValue="value"
+      [ngModel]="filters().priorities"
+      (ngModelChange)="filter({ priorities: $event })"
+      placeholder="Priority"
+      size="small"
+      appendTo="body"
+      ariaLabel="Filter priorities"
+    />
+    <label class="switch"
+      ><p-toggleswitch
+        [ngModel]="filters().showDone"
+        (ngModelChange)="filter({ showDone: $event })"
+      />
+      Done</label
+    >
+    <p-selectbutton
+      [options]="views"
+      optionValue="value"
+      [allowEmpty]="false"
+      [ngModel]="activeView()"
+      (ngModelChange)="navigate({ view: $event === 'board' ? null : $event })"
+      size="small"
+      ariaLabel="View"
+    >
+      <ng-template #item let-option
+        ><i [class]="option.icon" [pTooltip]="option.label" [attr.aria-label]="option.label"></i
+      ></ng-template>
+    </p-selectbutton>
+  </div>
+</header>
+
+@if (!boards.isLoading() && boardOptions().length === 0) {
+  <div class="ac-panel">
+    <ac-empty-state
+      icon="pi pi-th-large"
+      title="No board yet"
+      message="Boards hold your tasks in columns (To do, Doing, Done…)."
+    >
+      <p-button
+        label="Create a board"
+        icon="pi pi-plus"
+        (onClick)="boardDialog.set({ id: null, name: '', description: '' })"
+      />
+    </ac-empty-state>
+  </div>
+} @else {
+  @switch (activeView()) {
+    @case ('calendar') {
+      <div class="calendar-head">
+        <p-button
+          icon="pi pi-chevron-left"
+          [text]="true"
+          [rounded]="true"
+          ariaLabel="Previous month"
+          (onClick)="shiftCalendar(-1)"
+        />
+        <strong>{{ calendarLabel() }}</strong>
+        <p-button
+          icon="pi pi-chevron-right"
+          [text]="true"
+          [rounded]="true"
+          ariaLabel="Next month"
+          (onClick)="shiftCalendar(1)"
+        />
+      </div>
+      <div class="month">
+        @for (week of calendarWeeks(); track $index) {
+          @for (day of week; track day.date) {
+            <div
+              class="month-day"
+              [class.outside]="!day.inMonth"
+              [class.today]="day.date === today"
+            >
+              <span class="number">{{ day.day }}</span>
+              @for (task of dueOn(day.date); track task.id) {
+                <button
+                  type="button"
+                  class="due-task"
+                  [class.done]="task.completed"
+                  (click)="taskDialog.set({ task, columnId: null })"
+                >
+                  <i [class]="priority(task).icon" [style.color]="priority(task).color"></i
+                  >{{ task.title }}
+                </button>
+              }
+            </div>
+          }
+        }
+      </div>
+    }
+    @case ('timeline') {
+      <div class="timeline">
+        @for (group of timeline(); track group.key) {
+          <section class="group" [attr.data-tone]="group.tone">
+            <h2>
+              {{ group.label }} <span class="ac-muted">{{ group.key }}</span>
+            </h2>
+            @for (task of group.tasks; track task.id) {
+              <ng-container *ngTemplateOutlet="card; context: { $implicit: task }" />
+            }
+          </section>
+        } @empty {
+          <p class="ac-muted">No open task with a due date.</p>
+        }
+      </div>
+    }
+    @default {
+      <div
+        class="board"
+        cdkDropList
+        cdkDropListOrientation="horizontal"
+        [cdkDropListData]="columns()"
+        (cdkDropListDropped)="dropColumn($event)"
+      >
+        <div cdkDropListGroup class="board-lists">
+          @for (column of columns(); track column.id) {
+            <section class="column" cdkDrag [cdkDragData]="column">
+              <header class="column-head" cdkDragHandle>
+                <span class="dot" [style.background]="column.color"></span>
+                <strong>{{ column.name }}</strong>
+                <span class="ac-muted">{{ visibleTasks(column).length }}</span>
+                <p-button
+                  icon="pi pi-ellipsis-h"
+                  [text]="true"
+                  [rounded]="true"
+                  size="small"
+                  severity="secondary"
+                  ariaLabel="Column options"
+                  (onClick)="editColumn(column)"
+                />
+              </header>
+              <div
+                class="cards"
+                cdkDropList
+                [cdkDropListData]="column.id"
+                (cdkDropListDropped)="dropTask($event)"
+              >
+                @for (task of visibleTasks(column); track task.id) {
+                  <div cdkDrag [cdkDragData]="task">
+                    <ng-container *ngTemplateOutlet="card; context: { $implicit: task }" />
+                  </div>
+                }
+              </div>
+              <p-button
+                label="Add task"
+                icon="pi pi-plus"
+                size="small"
+                [text]="true"
+                severity="secondary"
+                (onClick)="taskDialog.set({ task: null, columnId: column.id })"
+              />
+            </section>
+          }
+          <button type="button" class="add-column" (click)="editColumn(null)">
+            <i class="pi pi-plus"></i> Add column
+          </button>
+        </div>
+      </div>
+    }
+  }
+}
+
+<ng-template #card let-task>
+  <article
+    class="card"
+    [class.done]="task.completed"
+    (click)="taskDialog.set({ task, columnId: null })"
+    (keydown.enter)="taskDialog.set({ task, columnId: null })"
+    tabindex="0"
+  >
+    <div class="card-head">
+      <i
+        [class]="priority(task).icon"
+        [style.color]="priority(task).color"
+        [pTooltip]="priority(task).label"
+      ></i>
+      <strong>{{ task.title }}</strong>
+      <button
+        type="button"
+        class="check"
+        [class.on]="task.completed"
+        [disabled]="!task.completed && blockedBy(task).length > 0"
+        [attr.aria-label]="task.completed ? 'Reopen' : 'Mark done'"
+        [pTooltip]="
+          !task.completed && blockedBy(task).length > 0
+            ? 'Blocked by ' + blockedBy(task).join(', ')
+            : ''
+        "
+        (click)="$event.stopPropagation(); toggleDone(task)"
+      >
+        <i [class]="task.completed ? 'pi pi-check-circle' : 'pi pi-circle'"></i>
+      </button>
+    </div>
+    @if (task.description) {
+      <ac-markdown-view class="description" [source]="task.description" layout="compact" />
+    }
+    <div class="meta">
+      @if (task.end_date) {
+        <span class="due" [class.overdue]="!task.completed && task.end_date.slice(0, 10) < today"
+          ><i class="pi pi-calendar"></i>{{ task.end_date.slice(0, 10) }}</span
+        >
+      }
+      @if (blockedBy(task).length > 0 && !task.completed) {
+        <span class="blocked"><i class="pi pi-lock"></i>{{ blockedBy(task).length }}</span>
+      }
+      @if (task.files.length > 0) {
+        <span class="ac-muted"><i class="pi pi-paperclip"></i>{{ task.files.length }}</span>
+      }
+    </div>
+    @if (task.projects.length + task.tags.length > 0) {
+      <div class="chips">
+        @for (project of task.projects; track project) {
+          <ac-tag-chip [name]="project" kind="project" />
+        }
+        @for (tag of task.tags; track tag) {
+          <ac-tag-chip [name]="tag" />
+        }
+      </div>
+    }
+    @if (task.contacts.length > 0) {
+      <div class="people">
+        @for (contactId of task.contacts; track contactId) {
+          <ac-contact-avatar
+            [contactId]="contactId"
+            [name]="contactName(contactId)"
+            [size]="22"
+            [pTooltip]="contactName(contactId)"
+          />
+        }
+      </div>
+    }
+  </article>
+</ng-template>
+
+<ac-task-dialog
+  [visible]="taskDialog() !== null"
+  (visibleChange)="$event ? null : taskDialog.set(null)"
+  [task]="taskDialog()?.task ?? null"
+  [columnId]="taskDialog()?.columnId ?? null"
+  [allTasks]="tasks.value() ?? []"
+  [defaultProjects]="filters().projects"
+/>
+
+<p-dialog
+  [header]="boardDialog()?.id ? 'Edit board' : 'New board'"
+  [modal]="true"
+  [visible]="boardDialog() !== null"
+  (visibleChange)="$event ? null : boardDialog.set(null)"
+  [style]="{ width: 'min(420px, 96vw)' }"
+>
+  @if (boardDialog(); as draft) {
+    <form class="form" (ngSubmit)="saveBoard()">
+      <label class="field"
+        ><span>Name</span><input pInputText name="name" [(ngModel)]="draft.name" required
+      /></label>
+      <label class="field"
+        ><span>Description</span
+        ><input pInputText name="description" [(ngModel)]="draft.description"
+      /></label>
+    </form>
+  }
+  <ng-template #footer>
+    <p-button label="Cancel" severity="secondary" [text]="true" (onClick)="boardDialog.set(null)" />
+    <p-button label="Save" icon="pi pi-check" (onClick)="saveBoard()" />
+  </ng-template>
+</p-dialog>
+
+<p-dialog
+  [header]="columnDraft()?.id ? 'Edit column' : 'New column'"
+  [modal]="true"
+  [visible]="columnDraft() !== null"
+  (visibleChange)="$event ? null : columnDraft.set(null)"
+  [style]="{ width: 'min(380px, 96vw)' }"
+>
+  @if (columnDraft(); as draft) {
+    <form class="form" (ngSubmit)="saveColumn()">
+      <label class="field"
+        ><span>Name</span><input pInputText name="name" [(ngModel)]="draft.name" required
+      /></label>
+      <label class="field"
+        ><span>Color</span
+        ><p-colorpicker name="color" [(ngModel)]="draft.color" format="hex" appendTo="body"
+      /></label>
+    </form>
+  }
+  <ng-template #footer>
+    @if (columnDraft()?.id) {
+      <p-button
+        class="left"
+        label="Delete"
+        icon="pi pi-trash"
+        severity="danger"
+        [text]="true"
+        (onClick)="deleteColumn()"
+      />
+    }
+    <p-button label="Cancel" severity="secondary" [text]="true" (onClick)="columnDraft.set(null)" />
+    <p-button label="Save" icon="pi pi-check" (onClick)="saveColumn()" />
+  </ng-template>
+</p-dialog>

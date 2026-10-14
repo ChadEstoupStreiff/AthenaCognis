@@ -1,0 +1,92 @@
+<div class="shell" [class.collapsed]="collapsed()">
+  <aside class="rail" aria-label="Main navigation">
+    <a class="brand" routerLink="/home" aria-label="AthenaCognis — Home">
+      <img src="logo.png" alt="" class="logo" />
+      @if (!collapsed()) {
+        <span class="name">AthenaCognis</span>
+      }
+    </a>
+
+    <nav class="nav">
+      @for (item of mainNav; track item.route) {
+        <a
+          class="nav-item"
+          [routerLink]="item.route"
+          routerLinkActive="active"
+          [pTooltip]="collapsed() ? item.label : undefined"
+          tooltipPosition="right"
+        >
+          <i [class]="item.icon" aria-hidden="true"></i>
+          <span class="label">{{ item.label }}</span>
+        </a>
+      }
+    </nav>
+
+    <div class="rail-footer">
+      <a
+        class="nav-item"
+        [routerLink]="settingsNav.route"
+        routerLinkActive="active"
+        [pTooltip]="collapsed() ? settingsNav.label : undefined"
+        tooltipPosition="right"
+      >
+        <i [class]="settingsNav.icon" aria-hidden="true"></i>
+        <span class="label">{{ settingsNav.label }}</span>
+      </a>
+      <div class="rail-actions">
+        <p-button
+          [icon]="themeIcon()"
+          [text]="true"
+          [rounded]="true"
+          severity="secondary"
+          [ariaLabel]="'Theme: ' + theme.mode()"
+          pTooltip="Theme: {{ theme.mode() }}"
+          (onClick)="theme.cycle()"
+        />
+        <p-button
+          [icon]="collapsed() ? 'pi pi-angle-double-right' : 'pi pi-angle-double-left'"
+          [text]="true"
+          [rounded]="true"
+          severity="secondary"
+          [ariaLabel]="collapsed() ? 'Expand navigation' : 'Collapse navigation'"
+          class="collapse-toggle"
+          (onClick)="toggleRail()"
+        />
+      </div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <button type="button" class="search-trigger" (click)="palette.open.set(true)">
+        <i class="pi pi-search" aria-hidden="true"></i>
+        <span>Search or jump to…</span>
+        <kbd>{{ isMac ? '⌘' : 'Ctrl' }} K</kbd>
+      </button>
+      <span class="spacer"></span>
+      <ac-jobs-indicator />
+      <p-button label="New" icon="pi pi-plus" size="small" (onClick)="newMenu.toggle($event)" />
+      <p-menu #newMenu [model]="newItems" [popup]="true" appendTo="body" />
+    </header>
+    <main class="content">
+      <router-outlet />
+    </main>
+  </div>
+</div>
+
+@defer (when palette.open()) {
+  <ac-command-palette />
+}
+@defer (when capture.uploadOpen()) {
+  <ac-upload-dialog />
+}
+@defer (when capture.voiceOpen()) {
+  <ac-voice-dock />
+}
+@defer (when peek.path() !== null) {
+  <ac-file-peek />
+}
+@defer (when telemetry.needsConsent()) {
+  <ac-telemetry-consent />
+}
+<ac-drop-overlay />

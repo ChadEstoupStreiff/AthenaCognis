@@ -1,0 +1,126 @@
+@let current = task();
+<div class="details">
+  <header class="head">
+    <h2 [class.done]="current.completed">{{ current.title }}</h2>
+    <div class="badges">
+      <span class="badge" [style.--tone]="priority().color"
+        ><i [class]="priority().icon" aria-hidden="true"></i>{{ priority().label }}</span
+      >
+      @if (current.completed) {
+        <span class="badge" style="--tone: var(--p-green-500)"
+          ><i class="pi pi-check-circle" aria-hidden="true"></i>Done
+          {{ day(current.completed) }}</span
+        >
+      } @else if (blockers().length > 0) {
+        <span class="badge" style="--tone: var(--p-orange-500)"
+          ><i class="pi pi-lock" aria-hidden="true"></i>Blocked</span
+        >
+      } @else {
+        <span class="badge" style="--tone: var(--p-primary-color)"
+          ><i class="pi pi-circle" aria-hidden="true"></i>Open</span
+        >
+      }
+    </div>
+  </header>
+
+  @if (current.start_date || current.end_date) {
+    <dl class="dates">
+      <div>
+        <dt>Start</dt>
+        <dd>{{ day(current.start_date) || '—' }}</dd>
+      </div>
+      <div>
+        <dt>Due</dt>
+        <dd [class.overdue]="overdue()">
+          {{ day(current.end_date) || '—' }}
+          @if (overdue()) {
+            <small>overdue</small>
+          }
+        </dd>
+      </div>
+    </dl>
+  }
+
+  <section>
+    <h3>Description</h3>
+    @if (current.description) {
+      <ac-markdown-view [source]="current.description" />
+    } @else {
+      <p class="ac-muted empty">No description.</p>
+    }
+  </section>
+
+  @if (current.projects.length + current.tags.length > 0) {
+    <section>
+      <h3>Projects & tags</h3>
+      <div class="chips">
+        @for (project of current.projects; track project) {
+          <ac-tag-chip [name]="project" kind="project" />
+        }
+        @for (tag of current.tags; track tag) {
+          <ac-tag-chip [name]="tag" />
+        }
+      </div>
+    </section>
+  }
+
+  @if (contacts().length > 0) {
+    <section>
+      <h3>People</h3>
+      <div class="people">
+        @for (contact of contacts(); track contact.id) {
+          <a class="person" [routerLink]="['/people', contact.id]">
+            <ac-contact-avatar [contactId]="contact.id" [name]="contact.name" [size]="24" />
+            {{ contact.name }}
+          </a>
+        }
+      </div>
+    </section>
+  }
+
+  @if (dependencies().length + dependents().length > 0) {
+    <section class="relations">
+      @if (dependencies().length > 0) {
+        <div>
+          <h3>Depends on</h3>
+          <ul>
+            @for (item of dependencies(); track item.id) {
+              <li [class.done]="item.completed">
+                <i
+                  [class]="item.completed ? 'pi pi-check-circle' : 'pi pi-lock'"
+                  aria-hidden="true"
+                ></i
+                >{{ item.title }}
+              </li>
+            }
+          </ul>
+        </div>
+      }
+      @if (dependents().length > 0) {
+        <div>
+          <h3>Blocks</h3>
+          <ul>
+            @for (item of dependents(); track item.id) {
+              <li [class.done]="item.completed">
+                <i class="pi pi-arrow-right" aria-hidden="true"></i>{{ item.title }}
+              </li>
+            }
+          </ul>
+        </div>
+      }
+    </section>
+  }
+
+  @if (files().length > 0) {
+    <section>
+      <h3>Files</h3>
+      <div class="files">
+        @for (file of files(); track file.path) {
+          <button type="button" class="file" (click)="peek.open(file.path)">
+            <i [class]="file.icon" aria-hidden="true"></i>{{ file.name }}
+          </button>
+        }
+      </div>
+    </section>
+  }
+</div>

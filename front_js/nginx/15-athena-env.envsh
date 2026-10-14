@@ -1,0 +1,5 @@
+#!/bin/sh
+# Sourced before template substitution: telemetry upstream without trailing slash (empty = disabled).
+TELEMETRY_UPSTREAM="${TELEMETRY_SERVER_URL:-}"
+TELEMETRY_UPSTREAM="${TELEMETRY_UPSTREAM%/}"
+export TELEMETRY_UPSTREAM

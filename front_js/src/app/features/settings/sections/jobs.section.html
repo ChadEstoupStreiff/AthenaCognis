@@ -1,0 +1,76 @@
+<section class="group" id="jobs">
+  <h2>Background jobs</h2>
+  <div class="daemons">
+    @for (item of jobs.overview.value()?.services ?? []; track item.service) {
+      <button
+        type="button"
+        class="daemon"
+        [class.active]="item.service === service()"
+        (click)="service.set(item.service)"
+      >
+        <span class="dot" [attr.data-health]="item.health" [attr.aria-label]="item.health"></span>
+        <strong>{{ label(item.service) }}</strong>
+        <small class="ac-muted">{{ item.pending }} queued · {{ item.failed }} failed</small>
+      </button>
+    }
+  </div>
+  @if (status(); as current) {
+    <p class="ac-muted intro">
+      Daemon {{ current.health.toLowerCase()
+      }}{{ current.running ? ' · working on ' + nameOf(current.running) : '' }}
+    </p>
+  }
+  <div class="inline toolbar">
+    <p-selectbutton
+      [options]="[
+        { value: false, label: 'Latest runs' },
+        { value: true, label: 'Open & failed' },
+      ]"
+      optionValue="value"
+      [allowEmpty]="false"
+      [ngModel]="onlyOpen()"
+      (ngModelChange)="onlyOpen.set($event)"
+      size="small"
+      ariaLabel="Filter"
+    />
+  </div>
+  <p-table
+    [value]="visibleTasks()"
+    [paginator]="visibleTasks().length > rows"
+    [rows]="rows"
+    [loading]="tasks.isLoading() && !tasks.hasValue()"
+    size="small"
+    styleClass="jobs-table"
+  >
+    <ng-template #header>
+      <tr>
+        <th>File</th>
+        <th>State</th>
+        <th>Added</th>
+        <th>Completed</th>
+      </tr>
+    </ng-template>
+    <ng-template #body let-task>
+      <tr>
+        <td>
+          <button type="button" class="link" (click)="peek.open(task.file)">
+            {{ nameOf(task.file) }}
+          </button>
+        </td>
+        <td>
+          <p-tag
+            [severity]="severity(task.state)"
+            [value]="task.state.replace('_', ' ').toLowerCase()"
+          />
+        </td>
+        <td class="ac-muted">{{ task.added | relativeDate }}</td>
+        <td class="ac-muted">{{ task.completed ? (task.completed | relativeDate) : '—' }}</td>
+      </tr>
+    </ng-template>
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="4" class="ac-muted">No task.</td>
+      </tr>
+    </ng-template>
+  </p-table>
+</section>

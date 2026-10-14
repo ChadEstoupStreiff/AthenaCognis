@@ -199,6 +199,22 @@ Go to **Settings → LLM Settings → Local Llama**, enter a model name (e.g.
 `llama3.2:8b`) and click **Pull Model**. Browse available models at
 [ollama.com/library](https://ollama.com/library).
 
+## Angular front (`front_js`)
+
+The repository also contains an alternative web UI, `front_js` (Angular, served by nginx). It is
+not published on Docker Hub: build it from a clone of the repository with
+`docker compose up -d --build front_js`, then open `http://localhost:<FRONT_JS_PORT>` (default
+`8405`). It uses the same backend and data as the Streamlit front. See
+[front_js/README.md](front_js/README.md).
+
+## Network exposure
+
+Only the web fronts are meant to be opened from other machines. `BACK_PORT` (FastAPI) and
+`PMA_PORT` (phpMyAdmin) are published on the host too and have **no authentication**: anyone
+reaching them can read and change every file, setting and API key. `front_js` has no login either
+(`APP_PWD` only protects the Streamlit front). Keep the host on a trusted network, or bind these
+ports to localhost (e.g. `"127.0.0.1:${BACK_PORT}:80"`) or firewall them.
+
 ## Updating
 
 ```bash

@@ -1,0 +1,57 @@
+<p-dialog
+  [visible]="palette.open()"
+  (visibleChange)="palette.open.set($event)"
+  [modal]="true"
+  [dismissableMask]="true"
+  [showHeader]="false"
+  position="top"
+  [style]="{ width: 'min(640px, 96vw)', marginTop: '10vh' }"
+  styleClass="palette-dialog"
+  (onShow)="input.focus()"
+>
+  <div class="palette">
+    <div class="input-row">
+      <i class="pi pi-search" aria-hidden="true"></i>
+      <input
+        #input
+        class="input"
+        placeholder="Search pages, files, projects, people…"
+        [ngModel]="query()"
+        (ngModelChange)="query.set($event)"
+        (keydown)="onKey($event)"
+        aria-label="Command palette"
+      />
+    </div>
+    <div class="results" role="listbox">
+      @for (group of groups(); track group.section) {
+        <div class="section">{{ group.section }}</div>
+        @for (item of group.items; track item.id) {
+          <button
+            type="button"
+            class="item"
+            role="option"
+            [class.active]="indexOf(item) === active()"
+            [attr.aria-selected]="indexOf(item) === active()"
+            (click)="choose(item)"
+            (mouseenter)="active.set(indexOf(item))"
+          >
+            <i [class]="item.icon" aria-hidden="true"></i>
+            <span class="label">{{ item.label }}</span>
+            <span class="hint">{{ item.hint }}</span>
+          </button>
+        }
+      } @empty {
+        <div class="empty">No match.</div>
+      }
+    </div>
+    <div class="tips ac-muted">
+      <span><kbd>&gt;</kbd> actions</span>
+      <span><kbd>#</kbd> tags</span>
+      <span><kbd>&#64;</kbd> people</span>
+      <span><kbd>/</kbd> pages</span>
+      <span class="keys"
+        ><kbd>↑</kbd><kbd>↓</kbd> move · <kbd>↵</kbd> open · <kbd>esc</kbd> close</span
+      >
+    </div>
+  </div>
+</p-dialog>

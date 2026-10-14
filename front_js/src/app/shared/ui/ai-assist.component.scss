@@ -1,0 +1,55 @@
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+}
+
+.label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--p-primary-color);
+}
+
+.busy {
+  margin-left: 6px;
+  color: var(--p-primary-color);
+}
+
+.end {
+  display: inline-flex;
+  margin-left: auto;
+}
+
+.ask {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+
+  input {
+    flex: 1;
+  }
+}
+
+.suggestion {
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px dashed color-mix(in srgb, var(--p-primary-color) 50%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--p-primary-color) 5%, transparent);
+}
+
+.suggestion-body {
+  max-height: 260px;
+  overflow: auto;
+}
+
+.suggestion-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}

@@ -1,0 +1,141 @@
+@if (missing()) {
+  <div class="ac-panel">
+    <ac-empty-state
+      icon="pi pi-question-circle"
+      title="File not found"
+      [message]="path() + ' does not exist anymore.'"
+    >
+      <p-button label="Go to the library" routerLink="/library" />
+    </ac-empty-state>
+  </div>
+} @else {
+  <header class="toolbar">
+    <p-button
+      icon="pi pi-arrow-left"
+      [text]="true"
+      [rounded]="true"
+      severity="secondary"
+      ariaLabel="Back"
+      (onClick)="back()"
+    />
+    <i [class]="icon()" class="kind" aria-hidden="true"></i>
+    <div class="titles">
+      <h1 [title]="name()">{{ name() }}</h1>
+      <span class="ac-muted">{{ date() | relativeDate }} · {{ folder() }}</span>
+    </div>
+    <div class="actions">
+      <p-button
+        [icon]="pinned.value() ? 'pi pi-thumbtack' : 'pi pi-thumbtack'"
+        [text]="!pinned.value()"
+        [rounded]="true"
+        [severity]="pinned.value() ? 'primary' : 'secondary'"
+        [pTooltip]="pinned.value() ? 'Unpin' : 'Pin to Home'"
+        [ariaLabel]="pinned.value() ? 'Unpin' : 'Pin'"
+        (onClick)="togglePin()"
+      />
+      <p-button
+        icon="pi pi-download"
+        [text]="true"
+        [rounded]="true"
+        severity="secondary"
+        pTooltip="Download"
+        ariaLabel="Download"
+        (onClick)="download()"
+      />
+      <p-button
+        icon="pi pi-external-link"
+        [text]="true"
+        [rounded]="true"
+        severity="secondary"
+        pTooltip="Open raw"
+        ariaLabel="Open raw"
+        (onClick)="openRaw()"
+      />
+      <p-button
+        icon="pi pi-comments"
+        [text]="true"
+        [rounded]="true"
+        severity="secondary"
+        pTooltip="Chat about this file"
+        ariaLabel="Chat about this file"
+        routerLink="/assistant"
+        [queryParams]="{ attach: path() }"
+      />
+      @if (kind() === 'markdown') {
+        <p-button
+          icon="pi pi-pen-to-square"
+          label="Edit"
+          size="small"
+          [outlined]="true"
+          routerLink="/notes"
+          [queryParams]="{ path: path() }"
+        />
+      }
+      <p-button
+        icon="pi pi-trash"
+        [text]="true"
+        [rounded]="true"
+        severity="danger"
+        pTooltip="Delete"
+        ariaLabel="Delete"
+        (onClick)="remove()"
+      />
+    </div>
+  </header>
+
+  <div class="layout">
+    <section class="stage ac-panel">
+      <ac-file-renderer
+        [path]="path()"
+        [metadata]="metadata.value() ?? null"
+        [ocrBoxes]="ocr().boxes"
+        [showBoxes]="showBoxes()"
+        [showScores]="showScores()"
+      />
+    </section>
+
+    <aside class="inspector ac-panel">
+      <p-tabs [value]="activeTab()" (valueChange)="selectTab($event)" [scrollable]="true">
+        <p-tablist>
+          <p-tab value="info">Info</p-tab>
+          <p-tab value="ai">AI</p-tab>
+          <p-tab value="links">Links</p-tab>
+          <p-tab value="notes">Notes</p-tab>
+          <p-tab value="people">People</p-tab>
+        </p-tablist>
+        <p-tabpanels>
+          <p-tabpanel value="info"
+            ><ac-info-tab [path]="path()" [metadata]="metadata.value() ?? null"
+          /></p-tabpanel>
+          <p-tabpanel value="ai">
+            @if (activeTab() === 'ai') {
+              <ac-ai-tab
+                [path]="path()"
+                [kind]="kind()"
+                [ocrRecord]="ocrRecord.value() ?? null"
+                [ocr]="ocr()"
+                [(showBoxes)]="showBoxes"
+                [(showScores)]="showScores"
+              />
+            }
+          </p-tabpanel>
+          <p-tabpanel value="links">
+            @if (activeTab() === 'links') {
+              <ac-links-tab [path]="path()" />
+            }
+          </p-tabpanel>
+          <p-tabpanel value="notes">
+            @if (activeTab() === 'notes') {
+              <ac-notes-tab [path]="path()" />
+            }
+          </p-tabpanel>
+          <p-tabpanel value="people">
+            @if (activeTab() === 'people') {
+              <ac-people-tab [path]="path()" />
+            }
+          </p-tabpanel>
+        </p-tabpanels>
+      </p-tabs>
+    </aside>
+  </div>
+}

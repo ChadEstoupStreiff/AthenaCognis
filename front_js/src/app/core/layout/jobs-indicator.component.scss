@@ -1,0 +1,122 @@
+.jobs-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ac-muted);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--p-content-hover-background);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--p-primary-color);
+    outline-offset: 1px;
+  }
+
+  &.busy {
+    color: var(--p-primary-color);
+  }
+
+  &.dead {
+    color: var(--p-red-500);
+  }
+}
+
+.count {
+  position: absolute;
+  top: 2px;
+  right: 0;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--p-primary-color);
+  color: var(--p-primary-contrast-color);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 17px;
+  text-align: center;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(360px, 90vw);
+}
+
+h3 {
+  margin: 4px 0 0;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ac-muted);
+}
+
+.service,
+.operation {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.operation {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+
+  p-progressbar {
+    height: 4px;
+  }
+}
+
+.health {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--p-surface-400);
+  flex: none;
+
+  &[data-health='RUNNING'] {
+    background: var(--p-green-500);
+  }
+
+  &[data-health='DEAD'] {
+    background: var(--p-red-500);
+  }
+}
+
+.service-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+
+  small {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+}
+
+.counts {
+  display: flex;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.pending {
+  color: var(--p-primary-color);
+}
+
+.failed {
+  color: var(--p-red-500);
+}

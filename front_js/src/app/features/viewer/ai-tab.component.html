@@ -1,0 +1,83 @@
+<ac-summary-block [path]="path()" />
+
+@if (canOcr()) {
+  <section class="block">
+    <h3>Text & caption</h3>
+    @if (ocrRecord()?.blip; as caption) {
+      <p><i class="pi pi-image" aria-hidden="true"></i> {{ caption }}</p>
+    }
+    @if (ocr().text !== '') {
+      @if (ocr().boxes.length > 0) {
+        <div class="row-actions">
+          <label class="switch"
+            ><p-toggleswitch [ngModel]="showBoxes()" (ngModelChange)="showBoxes.set($event)" />
+            Boxes on image</label
+          >
+          <label class="switch"
+            ><p-toggleswitch [ngModel]="showScores()" (ngModelChange)="showScores.set($event)" />
+            Confidence</label
+          >
+        </div>
+      }
+      <pre class="pre">{{ ocr().text }}</pre>
+    } @else {
+      <p class="empty">No text extracted yet.</p>
+    }
+    <div class="row-actions">
+      <p-button
+        label="Run OCR & caption"
+        icon="pi pi-eye"
+        size="small"
+        [outlined]="true"
+        (onClick)="ask('ocr')"
+      />
+    </div>
+  </section>
+}
+
+@if (canTranscribe()) {
+  <section class="block">
+    <h3>Transcription</h3>
+    @if (transcription.value(); as record) {
+      <pre class="pre">{{ record.transcription }}</pre>
+    } @else if (!transcription.isLoading()) {
+      <p class="empty">No transcription yet.</p>
+    }
+    <div class="row-actions">
+      <p-button
+        label="Transcribe"
+        icon="pi pi-microphone"
+        size="small"
+        [outlined]="true"
+        (onClick)="ask('transcription')"
+      />
+    </div>
+  </section>
+}
+
+<section class="block">
+  <h3>Background jobs</h3>
+  @for (run of history.value() ?? []; track run.service) {
+    <div class="item">
+      <div class="item-main">
+        <strong>{{ labels[run.service] }}</strong>
+        <small
+          >{{ run.added
+          }}{{ run.result && run.state === 'FAILED' ? ' · ' + run.result : '' }}</small
+        >
+      </div>
+      <p-tag [value]="run.state" [severity]="severity[run.state]" />
+    </div>
+  } @empty {
+    <p class="empty">No job has run on this file.</p>
+  }
+  <div class="row-actions">
+    <p-button
+      label="Regenerate preview"
+      icon="pi pi-image"
+      size="small"
+      [text]="true"
+      (onClick)="ask('preview')"
+    />
+  </div>
+</section>

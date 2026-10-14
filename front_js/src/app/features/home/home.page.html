@@ -1,0 +1,205 @@
+<header class="hero">
+  <div>
+    <h1>{{ hello }}{{ userName() ? ', ' + userName() : '' }}</h1>
+    <p class="ac-muted">{{ todayLabel }}</p>
+  </div>
+</header>
+
+<p-tabs [value]="tab() === 'insights' ? 'insights' : 'today'" (valueChange)="selectTab($event)">
+  <p-tablist>
+    <p-tab value="today">Today</p-tab>
+    <p-tab value="insights">Insights</p-tab>
+  </p-tablist>
+  <p-tabpanels>
+    <p-tabpanel value="today">
+      <div class="stats">
+        <div class="stat ac-panel">
+          <div class="ring" [style.--percent]="todayPercent()">
+            <span>{{ todayHours().toFixed(1) }}h</span>
+          </div>
+          <div>
+            <strong>Today</strong><small class="ac-muted">of {{ target() }}h target</small>
+          </div>
+        </div>
+        <div class="stat ac-panel">
+          <div class="ring" [style.--percent]="weekPercent()">
+            <span>{{ weekHours().toFixed(1) }}h</span>
+          </div>
+          <div>
+            <strong>Last 7 days</strong
+            ><small class="ac-muted">of {{ (target() * 5).toFixed(0) }}h</small>
+          </div>
+        </div>
+        <a class="stat ac-panel link" routerLink="/library" [queryParams]="{ range: 'today' }">
+          <i class="pi pi-file" aria-hidden="true"></i>
+          <div>
+            <strong>{{ today.value()?.todayFiles?.length ?? 0 }} files</strong
+            ><small class="ac-muted">added today</small>
+          </div>
+        </a>
+        <a class="stat ac-panel link" routerLink="/work">
+          <i class="pi pi-check-square" aria-hidden="true"></i>
+          <div>
+            <strong>{{ due().length }} tasks</strong
+            ><small class="ac-muted">due within 2 weeks</small>
+          </div>
+        </a>
+      </div>
+
+      <div class="columns">
+        <section class="ac-panel block">
+          <h2>Today's time</h2>
+          @for (record of today.value()?.todayRecords ?? []; track record.id) {
+            <div class="row">
+              <span class="time">{{ record.startTime ?? '—' }}</span>
+              <div class="row-main">
+                <strong>{{ record.title }}</strong>
+                <ac-tag-chip [name]="record.project" kind="project" />
+              </div>
+              <span class="ac-muted">{{ record.hours }}h</span>
+            </div>
+          } @empty {
+            <p class="ac-muted empty">Nothing logged today. <a routerLink="/time">Log time</a></p>
+          }
+        </section>
+
+        <section class="ac-panel block">
+          <h2>Due soon</h2>
+          @for (entry of due(); track entry.task.id) {
+            <div class="row">
+              <i [class]="entry.icon" [style.color]="entry.color" aria-hidden="true"></i>
+              <div class="row-main">
+                <strong>{{ entry.task.title }}</strong>
+              </div>
+              <span [class.overdue]="entry.days < 0" class="due">{{ dueLabel(entry.days) }}</span>
+            </div>
+          } @empty {
+            <p class="ac-muted empty">No task due in the next two weeks.</p>
+          }
+        </section>
+      </div>
+
+      @if ((today.value()?.pinned?.length ?? 0) > 0) {
+        <section class="block">
+          <h2><i class="pi pi-thumbtack" aria-hidden="true"></i> Pinned</h2>
+          <ac-file-collection
+            [paths]="today.value()?.pinned ?? []"
+            mode="cards"
+            [selectable]="false"
+          />
+        </section>
+      }
+
+      @if ((today.value()?.weekFiles?.length ?? 0) > 0) {
+        <section class="block">
+          <h2>
+            This week
+            <span class="ac-muted count"
+              >{{ today.value()?.todayFiles?.length ?? 0 }} today ·
+              {{ today.value()?.weekFiles?.length ?? 0 }} in 7 days</span
+            >
+          </h2>
+          <ac-file-collection
+            [paths]="today.value()?.weekFiles ?? []"
+            mode="cards"
+            [selectable]="false"
+          />
+        </section>
+      }
+
+      <div class="stack">
+        <section class="block">
+          <h2>Recently added</h2>
+          <ac-file-collection
+            [paths]="today.value()?.recentAdded ?? []"
+            mode="list"
+            [selectable]="false"
+            emptyTitle="Nothing yet"
+          />
+        </section>
+        <section class="block">
+          <h2>Recently opened</h2>
+          <ac-file-collection
+            [paths]="today.value()?.recentOpened ?? []"
+            mode="list"
+            [selectable]="false"
+            emptyTitle="Nothing yet"
+          />
+        </section>
+      </div>
+    </p-tabpanel>
+
+    <p-tabpanel value="insights">
+      @if (metrics.isLoading()) {
+        <p class="ac-muted"><i class="pi pi-spin pi-spinner"></i> Counting files and disk usage…</p>
+      }
+      <div class="tiles">
+        @for (tile of tiles(); track tile.label) {
+          <div class="tile ac-panel" [pTooltip]="tile.hint">
+            <i [class]="tile.icon" aria-hidden="true"></i>
+            <strong>{{ tile.value }}</strong>
+            <span class="ac-muted">{{ tile.label }}</span>
+          </div>
+        }
+      </div>
+
+      @if (disk().length > 0) {
+        <section class="ac-panel block">
+          <div class="block-head">
+            <h2>Storage</h2>
+            <span class="ac-muted"
+              >{{ bytes(total(disk())) }} used by AthenaCognis · {{ bytes(diskFree()) }} free of
+              {{ bytes(diskTotal()) }}</span
+            >
+            <p-button
+              icon="pi pi-refresh"
+              [text]="true"
+              size="small"
+              ariaLabel="Refresh"
+              (onClick)="refreshMetrics.set(!refreshMetrics())"
+            />
+          </div>
+          <p-metergroup [value]="disk()" [max]="total(disk())">
+            <ng-template #label let-items>
+              <div class="legend">
+                @for (item of items; track item.label) {
+                  <span
+                    ><i class="dot" [style.background]="item.color"></i>{{ item.label }} ·
+                    {{ bytes(item.value) }}</span
+                  >
+                }
+              </div>
+            </ng-template>
+          </p-metergroup>
+        </section>
+      }
+
+      @for (
+        chart of [
+          { title: 'Files by type', data: types() },
+          { title: 'Files per project', data: perProject() },
+          { title: 'Files per tag', data: perTag() },
+        ];
+        track chart.title
+      ) {
+        @if (chart.data.length > 0) {
+          <section class="ac-panel block">
+            <h2>{{ chart.title }}</h2>
+            <p-metergroup [value]="chart.data" [max]="total(chart.data)">
+              <ng-template #label let-items>
+                <div class="legend">
+                  @for (item of items; track item.label) {
+                    <span
+                      ><i class="dot" [style.background]="item.color"></i>{{ item.label }} ·
+                      {{ item.value }}</span
+                    >
+                  }
+                </div>
+              </ng-template>
+            </p-metergroup>
+          </section>
+        }
+      }
+    </p-tabpanel>
+  </p-tabpanels>
+</p-tabs>

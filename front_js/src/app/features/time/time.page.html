@@ -1,0 +1,166 @@
+<header class="toolbar">
+  <div class="titles">
+    <h1>Time</h1>
+    <span class="ac-muted">{{ monthTotal() }} h logged in {{ monthLabel() }}</span>
+  </div>
+  <div class="actions">
+    <p-button
+      icon="pi pi-chevron-left"
+      [text]="true"
+      [rounded]="true"
+      severity="secondary"
+      ariaLabel="Previous month"
+      (onClick)="shiftMonth(-1)"
+    />
+    <strong class="month">{{ monthLabel() }}</strong>
+    <p-button
+      icon="pi pi-chevron-right"
+      [text]="true"
+      [rounded]="true"
+      severity="secondary"
+      ariaLabel="Next month"
+      (onClick)="shiftMonth(1)"
+    />
+    <p-button
+      label="Today"
+      size="small"
+      severity="secondary"
+      [outlined]="true"
+      (onClick)="shiftMonth(0)"
+    />
+    <label class="switch"
+      ><p-toggleswitch [ngModel]="weekends()" (ngModelChange)="weekends.set($event)" />
+      Weekends</label
+    >
+    <p-button label="Log time" icon="pi pi-plus" size="small" (onClick)="logTime(today)" />
+  </div>
+</header>
+
+@if (goal(); as progress) {
+  <div class="goal ac-panel">
+    <div class="goal-head">
+      <strong>{{ progress.title }}</strong>
+      <span class="ac-muted">{{ progress.left }} days left · {{ progress.percent }}%</span>
+    </div>
+    <div class="goal-track">
+      <div
+        class="goal-fill"
+        [style.width.%]="progress.percent"
+        [style.background]="progress.gradient"
+      ></div>
+    </div>
+  </div>
+}
+
+<p-tabs [value]="tab() === 'stats' ? 'stats' : 'calendar'" (valueChange)="selectTab($event)">
+  <p-tablist>
+    <p-tab value="calendar">Calendar</p-tab>
+    <p-tab value="stats">Statistics</p-tab>
+  </p-tablist>
+  <p-tabpanels>
+    <p-tabpanel value="calendar">
+      <div class="calendar" [style.--columns]="weekdays().length">
+        <div class="row head">
+          @for (name of weekdays(); track name) {
+            <span>{{ name }}</span>
+          }
+          <span>Week</span>
+        </div>
+        @for (week of grid(); track $index; let index = $index) {
+          <div class="row">
+            @for (day of week; track day.date) {
+              <button
+                type="button"
+                class="day"
+                [class.outside]="!day.inMonth"
+                [class.selected]="selectedDay() === day.date"
+                [attr.data-status]="day.status"
+                (click)="selectedDay.set(day.date)"
+                [attr.aria-label]="day.date + ', ' + hoursLabel(day.hours)"
+              >
+                <span class="number">{{ day.day }}</span>
+                @if (day.hours > 0) {
+                  <span class="hours">{{ hoursLabel(day.hours) }}</span>
+                }
+                <span class="bar"><span [style.width.%]="day.bar"></span></span>
+                <span class="counts ac-muted">
+                  @if (day.records > 0) {
+                    <span><i class="pi pi-clock" aria-hidden="true"></i>{{ day.records }}</span>
+                  }
+                  @if (day.files > 0) {
+                    <span><i class="pi pi-file" aria-hidden="true"></i>{{ day.files }}</span>
+                  }
+                </span>
+              </button>
+            }
+            <span class="week-total">{{ hoursLabel(weekTotals()[index] ?? 0) }}</span>
+          </div>
+        }
+      </div>
+      <p class="legend ac-muted">
+        <span data-status="ok"></span>within ±1 h of {{ target() }} h
+        <span data-status="high"></span>above <span data-status="low"></span>below
+        <span data-status="empty"></span>nothing logged
+      </p>
+    </p-tabpanel>
+    <p-tabpanel value="stats">
+      @if (tab() === 'stats') {
+        <ac-time-stats />
+      }
+    </p-tabpanel>
+  </p-tabpanels>
+</p-tabs>
+
+<p-drawer
+  position="right"
+  [visible]="selectedDay() !== null"
+  (visibleChange)="$event ? null : selectedDay.set(null)"
+  [style]="{ width: 'min(560px, 100vw)' }"
+  [header]="dayLabel()"
+>
+  <div class="day-panel">
+    <div class="day-head">
+      <strong>{{ hoursLabel(dayTotal()) }} of {{ target() }} h</strong>
+      <p-button
+        label="Log time"
+        icon="pi pi-plus"
+        size="small"
+        (onClick)="logTime(selectedDay())"
+      />
+    </div>
+    <h3>Time entries</h3>
+    @for (record of dayRecords(); track record.id) {
+      <button type="button" class="entry" (click)="edit(record)">
+        <span class="entry-time">{{ record.startTime ?? '—' }}</span>
+        <span class="entry-main">
+          <strong>{{ record.title }}</strong>
+          <ac-tag-chip [name]="record.project" kind="project" />
+          @if (record.description) {
+            <ac-markdown-view
+              class="entry-description ac-muted"
+              [source]="record.description"
+              layout="compact"
+              [lines]="2"
+            />
+          }
+        </span>
+        <span class="entry-hours">{{ hoursLabel(record.hours) }}</span>
+      </button>
+    } @empty {
+      <p class="ac-muted">Nothing logged.</p>
+    }
+    <h3>Files of the day</h3>
+    <ac-file-collection
+      [paths]="dayFiles()"
+      mode="list"
+      [selectable]="false"
+      emptyTitle="No files"
+    />
+  </div>
+</p-drawer>
+
+<ac-record-dialog
+  [(visible)]="dialogOpen"
+  [record]="editing()"
+  [defaultDate]="selectedDay() ?? today"
+/>

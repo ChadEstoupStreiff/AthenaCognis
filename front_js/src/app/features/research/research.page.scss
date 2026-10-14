@@ -1,0 +1,41 @@
+.head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+
+  .titles {
+    flex: 1;
+    min-width: 260px;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: 22px;
+  }
+
+  p {
+    margin: 2px 0 0;
+    font-size: 13px;
+  }
+}
+
+.tag {
+  min-width: 220px;
+}
+
+.count {
+  margin-left: 6px;
+  color: var(--ac-muted);
+  font-size: 12px;
+}
+
+p-tab i {
+  margin-right: 6px;
+}
+
+:host ::ng-deep .p-tabpanels {
+  padding: 14px 0 0;
+  background: transparent;
+}

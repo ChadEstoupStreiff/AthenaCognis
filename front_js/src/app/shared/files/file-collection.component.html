@@ -1,0 +1,139 @@
+@if (rows().length === 0) {
+  <ac-empty-state icon="pi pi-folder-open" [title]="emptyTitle()" [message]="emptyMessage()" />
+} @else {
+  @switch (mode()) {
+    @case ('table') {
+      <p-table
+        [value]="rows()"
+        dataKey="path"
+        [selection]="selectedRows()"
+        (selectionChange)="onTableSelection($event)"
+        [paginator]="rows().length > tablePageSize"
+        [rows]="tablePageSize"
+        [first]="tableFirst()"
+        (onPage)="onTablePage($event)"
+        [rowHover]="true"
+        size="small"
+        styleClass="file-table"
+      >
+        <ng-template #header>
+          <tr>
+            @if (selectable()) {
+              <th style="width: 3rem"><p-tableHeaderCheckbox /></th>
+            }
+            <th pSortableColumn="name">Name <p-sortIcon field="name" /></th>
+            <th pSortableColumn="date" style="width: 9rem">Date <p-sortIcon field="date" /></th>
+            <th style="width: 7rem">Folder</th>
+            <th>Projects & tags</th>
+          </tr>
+        </ng-template>
+        <ng-template #body let-row>
+          <tr class="table-row" (click)="activate(row, $event)" (dblclick)="openViewer(row)">
+            @if (selectable()) {
+              <td (click)="$event.stopPropagation()"><p-tableCheckbox [value]="row" /></td>
+            }
+            <td>
+              <span class="table-name"
+                ><i [class]="row.icon" aria-hidden="true"></i>{{ row.name }}</span
+              >
+            </td>
+            <td class="ac-muted">{{ row.date | relativeDate }}</td>
+            <td class="ac-muted">{{ row.folder }}</td>
+            <td><ng-container *ngTemplateOutlet="chips; context: { $implicit: row.path }" /></td>
+          </tr>
+        </ng-template>
+      </p-table>
+    }
+    @case ('list') {
+      <div class="list" role="list">
+        @for (row of visibleRows(); track row.path) {
+          <div
+            class="list-row"
+            role="listitem"
+            tabindex="0"
+            [class.selected]="selectedSet().has(row.path)"
+            (click)="activate(row, $event)"
+            (dblclick)="openViewer(row)"
+            (keydown.enter)="openViewer(row)"
+            (keydown.space)="$event.preventDefault(); activate(row, $event)"
+          >
+            <div class="list-thumb"><ac-file-thumbnail [path]="row.path" /></div>
+            <div class="list-info">
+              <div class="name"><i [class]="row.icon" aria-hidden="true"></i>{{ row.name }}</div>
+              <div class="meta ac-muted">{{ row.date | relativeDate }} · {{ row.folder }}</div>
+              <ng-container *ngTemplateOutlet="chips; context: { $implicit: row.path }" />
+            </div>
+            <ac-file-summary-snippet class="list-summary" [path]="row.path" />
+            @if (selectable()) {
+              <p-checkbox
+                class="list-check"
+                [binary]="true"
+                [ngModel]="selectedSet().has(row.path)"
+                (onChange)="toggle(row.path)"
+                (click)="$event.stopPropagation()"
+                [ariaLabel]="'Select ' + row.name"
+              />
+            }
+          </div>
+        }
+      </div>
+    }
+    @default {
+      <div class="grid">
+        @for (row of visibleRows(); track row.path) {
+          <article
+            class="card"
+            tabindex="0"
+            [class.selected]="selectedSet().has(row.path)"
+            (click)="activate(row, $event)"
+            (dblclick)="openViewer(row)"
+            (keydown.enter)="openViewer(row)"
+            (keydown.space)="$event.preventDefault(); activate(row, $event)"
+          >
+            <div class="media"><ac-file-thumbnail [path]="row.path" /></div>
+            @if (selectable()) {
+              <p-checkbox
+                class="card-check"
+                [binary]="true"
+                [ngModel]="selectedSet().has(row.path)"
+                (onChange)="toggle(row.path)"
+                (click)="$event.stopPropagation()"
+                [ariaLabel]="'Select ' + row.name"
+              />
+            }
+            @if (relationsOf(row.path).pinned) {
+              <i class="pi pi-thumbtack pin" aria-label="Pinned"></i>
+            }
+            <div class="body">
+              <div class="name" [title]="row.name">
+                <i [class]="row.icon" aria-hidden="true"></i>{{ row.name }}
+              </div>
+              <div class="meta ac-muted">{{ row.date | relativeDate }} · {{ row.folder }}</div>
+              <ng-container *ngTemplateOutlet="chips; context: { $implicit: row.path }" />
+            </div>
+          </article>
+        }
+      </div>
+    }
+  }
+
+  @if (mode() !== 'table' && rows().length > limit()) {
+    <div class="more" (acInView)="showMore()">
+      <p-button label="Show more" severity="secondary" [text]="true" (onClick)="showMore()" />
+    </div>
+  }
+}
+
+<ng-template #chips let-path>
+  @let relations = relationsOf(path);
+  @if (relations.projects.length + relations.tags.length > 0) {
+    <div class="chips">
+      @for (project of relations.projects; track project) {
+        <ac-tag-chip [name]="project" kind="project" />
+      }
+      @for (tag of relations.tags; track tag) {
+        <ac-tag-chip [name]="tag" />
+      }
+    </div>
+  }
+</ng-template>

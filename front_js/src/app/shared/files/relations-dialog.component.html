@@ -1,0 +1,60 @@
+<p-dialog
+  header="Projects & tags"
+  [modal]="true"
+  [(visible)]="visible"
+  [style]="{ width: 'min(560px, 96vw)' }"
+  [dismissableMask]="true"
+>
+  <p class="ac-muted intro">
+    {{ paths().length }} file(s). Checked names are applied to every file; unchecked ones are
+    removed.
+  </p>
+  <input
+    pInputText
+    class="filter"
+    placeholder="Filter…"
+    [ngModel]="filter()"
+    (ngModelChange)="filter.set($event)"
+    aria-label="Filter names"
+  />
+
+  <div class="columns">
+    <section>
+      <h3>Projects</h3>
+      @for (row of visibleProjects(); track row.name) {
+        <label class="row">
+          <p-checkbox
+            [binary]="true"
+            [ngModel]="stateOf(row, 'p:') === 'all'"
+            [indeterminate]="stateOf(row, 'p:') === 'some'"
+            (onChange)="toggle(row, 'p:')"
+          />
+          <ac-tag-chip [name]="row.name" kind="project" />
+        </label>
+      } @empty {
+        <p class="ac-muted">No projects.</p>
+      }
+    </section>
+    <section>
+      <h3>Tags</h3>
+      @for (row of visibleTags(); track row.name) {
+        <label class="row">
+          <p-checkbox
+            [binary]="true"
+            [ngModel]="stateOf(row, 't:') === 'all'"
+            [indeterminate]="stateOf(row, 't:') === 'some'"
+            (onChange)="toggle(row, 't:')"
+          />
+          <ac-tag-chip [name]="row.name" />
+        </label>
+      } @empty {
+        <p class="ac-muted">No tags.</p>
+      }
+    </section>
+  </div>
+
+  <ng-template #footer>
+    <p-button label="Cancel" severity="secondary" [text]="true" (onClick)="visible.set(false)" />
+    <p-button label="Apply" icon="pi pi-check" [loading]="saving()" (onClick)="save()" />
+  </ng-template>
+</p-dialog>

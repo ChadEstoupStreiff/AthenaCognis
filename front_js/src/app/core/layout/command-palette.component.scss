@@ -1,0 +1,128 @@
+.palette {
+  display: flex;
+  flex-direction: column;
+  margin: 0 -4px -8px;
+  padding-top: 14px;
+}
+
+.input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px 14px;
+  border-bottom: 1px solid var(--ac-panel-border);
+
+  i {
+    color: var(--ac-muted);
+  }
+}
+
+.input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--p-text-color);
+  font: inherit;
+  font-size: 16px;
+}
+
+.results {
+  max-height: 55vh;
+  overflow-y: auto;
+  padding: 6px 0 2px;
+}
+
+.section {
+  padding: 10px 10px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ac-muted);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--p-text-color);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  i {
+    width: 18px;
+    color: var(--ac-muted);
+  }
+
+  &.active {
+    background: color-mix(in srgb, var(--p-primary-color) 12%, transparent);
+
+    i {
+      color: var(--p-primary-color);
+    }
+  }
+}
+
+.label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.hint {
+  max-width: 40%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  color: var(--ac-muted);
+}
+
+.empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--ac-muted);
+}
+
+.tips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  padding: 10px 10px 2px;
+  border-top: 1px solid var(--ac-panel-border);
+  font-size: 11.5px;
+
+  .keys {
+    margin-left: auto;
+  }
+
+  kbd {
+    display: inline-block;
+    min-width: 18px;
+    margin-right: 3px;
+    padding: 0 4px;
+    border: 1px solid var(--ac-panel-border);
+    border-radius: 5px;
+    font:
+      11px ui-monospace,
+      Menlo,
+      monospace;
+    text-align: center;
+  }
+}
+
+@media (max-width: 600px) {
+  .tips .keys {
+    display: none;
+  }
+}

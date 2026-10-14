@@ -1,0 +1,73 @@
+@if (capture.voiceOpen()) {
+  <div class="dock ac-panel" role="dialog" aria-label="Voice memo">
+    <header>
+      <strong><i class="pi pi-microphone" aria-hidden="true"></i> Voice memo</strong>
+      @if (phase() !== 'recording' && phase() !== 'saving') {
+        <p-button
+          icon="pi pi-times"
+          [text]="true"
+          [rounded]="true"
+          size="small"
+          severity="secondary"
+          ariaLabel="Close"
+          (onClick)="close()"
+        />
+      }
+    </header>
+
+    @if (unavailable; as reason) {
+      <p class="ac-muted">{{ reason }}</p>
+    } @else {
+      @switch (phase()) {
+        @case ('idle') {
+          <p-button
+            label="Start recording"
+            icon="pi pi-circle-fill"
+            severity="danger"
+            [fluid]="true"
+            (onClick)="start()"
+          />
+        }
+        @case ('recording') {
+          <div class="recording">
+            <span class="pulse" aria-hidden="true"></span>
+            <span class="time">{{ elapsed() }}</span>
+            <p-button label="Stop" icon="pi pi-stop-circle" (onClick)="stop()" />
+          </div>
+          <small class="ac-muted">You can keep browsing while recording.</small>
+        }
+        @default {
+          @if (audioUrl(); as url) {
+            <audio controls [src]="url"></audio>
+          }
+          <label class="field">
+            <span>Date</span>
+            <p-datepicker
+              [ngModel]="date()"
+              (ngModelChange)="date.set($event)"
+              dateFormat="yy-mm-dd"
+              [showIcon]="true"
+              [fluid]="true"
+              appendTo="body"
+            />
+          </label>
+          <div class="actions">
+            <p-button
+              label="Discard"
+              severity="secondary"
+              [text]="true"
+              [disabled]="phase() === 'saving'"
+              (onClick)="discard()"
+            />
+            <p-button
+              label="Save"
+              icon="pi pi-check"
+              [loading]="phase() === 'saving'"
+              (onClick)="save()"
+            />
+          </div>
+        }
+      }
+    }
+  </div>
+}

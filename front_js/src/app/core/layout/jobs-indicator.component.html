@@ -1,0 +1,58 @@
+<button
+  type="button"
+  class="jobs-button"
+  [class.busy]="active() > 0"
+  [class.dead]="dead()"
+  pTooltip="Background jobs"
+  tooltipPosition="bottom"
+  [attr.aria-label]="active() > 0 ? active() + ' background jobs running' : 'Background jobs'"
+  (click)="panel.toggle($event)"
+>
+  <ac-triathlete [busy]="active() > 0" />
+  @if (active() > 0) {
+    <span class="count">{{ active() }}</span>
+  }
+</button>
+
+<p-popover #panel>
+  <div class="panel">
+    <h3>Background jobs</h3>
+    @for (service of services(); track service.service) {
+      <div class="service">
+        <span class="health" [attr.data-health]="service.health" [title]="service.health"></span>
+        <div class="service-main">
+          <strong>{{ labels[service.service] }}</strong>
+          <small class="ac-muted">
+            @if (service.running) {
+              Working on {{ fileName(service.running) }}
+            } @else {
+              Idle
+            }
+          </small>
+        </div>
+        <span class="counts">
+          @if (service.pending > 0) {
+            <span class="pending">{{ service.pending }} queued</span>
+          }
+          @if (service.failed > 0) {
+            <span class="failed">{{ service.failed }} failed</span>
+          }
+        </span>
+      </div>
+    }
+    @if (operations().length > 0) {
+      <h3>Recent operations</h3>
+      @for (operation of operations(); track operation.id) {
+        <div class="operation" [attr.data-status]="operation.status">
+          <div class="service-main">
+            <strong>{{ operation.label }}</strong>
+            <small class="ac-muted">{{ operation.message ?? operation.status }}</small>
+          </div>
+          @if (operation.status === 'running') {
+            <p-progressbar [value]="percent(operation.done, operation.total)" [showValue]="false" />
+          }
+        </div>
+      }
+    }
+  </div>
+</p-popover>

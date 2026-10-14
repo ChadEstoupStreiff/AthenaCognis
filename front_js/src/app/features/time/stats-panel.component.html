@@ -1,0 +1,37 @@
+<div class="stats-head">
+  <p-selectbutton
+    [options]="rangeOptions"
+    optionValue="value"
+    [allowEmpty]="false"
+    [ngModel]="preset()"
+    (ngModelChange)="preset.set($event)"
+    size="small"
+    ariaLabel="Range"
+  />
+  <span class="ac-muted">{{ total() }} h over {{ days() }} day(s) · {{ start() }} → {{ end }}</span>
+</div>
+
+@if (records.isLoading()) {
+  <p class="ac-muted"><i class="pi pi-spin pi-spinner"></i> Loading…</p>
+} @else if ((records.value() ?? []).length === 0) {
+  <p class="ac-muted">No time logged in this range.</p>
+} @else {
+  <div class="charts">
+    <section class="ac-panel chart-card">
+      <h2>Hours per project</h2>
+      <ac-chart [options]="donut()" />
+    </section>
+    <section class="ac-panel chart-card">
+      <h2>Per month</h2>
+      <ac-chart [options]="perMonth()" />
+    </section>
+    <section class="ac-panel chart-card wide">
+      <h2>Per day</h2>
+      <ac-chart [options]="perDay()" />
+    </section>
+    <section class="ac-panel chart-card wide">
+      <h2>Activity</h2>
+      <ac-chart [options]="heatmap()" [height]="180" />
+    </section>
+  </div>
+}

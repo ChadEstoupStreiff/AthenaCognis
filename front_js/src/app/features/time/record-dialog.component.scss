@@ -1,0 +1,37 @@
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ac-muted);
+
+  input {
+    width: 100%;
+  }
+}
+
+.wide {
+  grid-column: 1 / -1;
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--p-orange-500);
+}
+
+.delete {
+  margin-right: auto;
+}
+
+@media (max-width: 560px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}

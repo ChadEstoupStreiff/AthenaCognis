@@ -1,0 +1,317 @@
+<div class="assistant">
+  <aside class="sessions ac-panel">
+    <p-button
+      label="New conversation"
+      icon="pi pi-plus"
+      [fluid]="true"
+      (onClick)="newConversation()"
+    />
+    <nav class="session-list" aria-label="Conversations">
+      @for (item of sessions.value() ?? []; track item.id) {
+        <button
+          type="button"
+          class="session"
+          [class.active]="item.id === id()"
+          (click)="open(item.id)"
+        >
+          <strong>{{ item.title }}</strong>
+          <small class="ac-muted">{{ item.date.slice(0, 10) }}</small>
+        </button>
+      } @empty {
+        <p class="ac-muted empty">No conversation yet.</p>
+      }
+    </nav>
+  </aside>
+
+  <section class="conversation">
+    <header class="head">
+      <div class="titles">
+        <h1>{{ current()?.title ?? 'Assistant' }}</h1>
+        @if (current()?.description; as description) {
+          <ac-markdown-view class="ac-muted" [source]="description" layout="inline" />
+        }
+      </div>
+      @if (current(); as item) {
+        <p-button
+          icon="pi pi-pencil"
+          [text]="true"
+          [rounded]="true"
+          severity="secondary"
+          ariaLabel="Rename"
+          (onClick)="editing.set({ title: item.title, description: item.description ?? '' })"
+        />
+        <p-button
+          icon="pi pi-trash"
+          [text]="true"
+          [rounded]="true"
+          severity="danger"
+          ariaLabel="Delete conversation"
+          (onClick)="removeSession()"
+        />
+      }
+    </header>
+
+    <div class="messages" aria-live="polite">
+      @for (message of messages.value() ?? []; track message.id) {
+        <article class="message" [attr.data-role]="message.role">
+          <div class="bubble">
+            @if (message.role === 'user') {
+              <ac-markdown-view class="text" [source]="message.content" />
+            } @else {
+              <ac-markdown-view [source]="message.content" />
+            }
+            @if (message.files.length + message.calendars.length > 0) {
+              <div class="attachments">
+                @for (file of message.files; track file.path) {
+                  <button
+                    type="button"
+                    class="chip"
+                    [class.retrieved]="file.source === 'retrieved'"
+                    (click)="peek.open(file.path)"
+                    [pTooltip]="file.source === 'retrieved' ? 'Found by search (RAG)' : 'Attached'"
+                  >
+                    <i
+                      [class]="file.source === 'retrieved' ? 'pi pi-search' : 'pi pi-paperclip'"
+                    ></i
+                    >{{ nameOf(file.path) }}
+                  </button>
+                }
+                @for (calendar of message.calendars; track $index) {
+                  <span class="chip calendar"
+                    ><i class="pi pi-clock"></i>{{ calendar.date.slice(0, 10) }} ·
+                    {{ calendar.title }}</span
+                  >
+                }
+              </div>
+            }
+          </div>
+          <footer class="meta ac-muted">
+            <span
+              >{{
+                message.role === 'user'
+                  ? 'You'
+                  : message.role === 'assistant'
+                    ? message.sender
+                    : message.role === 'error'
+                      ? 'Error'
+                      : 'Stopped'
+              }}
+              · {{ message.date.slice(0, 16).replace('T', ' ') }}</span
+            >
+            @if (message.role === 'assistant') {
+              <button type="button" class="copy" aria-label="Copy" (click)="copy(message)">
+                <i class="pi pi-copy"></i>
+              </button>
+            }
+          </footer>
+        </article>
+      } @empty {
+        @if (!stream.running()) {
+          <div class="welcome">
+            <i class="pi pi-sparkles" aria-hidden="true"></i>
+            <h2>Ask about your documents, notes and time</h2>
+            <p class="ac-muted">
+              Attach files or time entries, or turn on search to let the assistant find relevant
+              files.
+            </p>
+            @if (presets().length > 0) {
+              <div class="preset-grid">
+                @for (preset of presets().slice(0, 6); track preset.title) {
+                  <button type="button" class="preset" (click)="usePreset(preset.message)">
+                    {{ preset.title }}
+                  </button>
+                }
+              </div>
+            }
+          </div>
+        }
+      }
+      @if (canRetry()) {
+        <p-button
+          class="retry"
+          label="Retry"
+          icon="pi pi-refresh"
+          size="small"
+          severity="secondary"
+          [outlined]="true"
+          (onClick)="retry()"
+        />
+      }
+      @if (stream.running()) {
+        <article class="message" data-role="assistant">
+          <div class="bubble live">
+            @if (stream.partial()) {
+              <ac-markdown-view [source]="stream.partial()" />
+            } @else {
+              <span class="thinking"><i class="pi pi-spin pi-spinner"></i> Thinking…</span>
+            }
+          </div>
+          <footer class="meta">
+            <p-button
+              label="Stop"
+              icon="pi pi-stop-circle"
+              size="small"
+              severity="secondary"
+              [text]="true"
+              (onClick)="stop()"
+            />
+          </footer>
+        </article>
+      }
+    </div>
+
+    <form class="composer ac-panel" (ngSubmit)="send()">
+      @if (files().length + calendars().length > 0) {
+        <div class="attachments">
+          @for (path of files(); track path) {
+            <span class="chip"
+              ><i class="pi pi-paperclip"></i>{{ nameOf(path)
+              }}<button
+                type="button"
+                [attr.aria-label]="'Remove ' + nameOf(path)"
+                (click)="files.set(files().filter((item) => item !== path))"
+              >
+                <i class="pi pi-times"></i></button
+            ></span>
+          }
+          @for (calendar of calendars(); track $index; let index = $index) {
+            <span class="chip calendar"
+              ><i class="pi pi-clock"></i>{{ calendar.date.slice(0, 10) }} · {{ calendar.title
+              }}<button
+                type="button"
+                aria-label="Remove time entry"
+                (click)="calendars.set(calendars().filter((_, position) => position !== index))"
+              >
+                <i class="pi pi-times"></i></button
+            ></span>
+          }
+        </div>
+      }
+      <textarea
+        pTextarea
+        name="draft"
+        [autoResize]="true"
+        [rows]="2"
+        placeholder="Ask a question…  (Enter to send, Shift+Enter for a new line)"
+        [ngModel]="draft()"
+        (ngModelChange)="draft.set($event)"
+        (keydown)="onKey($event)"
+        aria-label="Message"
+      ></textarea>
+      <div class="tools">
+        <p-button
+          icon="pi pi-paperclip"
+          [text]="true"
+          [rounded]="true"
+          severity="secondary"
+          pTooltip="Attach files"
+          ariaLabel="Attach files"
+          (onClick)="pickingFiles.set(true)"
+        />
+        <p-button
+          icon="pi pi-clock"
+          [text]="true"
+          [rounded]="true"
+          severity="secondary"
+          pTooltip="Attach time entries"
+          ariaLabel="Attach time entries"
+          (onClick)="pickingCalendars.set(true)"
+        />
+        <p-button
+          icon="pi pi-bookmark"
+          [text]="true"
+          [rounded]="true"
+          severity="secondary"
+          pTooltip="Presets"
+          ariaLabel="Presets"
+          (onClick)="presetMenu.toggle($event)"
+        />
+        <button
+          type="button"
+          class="toggle"
+          [class.on]="ragEnabled()"
+          (click)="ragEnabled.set(!ragEnabled())"
+          pTooltip="Let the assistant search your files (RAG)"
+        >
+          <i class="pi pi-search"></i> Search files
+        </button>
+        @if (userDescription() !== '') {
+          <button
+            type="button"
+            class="toggle"
+            [class.on]="withDescription()"
+            (click)="withDescription.set(!withDescription())"
+            pTooltip="Send your profile (Settings → Chat)"
+          >
+            <i class="pi pi-user"></i> About me
+          </button>
+        }
+        <span class="spacer"></span>
+        <p-button
+          type="submit"
+          icon="pi pi-send"
+          [rounded]="true"
+          [loading]="sending()"
+          [disabled]="draft().trim() === '' || stream.running()"
+          ariaLabel="Send"
+        />
+      </div>
+    </form>
+  </section>
+</div>
+
+<p-popover #presetMenu>
+  <div class="preset-menu">
+    @for (preset of presets(); track preset.title) {
+      <button
+        type="button"
+        class="preset-item"
+        (click)="usePreset(preset.message); presetMenu.hide()"
+      >
+        {{ preset.title }}
+      </button>
+    } @empty {
+      <p class="ac-muted">No presets.</p>
+    }
+    <p-button
+      label="Manage presets…"
+      icon="pi pi-cog"
+      size="small"
+      [text]="true"
+      (onClick)="managingPresets.set(true); presetMenu.hide()"
+    />
+  </div>
+</p-popover>
+
+<ac-file-picker-dialog
+  [(visible)]="pickingFiles"
+  title="Attach files to the conversation"
+  confirmLabel="Attach"
+  (picked)="addFiles($event)"
+/>
+<ac-calendar-picker [(visible)]="pickingCalendars" (picked)="addCalendars($event)" />
+<ac-presets-dialog [(visible)]="managingPresets" />
+
+<p-dialog
+  header="Conversation"
+  [modal]="true"
+  [visible]="editing() !== null"
+  (visibleChange)="$event ? null : editing.set(null)"
+  [style]="{ width: 'min(460px, 96vw)' }"
+>
+  @if (editing(); as draft) {
+    <form class="form" (ngSubmit)="saveSession()">
+      <label class="field"
+        ><span>Title</span><input pInputText name="title" [(ngModel)]="draft.title"
+      /></label>
+      <label class="field"
+        ><span>Description</span
+        ><input pInputText name="description" [(ngModel)]="draft.description"
+      /></label>
+    </form>
+  }
+  <ng-template #footer>
+    <p-button label="Cancel" severity="secondary" [text]="true" (onClick)="editing.set(null)" />
+    <p-button label="Save" icon="pi pi-check" (onClick)="saveSession()" />
+  </ng-template>
+</p-dialog>

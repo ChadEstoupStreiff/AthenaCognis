@@ -1,0 +1,182 @@
+@if (project.value(); as current) {
+  <header class="hero" [style.--color]="catalog.projectColor(current.name)">
+    <span class="swatch"></span>
+    <div class="titles">
+      <h1>{{ current.name }}</h1>
+      @if (current.description) {
+        <ac-markdown-view class="description" [source]="current.description" />
+      } @else {
+        <p class="ac-muted">No description</p>
+      }
+    </div>
+    <div class="actions">
+      <p-button
+        label="Edit"
+        icon="pi pi-pencil"
+        size="small"
+        severity="secondary"
+        [outlined]="true"
+        (onClick)="editing.set(true)"
+      />
+      <p-button
+        icon="pi pi-trash"
+        size="small"
+        severity="danger"
+        [text]="true"
+        ariaLabel="Delete project"
+        (onClick)="remove()"
+      />
+    </div>
+  </header>
+
+  <p-tabs [value]="activeTab()" (valueChange)="selectTab($event)" [scrollable]="true">
+    <p-tablist>
+      <p-tab value="overview">Overview</p-tab>
+      <p-tab value="files"
+        >Files <span class="count">{{ projectFiles.value()?.length ?? '' }}</span></p-tab
+      >
+      <p-tab value="time">Time</p-tab>
+      <p-tab value="people"
+        >People <span class="count">{{ people.value()?.length ?? '' }}</span></p-tab
+      >
+      <p-tab value="tasks">Tasks</p-tab>
+    </p-tablist>
+    <p-tabpanels>
+      <p-tabpanel value="overview">
+        <div class="overview">
+          <section class="ac-panel block notes">
+            <div class="block-head">
+              <h2>Notes</h2>
+              <ac-save-status [status]="notesSave.status()" />
+            </div>
+            <div class="split">
+              <div class="editor">
+                <ac-markdown-editor [value]="notes()" (valueChange)="editNotes($event)" />
+              </div>
+              <div class="preview"><ac-markdown-view [source]="notes()" /></div>
+            </div>
+          </section>
+          <section class="ac-panel block">
+            <div class="block-head">
+              <h2>To do</h2>
+              <ac-save-status [status]="todoSave.status()" />
+            </div>
+            <ac-todo-list [items]="todo()" (changed)="editTodo($event)" />
+          </section>
+        </div>
+      </p-tabpanel>
+
+      <p-tabpanel value="files">
+        <div class="tab-actions">
+          <p-button
+            label="Add files…"
+            icon="pi pi-plus"
+            size="small"
+            (onClick)="picking.set(true)"
+          />
+        </div>
+        <ac-file-collection
+          [paths]="projectFiles.value() ?? []"
+          [mode]="view()"
+          [(selection)]="selection"
+          emptyTitle="No files in this project"
+        />
+        <ac-file-bulk-bar [(selection)]="selection" [allPaths]="projectFiles.value() ?? []" />
+      </p-tabpanel>
+
+      <p-tabpanel value="time">
+        <p class="ac-muted">
+          {{ hours() }} h logged on this project · {{ records.value()?.length ?? 0 }} entries
+        </p>
+        @if ((records.value()?.length ?? 0) > 0) {
+          <section class="ac-panel block">
+            <ac-chart [options]="monthly()" [height]="260" />
+          </section>
+          <section class="ac-panel block">
+            @for (record of records.value() ?? []; track record.id) {
+              <div class="row">
+                <span class="ac-muted date">{{ record.date }}</span>
+                <strong class="grow">{{ record.title }}</strong>
+                <span>{{ record.hours }}h</span>
+              </div>
+            }
+          </section>
+        }
+      </p-tabpanel>
+
+      <p-tabpanel value="people">
+        <section class="ac-panel block">
+          @for (person of people.value() ?? []; track person.id) {
+            <div class="row">
+              <ac-contact-avatar [contactId]="person.id" [name]="person.name" />
+              <a class="grow" [routerLink]="['/people', person.id]">{{ person.name }}</a>
+              <span class="ac-muted"
+                >{{ person.role }}{{ person.company ? ' · ' + person.company : '' }}</span
+              >
+              <p-button
+                icon="pi pi-times"
+                [text]="true"
+                size="small"
+                severity="secondary"
+                ariaLabel="Unlink"
+                (onClick)="setPerson(person.id, false)"
+              />
+            </div>
+          } @empty {
+            <p class="ac-muted">Nobody linked to this project.</p>
+          }
+          <p-select
+            [options]="candidates()"
+            optionLabel="name"
+            optionValue="id"
+            [filter]="true"
+            placeholder="Link someone…"
+            [ngModel]="null"
+            (ngModelChange)="setPerson($event, true)"
+            appendTo="body"
+            ariaLabel="Link a contact"
+          />
+        </section>
+      </p-tabpanel>
+
+      <p-tabpanel value="tasks">
+        <section class="ac-panel block">
+          @for (task of tasks.value() ?? []; track task.id) {
+            <button
+              type="button"
+              class="row task"
+              [class.done]="task.completed"
+              (click)="openTask.set(task)"
+            >
+              <i [class]="priority(task).icon" [style.color]="priority(task).color"></i>
+              <strong class="grow">{{ task.title }}</strong>
+              <span class="ac-muted">{{ task.end_date?.slice(0, 10) ?? '' }}</span>
+            </button>
+          } @empty {
+            <p class="ac-muted">
+              {{ tasks.isLoading() ? 'Loading…' : 'No task linked to this project.' }}
+            </p>
+          }
+        </section>
+      </p-tabpanel>
+    </p-tabpanels>
+  </p-tabs>
+
+  <ac-project-dialog [(visible)]="editing" [project]="current" (saved)="onSaved($event)" />
+  <ac-file-picker-dialog
+    [(visible)]="picking"
+    [title]="'Add files to ' + current.name"
+    [exclude]="projectFiles.value() ?? []"
+    (picked)="addFiles($event)"
+  />
+  <ac-task-dialog
+    [visible]="openTask() !== null"
+    (visibleChange)="$event ? null : openTask.set(null)"
+    [task]="openTask()"
+    [allTasks]="allTasks.value() ?? []"
+  />
+} @else if (project.error()) {
+  <div class="ac-panel">
+    <ac-empty-state icon="pi pi-question-circle" title="Project not found" />
+  </div>
+}

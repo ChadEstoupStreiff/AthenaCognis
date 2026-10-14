@@ -1,0 +1,165 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.empty {
+  padding: 24px;
+  text-align: center;
+}
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  font-size: 13px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+
+.grow {
+  flex: 1;
+  min-width: 200px;
+}
+
+.focus {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+
+.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+:host ::ng-deep .hops {
+  width: 3.5rem;
+}
+
+.slider p-slider {
+  width: 160px;
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+}
+
+.stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 12px;
+  align-items: start;
+}
+
+.caption {
+  margin: 6px 0 0;
+  font-size: 12px;
+}
+
+.details {
+  max-height: 660px;
+  padding: 14px;
+  overflow-y: auto;
+  font-size: 13px;
+
+  h3 {
+    margin: 0 0 4px;
+    font-size: 15px;
+  }
+
+  h4 {
+    margin: 14px 0 6px;
+    font-size: 13px;
+  }
+
+  p {
+    margin: 0;
+  }
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 8px;
+
+  a {
+    color: var(--p-primary-color);
+  }
+}
+
+.buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+
+  a {
+    text-decoration: none;
+  }
+}
+
+.connections {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 0;
+    border-top: 1px solid var(--ac-panel-border);
+  }
+}
+
+.relation {
+  align-self: flex-start;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+
+  &[data-relation='cites'] {
+    background: color-mix(in srgb, var(--p-sky-500) 15%, transparent);
+    color: var(--p-sky-600);
+  }
+
+  &[data-relation='cited-by'] {
+    background: color-mix(in srgb, var(--p-primary-color) 15%, transparent);
+    color: var(--p-primary-color);
+  }
+
+  &[data-relation='ai'] {
+    background: color-mix(in srgb, var(--p-orange-400) 18%, transparent);
+    color: var(--p-orange-600);
+  }
+}
+
+.link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--p-primary-color);
+  }
+}
+
+@media (max-width: 1100px) {
+  .stage {
+    grid-template-columns: 1fr;
+  }
+}

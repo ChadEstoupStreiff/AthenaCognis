@@ -1,0 +1,102 @@
+@if (renderable() !== null && !gated() && display() === 'auto') {
+  <div class="view-switch">
+    <p-selectbutton
+      [options]="viewOptions"
+      optionValue="value"
+      [allowEmpty]="false"
+      [ngModel]="view()"
+      (ngModelChange)="setView($event)"
+      size="small"
+      ariaLabel="Display"
+    >
+      <ng-template #item let-option>
+        <span class="view-option"
+          ><i [class]="option.icon" aria-hidden="true"></i>{{ option.label }}</span
+        >
+      </ng-template>
+    </p-selectbutton>
+  </div>
+}
+<div class="renderer" [class.compact]="compact()">
+  @if (gated()) {
+    <div class="fallback">
+      <i class="pi pi-exclamation-circle" aria-hidden="true"></i>
+      <p>This file is large ({{ sizeLabel() }}). Displaying it may be slow.</p>
+      <div class="actions">
+        <p-button label="Display anyway" (onClick)="forced.set(true)" />
+        <p-button
+          label="Download"
+          icon="pi pi-download"
+          severity="secondary"
+          [outlined]="true"
+          (onClick)="download()"
+        />
+      </div>
+    </div>
+  } @else if (display() !== 'auto') {
+    <ac-text-renderer [path]="path()" [kind]="kind()" [display]="display()" />
+  } @else if (renderable() !== null && view() === 'source') {
+    <ac-text-renderer [path]="path()" [kind]="kind()" display="source" />
+  } @else {
+    @switch (kind()) {
+      @case ('pdf') {
+        <ac-pdf-renderer [path]="path()" [title]="name()" />
+      }
+      @case ('image') {
+        <ac-image-renderer
+          [src]="contentUrl()"
+          [alt]="name()"
+          [boxes]="ocrBoxes()"
+          [showBoxes]="showBoxes()"
+          [showScores]="showScores()"
+        />
+      }
+      @case ('tiff') {
+        <ac-tiff-renderer [path]="path()" />
+      }
+      @case ('audio') {
+        <audio controls preload="metadata" [src]="contentUrl()"></audio>
+      }
+      @case ('video') {
+        <video controls preload="metadata" [src]="contentUrl()"></video>
+      }
+      @case ('html') {
+        <ac-page-renderer [url]="contentUrl()" [svg]="renderable() === 'svg'" [title]="name()" />
+      }
+      @case ('table') {
+        <ac-table-renderer [path]="path()" />
+      }
+      @case ('archive') {
+        @if (meta(); as metadata) {
+          <ac-archive-renderer [metadata]="metadata" />
+        }
+      }
+      @case ('office') {
+        <ng-container *ngTemplateOutlet="fallback" />
+      }
+      @case ('binary') {
+        <ng-container *ngTemplateOutlet="fallback" />
+      }
+      @default {
+        <ac-text-renderer [path]="path()" [kind]="kind()" />
+      }
+    }
+  }
+</div>
+
+<ng-template #fallback>
+  <div class="fallback">
+    <div class="fallback-thumb"><ac-file-thumbnail [path]="path()" /></div>
+    <p>No inline preview for this format.</p>
+    <div class="actions">
+      <p-button label="Download" icon="pi pi-download" (onClick)="download()" />
+      <p-button
+        label="Read as text"
+        severity="secondary"
+        [outlined]="true"
+        (onClick)="display.set('text')"
+      />
+      <p-button label="Hex" severity="secondary" [outlined]="true" (onClick)="display.set('hex')" />
+    </div>
+  </div>
+</ng-template>

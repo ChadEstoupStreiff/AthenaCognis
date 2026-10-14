@@ -1,0 +1,147 @@
+.panel,
+.top,
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.depth {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.panel.wide {
+  gap: 0;
+
+  .top {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 16px;
+  }
+
+  form {
+    flex: 1 1 320px;
+    min-width: 0;
+  }
+
+  .search-input {
+    font-size: 15px;
+  }
+
+  .depth {
+    flex-direction: row;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .filters {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 18px 28px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--ac-panel-border);
+  }
+
+  .filters-foot {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: flex-end;
+    margin-top: -8px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .panel.wide .filters {
+    grid-template-columns:
+      minmax(0, 1.25fr) minmax(0, 1.5fr) minmax(0, 0.75fr) minmax(0, 1fr)
+      minmax(0, 1fr);
+  }
+}
+
+.search-input {
+  width: 100%;
+}
+
+p-iconfield {
+  display: block;
+}
+
+section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+h3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ac-muted);
+}
+
+.exclude {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: pointer;
+}
+
+.switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid var(--ac-panel-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--p-text-color);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+
+  i {
+    font-size: 11px;
+    color: var(--ac-muted);
+  }
+
+  &:hover {
+    border-color: var(--p-primary-color);
+  }
+
+  &.on {
+    border-color: var(--p-primary-color);
+    background: color-mix(in srgb, var(--p-primary-color) 14%, transparent);
+    color: var(--p-primary-color);
+
+    i {
+      color: var(--p-primary-color);
+    }
+  }
+}

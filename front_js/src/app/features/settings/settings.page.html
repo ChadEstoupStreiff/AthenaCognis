@@ -1,0 +1,53 @@
+<div class="settings">
+  <aside class="nav">
+    <h1>Settings</h1>
+    <p-iconfield>
+      <p-inputicon styleClass="pi pi-search" />
+      <input
+        pInputText
+        type="search"
+        placeholder="Find a setting…"
+        [ngModel]="query()"
+        (ngModelChange)="query.set($event)"
+        aria-label="Find a setting"
+      />
+    </p-iconfield>
+    <nav aria-label="Settings sections">
+      @for (section of sections(); track section.id) {
+        <button type="button" (click)="jump(section.id)">
+          <i [class]="section.icon" aria-hidden="true"></i>{{ section.label }}
+        </button>
+      } @empty {
+        <p class="ac-muted">Nothing matches.</p>
+      }
+    </nav>
+    <small class="ac-muted saved">Changes are saved automatically.</small>
+  </aside>
+
+  <div class="sections">
+    @if (visible().has('general')) {
+      <ac-general-section />
+    }
+    @if (visible().has('ai')) {
+      <ac-ai-section />
+    }
+    @if (visible().has('providers')) {
+      <ac-providers-section />
+    }
+    @if (visible().has('assistant')) {
+      <ac-assistant-section />
+    }
+    @if (visible().has('processing')) {
+      <ac-processing-section />
+    }
+    @if (visible().has('jobs')) {
+      <ac-jobs-section />
+    }
+    @if (visible().has('tags')) {
+      <ac-tags-section />
+    }
+    @if (visible().has('telemetry')) {
+      <ac-telemetry-section />
+    }
+  </div>
+</div>
