@@ -16,6 +16,9 @@ import { UploadDialogComponent } from '../../features/capture/upload-dialog.comp
 import { VoiceDockComponent } from '../../features/capture/voice-dock.component';
 import { FilePeekComponent } from '../../features/viewer/file-peek.component';
 import { CaptureService } from '../capture/capture.service';
+import { fileKindOf, fileNameOf, FILE_KIND_ICONS } from '@domain/files';
+import { viewerCommands } from '../../shared/files/file-row';
+import { LastOpenedService } from '../files/last-opened.service';
 import { PeekService } from '../files/peek.service';
 import { ShortcutService } from '../shortcuts/shortcut.service';
 import { TelemetryConsentComponent } from '../telemetry/telemetry-consent.component';
@@ -56,12 +59,23 @@ export class ShellComponent {
   protected readonly palette = inject(PaletteService);
   protected readonly capture = inject(CaptureService);
   protected readonly peek = inject(PeekService);
+  private readonly lastOpened = inject(LastOpenedService);
   protected readonly telemetry = inject(TelemetryService);
 
   protected readonly mainNav = MAIN_NAV;
   protected readonly settingsNav = SETTINGS_NAV;
   protected readonly collapsed = signal(false);
   protected readonly themeIcon = computed(() => THEME_ICONS[this.theme.mode()]);
+  protected readonly lastFile = computed(() => {
+    const path = this.lastOpened.path();
+    return path === null
+      ? null
+      : {
+          name: fileNameOf(path),
+          icon: FILE_KIND_ICONS[fileKindOf(path)],
+          commands: viewerCommands(path),
+        };
+  });
   protected readonly isMac = /Mac|iPhone|iPad/.test(navigator.userAgent);
   protected readonly newItems: MenuItem[] = [
     {

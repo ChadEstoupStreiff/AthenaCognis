@@ -63,7 +63,11 @@
               <div class="meta ac-muted">{{ row.date | relativeDate }} · {{ row.folder }}</div>
               <ng-container *ngTemplateOutlet="chips; context: { $implicit: row.path }" />
             </div>
-            <ac-file-summary-snippet class="list-summary" [path]="row.path" />
+            <ac-file-summary-snippet
+              class="list-summary"
+              [path]="row.path"
+              [lines]="summaryLines"
+            />
             @if (selectable()) {
               <p-checkbox
                 class="list-check"

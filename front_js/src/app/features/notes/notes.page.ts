@@ -34,12 +34,17 @@ import { viewerCommands } from '../../shared/files/file-row';
 import { AiAssistComponent } from '../../shared/ui/ai-assist.component';
 import { MarkdownEditorComponent } from '../../shared/ui/markdown-editor.component';
 import { MarkdownViewComponent } from '../../shared/ui/markdown-view.component';
+import { persistedWidth } from '../../shared/ui/persisted-width';
+import { ResizeHandleComponent } from '../../shared/ui/resize-handle.component';
 import { SaveStatusComponent } from '../../shared/ui/save-status.component';
 
 /** Editor layouts. */
 type NotesLayout = 'split' | 'edit' | 'preview';
 
 const NOTES_FOLDER = 'notes';
+const PREVIEW_WIDTH_KEY = 'ac.notes.previewWidth';
+/** No stored width: editor and preview split the space evenly. */
+const EVEN_SPLIT = 0;
 const NEW_NOTE = '# New note\n\n';
 const MAX_NOTE_BYTES = 5_242_880;
 const AI_CONTEXT =
@@ -64,6 +69,7 @@ const LAYOUTS = [
     AiAssistComponent,
     MarkdownEditorComponent,
     MarkdownViewComponent,
+    ResizeHandleComponent,
     SaveStatusComponent,
   ],
   templateUrl: './notes.page.html',
@@ -109,10 +115,16 @@ export class NotesPage {
     loader: ({ params }) => this.files.listFolder(NOTES_FOLDER, params.day, params.day),
   });
 
+  protected readonly previewWidth = persistedWidth(PREVIEW_WIDTH_KEY, EVEN_SPLIT);
   protected readonly autosave = new AutosaveController<{ path: string; content: string }>(
     (value) => this.files.writeText(value.path, value.content, true).then(() => undefined),
     inject(DestroyRef),
   );
+
+  /** Restore the even editor / preview split. */
+  protected resetPreviewWidth(): void {
+    this.previewWidth.set(EVEN_SPLIT);
+  }
 
   /** Load the note whenever the path changes. */
   constructor() {

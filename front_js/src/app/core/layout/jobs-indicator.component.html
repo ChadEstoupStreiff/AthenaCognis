@@ -4,7 +4,7 @@
   [class.busy]="active() > 0"
   [class.dead]="dead()"
   pTooltip="Background jobs"
-  tooltipPosition="bottom"
+  tooltipPosition="right"
   [attr.aria-label]="active() > 0 ? active() + ' background jobs running' : 'Background jobs'"
   (click)="panel.toggle($event)"
 >
@@ -16,7 +16,17 @@
 
 <p-popover #panel>
   <div class="panel">
-    <h3>Background jobs</h3>
+    <div class="panel-header">
+      <h3>Background jobs</h3>
+      <p-button
+        label="Open"
+        icon="pi pi-external-link"
+        size="small"
+        [text]="true"
+        routerLink="/jobs"
+        (onClick)="panel.hide()"
+      />
+    </div>
     @for (service of services(); track service.service) {
       <div class="service">
         <span class="health" [attr.data-health]="service.health" [title]="service.health"></span>

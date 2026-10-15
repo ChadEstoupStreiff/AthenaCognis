@@ -41,16 +41,24 @@
 }
 
 .board-lists {
+  --ac-column-gap: 14px;
+
   display: flex;
   align-items: flex-start;
-  gap: 14px;
+  gap: var(--ac-column-gap);
 }
 
 .column {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  flex: 0 0 290px;
+  /* Share the board width between up to 6 columns; more scroll (the add button is extra). */
+  flex: 0 0
+    calc(
+      (100% - (var(--ac-visible-columns, 1) - 1) * var(--ac-column-gap)) /
+        var(--ac-visible-columns, 1)
+    );
+  min-width: 260px;
   max-height: calc(100vh - 220px);
   padding: 10px;
   border-radius: var(--ac-radius);
@@ -113,7 +121,7 @@
 
   strong {
     flex: 1;
-    font-size: 13px;
+    font-size: 15px;
   }
 }
 
@@ -137,7 +145,7 @@
 
 .description {
   font-size: 12px;
-  color: var(--ac-muted);
+  color: var(--p-text-color);
 }
 
 .meta {

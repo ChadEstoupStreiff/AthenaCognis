@@ -2,10 +2,22 @@ import logging
 import os
 import traceback
 
+from controllers.JobManager import JobAlreadyQueuedError
 from controllers.OCRManager import OCRManager
 from fastapi import APIRouter, HTTPException
 
 router = APIRouter(prefix="/ocr", tags=["OCR"])
+
+
+@router.get("/health")
+async def health() -> str:
+    """
+    Get the OCR daemon health
+
+    Returns:
+        str: RUNNING when the daemon thread is alive, DEAD otherwise
+    """
+    return "RUNNING" if OCRManager.is_alive() else "DEAD"
 
 
 @router.get("/running")
@@ -14,7 +26,7 @@ async def get_running_ocr():
     Get the list of currently running OCR tasks.
     """
     try:
-        return OCRManager.in_progess_file
+        return OCRManager.in_progress_file
     except Exception as e:
         logging.error(f"Error retrieving running OCR tasks: {str(e)}")
         logging.error(traceback.format_exc())
@@ -78,6 +90,8 @@ async def launch_ocr(file: str):
     try:
         OCRManager.add_file_to_queue(file)
         return {"message": f"OCR processing for {file} has been launched."}
+    except JobAlreadyQueuedError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except Exception as e:
         logging.error(f"Error launching OCR for {file}: {str(e)}")
         logging.error(traceback.format_exc())

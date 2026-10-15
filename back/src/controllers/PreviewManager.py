@@ -1,16 +1,16 @@
 import logging
 import mimetypes
-import os
-import queue
 import tarfile
-import time
-import traceback
 import zipfile
-from datetime import datetime
+from pathlib import Path
+from typing import Callable, List, Optional
 
-from db import PreviewTask, TaskStateEnum, get_db
 from PIL import Image
-from sqlalchemy import and_
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
+
+from controllers.JobManager import JobAlreadyQueuedError, JobManager
+from db import PreviewTask
 from views.settings import get_setting
 
 try:
@@ -21,11 +21,27 @@ except ImportError:
     HAS_FITZ = False
 
 
+logger = logging.getLogger(__name__)
+
+PREVIEW_ROOT = Path("/shared/.previews")
+IMAGE_PREVIEW_SUFFIX = ".jpg"
+TEXT_PREVIEW_SUFFIX = ".txt"
+UNSUPPORTED_RESULT = "unsupported"
+JPEG_QUALITY = 75
+DEFAULT_QUALITY = "medium"
+DEFAULT_TARGET_SIZE = 360
+DEFAULT_TEXT_CHARS = 300
+DEFAULT_ZIP_SUBFILES = 15
+UNREADABLE_ARCHIVE = "Could not read archive contents"
+
 QUALITY_MAP = {
     "low": 144,
-    "medium": 360,
+    "medium": DEFAULT_TARGET_SIZE,
     "high": 720,
 }
+
+# Vector images: PIL can't open them, the front renders the file itself.
+VECTOR_IMAGE_MIMES = {"image/svg+xml"}
 
 TEXT_EXTENSIONS = {
     "txt", "md", "markdown", "py", "js", "ts", "jsx", "tsx", "json",
@@ -48,286 +64,268 @@ ARCHIVE_MIMES = {
 }
 
 
-def get_preview_path(file: str, is_image_preview: bool) -> str:
-    relative = file.lstrip("/")
-    ext = ".jpg" if is_image_preview else ".txt"
-    return os.path.join("/shared/.previews", relative + ext)
+def get_preview_path(file: str, is_image_preview: bool) -> Path:
+    """
+    Get where the preview of a file is stored
+
+    Args:
+        file (str): file path
+        is_image_preview (bool): True for a JPEG thumbnail, False for a text excerpt
+    Returns:
+        Path: preview path
+    """
+    suffix = IMAGE_PREVIEW_SUFFIX if is_image_preview else TEXT_PREVIEW_SUFFIX
+    return PREVIEW_ROOT / (file.lstrip("/") + suffix)
 
 
-class PreviewManager:
-    in_progress_file = None
-    queue = queue.Queue()
+def prepare_preview_path(file: str, is_image_preview: bool) -> Path:
+    """
+    Get the preview path of a file and create its parent directory
 
-    def start_thread():
-        db = get_db()
-        pending = (
-            db.query(PreviewTask)
-            .filter(
-                PreviewTask.state.in_(
-                    [TaskStateEnum.PENDING, TaskStateEnum.IN_PROGRESS]
-                )
-            )
-            .all()
-        )
-        for task in pending:
-            task.state = TaskStateEnum.PENDING
-            PreviewManager.queue.put(task.file)
-        db.commit()
-        db.close()
-        PreviewManager.loop()
+    Args:
+        file (str): file path
+        is_image_preview (bool): True for a JPEG thumbnail, False for a text excerpt
+    Returns:
+        Path: preview path
+    """
+    preview_path = get_preview_path(file, is_image_preview)
+    preview_path.parent.mkdir(parents=True, exist_ok=True)
+    return preview_path
 
-    @classmethod
-    def loop(cls):
-        time.sleep(10)
-        while True:
-            file = cls.queue.get()
-            cls.in_progress_file = file
 
-            db = get_db()
-            try:
-                task = (
-                    db.query(PreviewTask)
-                    .filter(
-                        and_(
-                            PreviewTask.file == file,
-                            PreviewTask.state == TaskStateEnum.PENDING,
-                        )
-                    )
-                    .first()
-                )
-                if task is None:
-                    continue
-                task.state = TaskStateEnum.IN_PROGRESS
-                db.commit()
+def save_thumbnail(image: Image.Image, preview_path: Path) -> None:
+    """
+    Save an image as a compressed JPEG thumbnail
 
-                quality = get_setting("preview_quality", "medium")
-                target_size = QUALITY_MAP.get(quality, 360)
-                text_chars = int(get_setting("preview_text_chars", 300))
-                zip_subfiles = int(get_setting("preview_zip_subfiles", 15))
+    Args:
+        image (Image.Image): image
+        preview_path (Path): destination
+    Returns:
+        None
+    """
+    image.save(preview_path, "JPEG", quality=JPEG_QUALITY, optimize=True)
 
-                mime, _ = mimetypes.guess_type(file)
-                if mime is None:
-                    mime = ""
 
-                ext = os.path.splitext(file)[1].lstrip(".").lower()
-                preview_path = None
+def generate_image_preview(file: str) -> Path:
+    """
+    Downscale an image so its short side fits the configured quality
 
-                if mime.startswith("image/"):
-                    preview_path = cls._generate_image_preview(file, target_size)
-                elif mime == "application/pdf" or ext == "pdf":
-                    preview_path = cls._generate_pdf_preview(file, target_size)
-                elif mime.startswith("text/") or ext in TEXT_EXTENSIONS:
-                    preview_path = cls._generate_text_preview(file, text_chars)
-                elif mime in ARCHIVE_MIMES or ext in ARCHIVE_EXTENSIONS:
-                    preview_path = cls._generate_zip_preview(file, zip_subfiles)
+    Args:
+        file (str): image path
+    Returns:
+        Path: preview path
+    """
+    target_size = QUALITY_MAP.get(
+        str(get_setting("preview_quality", DEFAULT_QUALITY)), DEFAULT_TARGET_SIZE
+    )
+    image = Image.open(file).convert("RGB")
+    width, height = image.size
+    short_side = min(width, height)
+    if short_side > target_size:
+        size = (width * target_size // short_side, height * target_size // short_side)
+        image = image.resize(size, Image.Resampling.LANCZOS)
+    preview_path = prepare_preview_path(file, True)
+    save_thumbnail(image, preview_path)
+    return preview_path
 
-                task.state = TaskStateEnum.COMPLETED
-                task.completed = datetime.now()
-                task.result = preview_path or "unsupported"
-                db.commit()
-                logging.info(f"Preview >> Completed for file: {file}")
-            except Exception as e:
-                db.rollback()
-                task = db.query(PreviewTask).filter(PreviewTask.file == file).first()
-                if task:
-                    task.state = TaskStateEnum.FAILED
-                    task.completed = datetime.now()
-                    task.result = str(e)
-                    db.commit()
-                logging.error(f"Preview >> Error for {file}: {str(e)}")
-                logging.error(traceback.format_exc())
-            finally:
-                cls.in_progress_file = None
-                db.close()
 
-    @classmethod
-    def _generate_image_preview(cls, file: str, target_size: int) -> str:
-        preview_path = get_preview_path(file, True)
-        os.makedirs(os.path.dirname(preview_path), exist_ok=True)
+def generate_pdf_preview(file: str) -> Path:
+    """
+    Render the first page of a PDF as a thumbnail
 
-        img = Image.open(file).convert("RGB")
-        w, h = img.size
-        if min(w, h) > target_size:
-            if w < h:
-                new_w = target_size
-                new_h = int(h * target_size / w)
-            else:
-                new_h = target_size
-                new_w = int(w * target_size / h)
-            img = img.resize((new_w, new_h), Image.LANCZOS)
-
-        img.save(preview_path, "JPEG", quality=75, optimize=True)
-        return preview_path
-
-    @classmethod
-    def _generate_pdf_preview(cls, file: str, target_size: int) -> str:
-        if not HAS_FITZ:
-            raise RuntimeError("PyMuPDF not installed; cannot generate PDF previews")
-
-        preview_path = get_preview_path(file, True)
-        os.makedirs(os.path.dirname(preview_path), exist_ok=True)
-
-        doc = fitz.open(file)
-        page = doc[0]
-        rect = page.rect
-        short_side = min(rect.width, rect.height)
+    Args:
+        file (str): PDF path
+    Returns:
+        Path: preview path
+    Raises:
+        RuntimeError: when PyMuPDF is not installed
+    """
+    if not HAS_FITZ:
+        raise RuntimeError("PyMuPDF not installed; cannot generate PDF previews")
+    target_size = QUALITY_MAP.get(
+        str(get_setting("preview_quality", DEFAULT_QUALITY)), DEFAULT_TARGET_SIZE
+    )
+    with fitz.open(file) as document:
+        page = document[0]
+        short_side = min(page.rect.width, page.rect.height)
         zoom = target_size / short_side if short_side > 0 else 1.0
-        mat = fitz.Matrix(zoom, zoom)
-        pix = page.get_pixmap(matrix=mat, alpha=False)
-        doc.close()
+        pixmap = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
+    image = Image.frombytes("RGB", (pixmap.width, pixmap.height), pixmap.samples)
+    preview_path = prepare_preview_path(file, True)
+    save_thumbnail(image, preview_path)
+    return preview_path
 
-        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-        img.save(preview_path, "JPEG", quality=75, optimize=True)
-        return preview_path
+
+def generate_text_preview(file: str) -> Path:
+    """
+    Store the first characters of a text file
+
+    Args:
+        file (str): text file path
+    Returns:
+        Path: preview path
+    """
+    chars = int(get_setting("preview_text_chars", DEFAULT_TEXT_CHARS))
+    with open(file, "r", encoding="utf-8", errors="replace") as source:
+        content = source.read(chars)
+    preview_path = prepare_preview_path(file, False)
+    preview_path.write_text(content, encoding="utf-8")
+    return preview_path
+
+
+def list_archive_entries(file: str, max_entries: int) -> List[str]:
+    """
+    List the first entries of a zip or tar archive
+
+    Args:
+        file (str): archive path
+        max_entries (int): maximum number of entries
+    Returns:
+        List[str]: entry names
+    """
+    try:
+        if zipfile.is_zipfile(file):
+            with zipfile.ZipFile(file, "r") as archive:
+                return archive.namelist()[:max_entries]
+        if tarfile.is_tarfile(file):
+            with tarfile.open(file, "r:*") as tar:
+                return [member.name for member in tar.getmembers()[:max_entries]]
+    except (OSError, EOFError, zipfile.BadZipFile, tarfile.TarError):
+        logger.warning(f"PREVIEW >> Could not read archive {file}")
+        return [UNREADABLE_ARCHIVE]
+    return []
+
+
+def generate_archive_preview(file: str) -> Path:
+    """
+    Store the first entries of an archive
+
+    Args:
+        file (str): archive path
+    Returns:
+        Path: preview path
+    """
+    max_entries = int(get_setting("preview_zip_subfiles", DEFAULT_ZIP_SUBFILES))
+    preview_path = prepare_preview_path(file, False)
+    preview_path.write_text("\n".join(list_archive_entries(file, max_entries)), encoding="utf-8")
+    return preview_path
+
+
+def preview_generator(file: str) -> Optional[Callable[[str], Path]]:
+    """
+    Pick the preview generator of a file from its type
+
+    Args:
+        file (str): file path
+    Returns:
+        Optional[Callable[[str], Path]]: generator, None when unsupported
+    """
+    mime = mimetypes.guess_type(file)[0] or ""
+    extension = Path(file).suffix.lstrip(".").lower()
+    if mime in VECTOR_IMAGE_MIMES:
+        return None
+    if mime.startswith("image/"):
+        return generate_image_preview
+    if mime == "application/pdf" or extension == "pdf":
+        return generate_pdf_preview
+    if mime.startswith("text/") or extension in TEXT_EXTENSIONS:
+        return generate_text_preview
+    if mime in ARCHIVE_MIMES or extension in ARCHIVE_EXTENSIONS:
+        return generate_archive_preview
+    return None
+
+
+class PreviewManager(JobManager):
+    """Generate thumbnails and text excerpts of files."""
+
+    name = "PREVIEW"
+    task_model = PreviewTask
 
     @classmethod
-    def _generate_text_preview(cls, file: str, chars: int) -> str:
-        preview_path = get_preview_path(file, False)
-        os.makedirs(os.path.dirname(preview_path), exist_ok=True)
+    def process(cls, file: str, db: Session) -> str:
+        """
+        Generate the preview of a file
 
-        with open(file, "r", encoding="utf-8", errors="replace") as f:
-            content = f.read(chars)
-
-        with open(preview_path, "w", encoding="utf-8") as f:
-            f.write(content)
-
-        return preview_path
+        Args:
+            file (str): file path
+            db (Session): session committed with the task completion
+        Returns:
+            str: preview path, or "unsupported"
+        Raises:
+            FileNotFoundError: when the file does not exist
+        """
+        if not Path(file).is_file():
+            raise FileNotFoundError(f"File not found: {file}")
+        generator = preview_generator(file)
+        return UNSUPPORTED_RESULT if generator is None else str(generator(file))
 
     @classmethod
-    def _generate_zip_preview(cls, file: str, max_entries: int) -> str:
-        preview_path = get_preview_path(file, False)
-        os.makedirs(os.path.dirname(preview_path), exist_ok=True)
+    def add_file_to_queue(cls, file: str) -> None:
+        """
+        Queue a preview, ignoring files already queued
 
-        entries = []
+        Args:
+            file (str): file path
+        Returns:
+            None
+        """
         try:
-            if zipfile.is_zipfile(file):
-                with zipfile.ZipFile(file, "r") as zf:
-                    entries = zf.namelist()[:max_entries]
-            elif tarfile.is_tarfile(file):
-                with tarfile.open(file, "r:*") as tf:
-                    entries = [m.name for m in tf.getmembers()[:max_entries]]
-        except Exception:
-            entries = ["Could not read archive contents"]
-
-        with open(preview_path, "w", encoding="utf-8") as f:
-            f.write("\n".join(entries))
-
-        return preview_path
+            super().add_file_to_queue(file)
+        except JobAlreadyQueuedError:
+            return
+        except SQLAlchemyError:
+            logger.exception(f"PREVIEW >> Error queuing {file}")
 
     @classmethod
-    def add_file_to_queue(cls, file):
-        db = get_db()
-        try:
-            if (
-                db.query(PreviewTask)
-                .filter(PreviewTask.file == file)
-                .filter(
-                    PreviewTask.state.in_(
-                        [TaskStateEnum.PENDING, TaskStateEnum.IN_PROGRESS]
-                    )
-                )
-                .first()
-            ):
-                return
-            db.add(
-                PreviewTask(
-                    file=file,
-                    added=datetime.now(),
-                    state=TaskStateEnum.PENDING,
-                )
-            )
-            db.commit()
-            cls.queue.put(file)
-        except Exception as e:
-            db.rollback()
-            logging.error(f"Error adding {file} to preview queue: {str(e)}")
-            logging.error(traceback.format_exc())
-        finally:
-            db.close()
+    def get_preview_path(cls, file: str) -> Optional[str]:
+        """
+        Get the existing preview of a file
 
-    @classmethod
-    def get_preview_path(cls, file: str):
+        Args:
+            file (str): file path
+        Returns:
+            Optional[str]: preview path, None when absent
+        """
         for is_image in (True, False):
             path = get_preview_path(file, is_image)
-            if os.path.exists(path):
-                return path
+            if path.exists():
+                return str(path)
         return None
 
     @classmethod
-    def delete(cls, file):
-        db = get_db()
-        try:
-            tasks = db.query(PreviewTask).filter(PreviewTask.file == file).all()
-            for task in tasks:
-                db.delete(task)
-            db.commit()
-        except Exception as e:
-            db.rollback()
-            logging.error(f"Error deleting preview tasks for {file}: {str(e)}")
-        finally:
-            db.close()
+    def delete(cls, file: str) -> None:
+        """
+        Delete the tasks and preview files of a file
 
+        Args:
+            file (str): file path
+        Returns:
+            None
+        """
+        try:
+            super().delete(file)
+        except SQLAlchemyError:
+            logger.exception(f"PREVIEW >> Error deleting tasks of {file}")
         for is_image in (True, False):
-            path = get_preview_path(file, is_image)
-            if os.path.exists(path):
-                try:
-                    os.remove(path)
-                except OSError:
-                    pass
+            get_preview_path(file, is_image).unlink(missing_ok=True)
 
     @classmethod
-    def move(cls, file, new_file):
-        db = get_db()
-        try:
-            tasks = db.query(PreviewTask).filter(PreviewTask.file == file).all()
-            for task in tasks:
-                task.file = new_file
-            db.commit()
-        except Exception as e:
-            db.rollback()
-            logging.error(f"Error moving preview tasks for {file}: {str(e)}")
-        finally:
-            db.close()
+    def move(cls, file: str, new_file: str) -> None:
+        """
+        Move the tasks and preview files of a file
 
+        Args:
+            file (str): old file path
+            new_file (str): new file path
+        Returns:
+            None
+        """
+        try:
+            super().move(file, new_file)
+        except SQLAlchemyError:
+            logger.exception(f"PREVIEW >> Error moving tasks of {file}")
         for is_image in (True, False):
             old_path = get_preview_path(file, is_image)
-            new_path = get_preview_path(new_file, is_image)
-            if os.path.exists(old_path):
-                os.makedirs(os.path.dirname(new_path), exist_ok=True)
-                os.rename(old_path, new_path)
+            if old_path.exists():
+                old_path.rename(prepare_preview_path(new_file, is_image))
 
-    @classmethod
-    def get_tasks(cls, file):
-        db = get_db()
-        tasks = db.query(PreviewTask).filter(PreviewTask.file == file).all()
-        db.close()
-        return [
-            {
-                "file": task.file,
-                "state": task.state.value,
-                "added": task.added.strftime("%Y-%m-%d %H:%M:%S"),
-                "completed": task.completed.strftime("%Y-%m-%d %H:%M:%S")
-                if task.completed
-                else None,
-                "result": task.result,
-            }
-            for task in tasks
-        ]
-
-    @classmethod
-    def list_tasks(cls):
-        db = get_db()
-        tasks = db.query(PreviewTask).order_by(PreviewTask.added.desc()).all()
-        db.close()
-        return [
-            {
-                "file": task.file,
-                "state": task.state.value,
-                "added": task.added.strftime("%Y-%m-%d %H:%M:%S"),
-                "completed": task.completed.strftime("%Y-%m-%d %H:%M:%S")
-                if task.completed
-                else None,
-                "result": task.result,
-            }
-            for task in tasks
-        ]

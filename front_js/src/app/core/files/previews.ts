@@ -1,6 +1,8 @@
 import { inject, Injectable } from '@angular/core';
+import type { JobState, JobTask } from '@domain/contracts';
 import { encodeFileSegment } from '@domain/files';
 import { ApiClient, backendUrl } from '../api/api-client';
+import { latestRuns } from '../jobs/jobs-overview';
 
 /** Loaded preview. */
 export type PreviewResult =
@@ -10,13 +12,24 @@ export type PreviewResult =
   | { readonly kind: 'none' };
 
 const NOT_FOUND = 404;
-const REQUEST_DEDUP_MS = 300_000;
+const OPEN_STATES: ReadonlySet<JobState> = new Set(['PENDING', 'IN_PROGRESS']);
+/** Task result of a file type the backend can't preview. */
+const UNSUPPORTED_RESULT = 'unsupported';
+
+/**
+ * Whether a finished run means asking again is pointless (it failed, or nothing to preview).
+ *
+ * @param run - Latest preview run.
+ * @returns `true` when the preview must not be requested again automatically.
+ */
+function isFinal(run: JobTask): boolean {
+  return run.state === 'FAILED' || (run.state === 'COMPLETED' && run.result === UNSUPPORTED_RESULT);
+}
 
 /** Backend thumbnails (`/preview/{file}`), generated on demand for visible files. */
 @Injectable({ providedIn: 'root' })
 export class Previews {
   private readonly api = inject(ApiClient);
-  private readonly requested = new Map<string, number>();
 
   /**
    * Load the preview of a file, queuing its generation when missing.
@@ -39,18 +52,20 @@ export class Previews {
   }
 
   /**
-   * Ask for a preview (at most once per file every five minutes).
+   * Ask for a missing preview, unless one is already queued or the last run was final.
    *
    * @param path - Shared path.
-   * @returns `true` when generation is queued.
+   * @returns `true` while generation is queued or running.
    */
   async queue(path: string): Promise<boolean> {
-    const now = Date.now();
-    if (now - (this.requested.get(path) ?? 0) < REQUEST_DEDUP_MS) {
-      return true;
-    }
-    this.requested.set(path, now);
     try {
+      const latest = await this.latestRun(path);
+      if (latest !== null && OPEN_STATES.has(latest.state)) {
+        return true;
+      }
+      if (latest !== null && isFinal(latest)) {
+        return false;
+      }
       await this.api.post(backendUrl(`/preview/generate/${encodeFileSegment(path)}`), undefined, {
         silent: true,
       });
@@ -58,5 +73,19 @@ export class Previews {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Latest preview run of a file.
+   *
+   * @param path - Shared path.
+   * @returns The run, or `null` when never requested.
+   */
+  private async latestRun(path: string): Promise<JobTask | null> {
+    const tasks = await this.api.get<JobTask[]>(
+      backendUrl(`/preview/tasks/${encodeFileSegment(path)}`),
+      { silent: true },
+    );
+    return latestRuns(tasks)[0] ?? null;
   }
 }

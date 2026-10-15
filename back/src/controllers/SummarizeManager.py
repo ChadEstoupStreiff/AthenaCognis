@@ -1,131 +1,25 @@
 import json
-import logging
-import queue
-import time
-import traceback
 from datetime import datetime
+from typing import Dict, List, Optional, Tuple, Type, TypedDict
 
+from sqlalchemy.orm import Session
+
+from controllers.JobManager import JobManager
 from controllers.OCRManager import OCRManager
 from controllers.TranscriptionManager import TranscriptionManager
 from db import Summary, SummaryTask, TaskStateEnum, get_db
-from sqlalchemy import and_
 from tools.ai import request_llm
 from utils import guess_mime, read_content
 
-
-class SummarizeManager:
-    in_progress_file = None
-    queue = queue.Queue()
-
-    def start_thread():
-        db = get_db()
-        pending = (
-            db.query(SummaryTask)
-            .filter(
-                SummaryTask.state.in_(
-                    [TaskStateEnum.PENDING, TaskStateEnum.IN_PROGRESS]
-                )
-            )
-            .all()
-        )
-        for task in pending:
-            task.state = TaskStateEnum.PENDING
-            SummarizeManager.queue.put(task.file)
-        db.commit()
-        db.close()
-        SummarizeManager.loop()
-
-    @classmethod
-    def loop(cls):
-        time.sleep(10)
-        while True:
-            time.sleep(1)
-            file = cls.queue.get()
-            cls.in_progress_file = file
-
-            db = get_db()
-            try:
-                logging.info(f"SUMMARY >> Processing file: {file}")
-
-                mime = guess_mime(file)
-                if mime.startswith("image/"):
-                    logging.info("SUMMARY >> Attempting to get OCR.")
-                    result = OCRManager.get(file)
-                    if result is None:
-                        logging.info("SUMMARY >> No OCR found, cancelled.")
-                        # logging.info("SUMMARY >> No OCR found, re-adding to queue.")
-                        # cls.queue.put(file)
-                        continue
-                elif mime.startswith("audio/") or mime.startswith("video/"):
-                    logging.info("SUMMARY >> Attempting to get transcription.")
-                    transcription = TranscriptionManager.get(file)
-                    if transcription is None:
-                        logging.info("SUMMARY >> No transcription found, cancelled.")
-                        # logging.info(
-                        #     "SUMMARY >> No transcription found, re-adding to queue."
-                        # )
-                        # cls.queue.put(file)
-                        continue
-
-                task = (
-                    db.query(SummaryTask)
-                    .filter(
-                        and_(
-                            SummaryTask.file == file,
-                            SummaryTask.state == TaskStateEnum.PENDING,
-                        )
-                    )
-                    .order_by(SummaryTask.added.desc())
-                    .first()
-                )
-                task.state = TaskStateEnum.IN_PROGRESS
-                db.commit()
-
-                content = read_content(file)
-
-                # MARK: Prompt
-                if content is None:
-                    raise Exception(f"Can't summarize this type of file: {file}")
-                else:
-                    logging.info("SUMMARY >> Asking LLM for summary.")
-                    keywords, summary = cls.make_summary(input=content)
-                logging.info(
-                    f"SUMMARY >> Result for file {file}: {keywords} - {summary}"
-                )
-
-                task.state = TaskStateEnum.COMPLETED
-                task.completed = datetime.now()
-                task.result = f"{keywords} - {summary}"
-                db.query(Summary).filter(Summary.file == file).delete()
-                db.add(
-                    Summary(
-                        file=file,
-                        date=datetime.now(),
-                        summary=summary,
-                        keywords=json.dumps(keywords),
-                    )
-                )
-                db.commit()
-                logging.info(f"SUMMARY >> Completed processing for file: {file}")
-            except Exception as e:
-                db.rollback()
-                task = db.query(SummaryTask).filter(SummaryTask.file == file).first()
-                if task:
-                    task.state = TaskStateEnum.FAILED
-                    task.completed = datetime.now()
-                    task.result = str(e)
-                    db.commit()
-                logging.error(f"Error processing summary for file {file}: {str(e)}")
-                logging.error(traceback.format_exc())
-            finally:
-                cls.in_progress_file = None
-                db.close()
-
-    @classmethod
-    def make_summary(cls, input):
-        _, _, keywords = request_llm(
-            setting_prefix="summarization",
-            prompt=""""! FILE CONTENT START !
+SETTING_PREFIX = "summarization"
+CODE_FENCE = "```"
+MISSING_TEXT_REASONS: Dict[Optional[TaskStateEnum], str] = {
+    None: "run {job} first",
+    TaskStateEnum.COMPLETED: "{job} found no text",
+    TaskStateEnum.FAILED: "last {job} run failed",
+}
+UNFINISHED_REASON = "{job} not finished"
+KEYWORDS_PROMPT = """"! FILE CONTENT START !
 {input}
 ! FILE CONTENT END !
 
@@ -138,17 +32,8 @@ Extract **5 to 10 relevant keywords** that capture the **main topics and themes*
 Respond ONLY with a plain comma-separated list.  
 Do NOT use JSON, code blocks, quotes, or formatting.  
 Example: keyword1, keyword2, keyword3, ...
-""",
-            input_text=input,
-        )
-        if keywords.startswith("[") and keywords.endswith("]"):
-            keywords = json.loads(keywords)
-        else:
-            keywords = [w.strip() for w in keywords.split(",")]
-
-        _, _, summary = request_llm(
-            setting_prefix="summarization",
-            prompt=""""! FILE CONTENT START !
+"""
+SUMMARY_PROMPT = """"! FILE CONTENT START !
 {input}
 ! FILE CONTENT END !
 
@@ -160,142 +45,211 @@ Write a **summary** from the CONTENT of the file above. Maximum of **400 WORDS**
 ! FORMAT !
 Respond ONLY with plain markdown.  
 Do NOT include explanations, notes, or any formatting outside the summary itself.
-""",
-            input_text=input,
-        )
-        summary = summary.strip()
-        if summary.startswith("```") and summary.endswith("```"):
-            summary = summary[3:-3].strip()
-        return (keywords, summary)
+"""
+
+
+class SummaryRecord(TypedDict):
+    """Stored summary and keywords of a file."""
+
+    file: str
+    date: datetime
+    summary: str
+    keywords: List[str]
+
+
+class JobInputError(Exception):
+    """Raised when a file has no text to summarize."""
+
+
+def parse_keywords(raw: str) -> List[str]:
+    """
+    Parse the keywords answered by the LLM (JSON list or comma-separated)
+
+    Args:
+        raw (str): LLM answer
+    Returns:
+        List[str]: keywords
+    """
+    if raw.startswith("[") and raw.endswith("]"):
+        return [str(keyword) for keyword in json.loads(raw)]
+    return [keyword.strip() for keyword in raw.split(",")]
+
+
+def strip_code_fence(text: str) -> str:
+    """
+    Remove a markdown code fence wrapping a whole text
+
+    Args:
+        text (str): LLM answer
+    Returns:
+        str: unwrapped, stripped text
+    """
+    text = text.strip()
+    if text.startswith(CODE_FENCE) and text.endswith(CODE_FENCE):
+        return text[len(CODE_FENCE) : -len(CODE_FENCE)].strip()
+    return text
+
+
+class SummarizeManager(JobManager):
+    """Summarize files; images and media wait for their OCR or transcription."""
+
+    name = "SUMMARY"
+    task_model = SummaryTask
 
     @classmethod
-    def add_file_to_queue(cls, file):
-        db = get_db()
-        try:
-            if (
-                db.query(SummaryTask)
-                .filter(SummaryTask.file == file)
-                .filter(
-                    SummaryTask.state.in_(
-                        [TaskStateEnum.PENDING, TaskStateEnum.IN_PROGRESS]
-                    )
-                )
-                .first()
-            ):
-                raise Exception(f"File {file} is already in the summary queue.")
-            db.add(
-                SummaryTask(
-                    file=file,
-                    added=datetime.now(),
-                    state=TaskStateEnum.PENDING,
-                )
-            )
-            db.commit()
+    def prerequisite_of(cls, file: str) -> Optional[Type[JobManager]]:
+        """
+        Get the job producing the text a file summary needs
+
+        Args:
+            file (str): file path
+        Returns:
+            Optional[Type[JobManager]]: OCR for images, transcription for media, None otherwise
+        """
+        mime = guess_mime(file)
+        if mime.startswith("image/"):
+            return OCRManager
+        if mime.startswith(("audio/", "video/")):
+            return TranscriptionManager
+        return None
+
+    @classmethod
+    def is_waiting(cls, file: str) -> bool:
+        """
+        Tell whether the OCR or transcription of a file is still queued or running
+
+        Args:
+            file (str): file path
+        Returns:
+            bool: True to wait (re-queued by requeue_waiting when it finishes)
+        """
+        prerequisite = cls.prerequisite_of(file)
+        return prerequisite is not None and prerequisite.has_open_task(file)
+
+    @classmethod
+    def requeue_waiting(cls, file: str) -> None:
+        """
+        Queue the summary of a file waiting for its OCR or transcription
+
+        Args:
+            file (str): file path
+        Returns:
+            None
+        """
+        if cls.has_open_task(file):
             cls.queue.put(file)
-        except Exception as e:
-            db.rollback()
-            logging.error(f"Error adding file {file} to Summary queue: {str(e)}")
-            logging.error(traceback.format_exc())
-            raise e
-        finally:
-            db.close()
 
     @classmethod
-    def get(cls, file):
-        db = get_db()
-        summary = db.query(Summary).filter(Summary.file == file).first()
-        db.close()
-        if not summary:
-            return None
-        return {
-            "file": summary.file,
-            "date": summary.date,
-            "summary": summary.summary,
-            "keywords": json.loads(summary.keywords),
-        }
-
-    @classmethod
-    def delete(cls, file):
+    def process(cls, file: str, db: Session) -> str:
         """
-        Delete the summary and its tasks for a given file.
-        """
-        db = get_db()
-        try:
-            summary = db.query(Summary).filter(Summary.file == file).first()
-            if summary:
-                db.delete(summary)
+        Summarize a file and add the summary row
 
-            tasks = db.query(SummaryTask).filter(SummaryTask.file == file).all()
-            for task in tasks:
-                db.delete(task)
-            db.commit()
-        except Exception as e:
-            db.rollback()
-            logging.error(f"Error deleting summary for file {file}: {str(e)}")
-            logging.error(traceback.format_exc())
-            raise e
-        finally:
-            db.close()
-
-    @classmethod
-    def move(cls, file, new_file):
+        Args:
+            file (str): file path
+            db (Session): session committed with the task completion
+        Returns:
+            str: keywords and summary, stored as the task result
+        Raises:
+            JobInputError: when the file has no readable text
         """
-        Move the summary and its tasks to a new file.
-        """
-        db = get_db()
-        try:
-            summary = db.query(Summary).filter(Summary.file == file).first()
-            if summary:
-                summary.file = new_file
-                db.commit()
-
-            tasks = db.query(SummaryTask).filter(SummaryTask.file == file).all()
-            for task in tasks:
-                task.file = new_file
-            db.commit()
-        except Exception as e:
-            db.rollback()
-            logging.error(
-                f"Error moving summary for file {file} to {new_file}: {str(e)}"
+        content = read_content(file)
+        if content is None:
+            raise JobInputError(cls.missing_input_reason(file))
+        keywords, summary = cls.make_summary(content)
+        db.query(Summary).filter(Summary.file == file).delete()
+        db.add(
+            Summary(
+                file=file,
+                date=datetime.now(),
+                summary=summary,
+                keywords=json.dumps(keywords),
             )
-            logging.error(traceback.format_exc())
-            raise e
-        finally:
-            db.close()
+        )
+        return f"{keywords} - {summary}"
 
     @classmethod
-    def get_tasks(cls, file):
-        db = get_db()
-        tasks = db.query(SummaryTask).filter(SummaryTask.file == file).all()
-        db.close()
+    def missing_input_reason(cls, file: str) -> str:
+        """
+        Explain why a file has no text to summarize
 
-        return [
-            {
-                "file": task.file,
-                "state": task.state.value,
-                "added": task.added.strftime("%Y-%m-%d %H:%M:%S"),
-                "completed": task.completed.strftime("%Y-%m-%d %H:%M:%S")
-                if task.completed
-                else None,
-                "result": task.result,
-            }
-            for task in tasks
-        ]
+        Args:
+            file (str): file path
+        Returns:
+            str: error message
+        """
+        prerequisite = cls.prerequisite_of(file)
+        if prerequisite is None:
+            return f"Can't summarize this type of file: {file}"
+        state = prerequisite.latest_state(file)
+        reason = MISSING_TEXT_REASONS.get(state, UNFINISHED_REASON)
+        return f"Nothing to summarize: {reason.format(job=prerequisite.name)}."
 
     @classmethod
-    def list_tasks(cls):
-        db = get_db()
-        tasks = db.query(SummaryTask).order_by(SummaryTask.added.desc()).all()
-        db.close()
-        return [
-            {
-                "file": task.file,
-                "state": task.state.value,
-                "added": task.added.strftime("%Y-%m-%d %H:%M:%S"),
-                "completed": task.completed.strftime("%Y-%m-%d %H:%M:%S")
-                if task.completed
-                else None,
-                "result": task.result,
-            }
-            for task in tasks
-        ]
+    def make_summary(cls, content: str) -> Tuple[List[str], str]:
+        """
+        Ask the LLM for the keywords and summary of a text
+
+        Args:
+            content (str): text to summarize
+        Returns:
+            Tuple[List[str], str]: keywords and markdown summary
+        """
+        _, _, keywords = request_llm(
+            setting_prefix=SETTING_PREFIX, prompt=KEYWORDS_PROMPT, input_text=content
+        )
+        _, _, summary = request_llm(
+            setting_prefix=SETTING_PREFIX, prompt=SUMMARY_PROMPT, input_text=content
+        )
+        return parse_keywords(keywords), strip_code_fence(summary)
+
+    @classmethod
+    def delete_results(cls, db: Session, file: str) -> None:
+        """
+        Delete the summary row of a file
+
+        Args:
+            db (Session): session
+            file (str): file path
+        Returns:
+            None
+        """
+        db.query(Summary).filter(Summary.file == file).delete()
+
+    @classmethod
+    def move_results(cls, db: Session, file: str, new_file: str) -> None:
+        """
+        Re-point the summary row of a file to its new path
+
+        Args:
+            db (Session): session
+            file (str): old file path
+            new_file (str): new file path
+        Returns:
+            None
+        """
+        db.query(Summary).filter(Summary.file == file).update({Summary.file: new_file})
+
+    @classmethod
+    def get(cls, file: str) -> Optional[SummaryRecord]:
+        """
+        Get the summary of a file
+
+        Args:
+            file (str): file path
+        Returns:
+            Optional[SummaryRecord]: summary, None when absent
+        """
+        with get_db() as db:
+            row = db.query(Summary).filter(Summary.file == file).first()
+            if row is None:
+                return None
+            return SummaryRecord(
+                file=row.file,
+                date=row.date,
+                summary=row.summary,
+                keywords=json.loads(row.keywords),
+            )
+
+
+OCRManager.listeners.append(SummarizeManager.requeue_waiting)
+TranscriptionManager.listeners.append(SummarizeManager.requeue_waiting)

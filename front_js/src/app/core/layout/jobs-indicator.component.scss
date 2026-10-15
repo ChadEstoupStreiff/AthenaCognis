@@ -53,6 +53,16 @@
   width: min(360px, 90vw);
 }
 
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  h3 {
+    margin: 0;
+  }
+}
+
 h3 {
   margin: 4px 0 0;
   font-size: 11px;

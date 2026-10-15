@@ -2,10 +2,22 @@ import logging
 import os
 import traceback
 
+from controllers.JobManager import JobAlreadyQueuedError
 from controllers.TranscriptionManager import TranscriptionManager
 from fastapi import APIRouter, HTTPException
 
 router = APIRouter(prefix="/transcription", tags=["Transcription"])
+
+
+@router.get("/health")
+async def health() -> str:
+    """
+    Get the transcription daemon health
+
+    Returns:
+        str: RUNNING when the daemon thread is alive, DEAD otherwise
+    """
+    return "RUNNING" if TranscriptionManager.is_alive() else "DEAD"
 
 
 @router.get("/running")
@@ -82,6 +94,8 @@ async def launch_transcription(file: str):
     try:
         TranscriptionManager.add_file_to_queue(file)
         return {"message": f"Transcription launched for {file}."}
+    except JobAlreadyQueuedError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except Exception as e:
         logging.error(f"Error launching transcription for {file}: {str(e)}")
         logging.error(traceback.format_exc())

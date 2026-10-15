@@ -91,8 +91,8 @@
 
 .panes {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto var(--ac-preview-width, minmax(0, 1fr));
+  gap: 2px;
   flex: 1;
   min-height: 0;
 
@@ -148,6 +148,10 @@
   .notes {
     grid-template-columns: minmax(0, 1fr);
     height: auto;
+  }
+
+  .splitter {
+    display: none;
   }
 
   .panes {

@@ -11,8 +11,14 @@ router = APIRouter(prefix="/preview", tags=["Preview"])
 
 
 @router.get("/health")
-async def health():
-    return "RUNNING"
+async def health() -> str:
+    """
+    Get the preview daemon health
+
+    Returns:
+        str: RUNNING when the daemon thread is alive, DEAD otherwise
+    """
+    return "RUNNING" if PreviewManager.is_alive() else "DEAD"
 
 
 @router.get("/running")
@@ -32,6 +38,8 @@ async def get_tasks(file: str):
 
 @router.post("/generate/{file:path}")
 async def generate_preview(file: str):
+    if not os.path.exists(file):
+        raise HTTPException(status_code=404, detail=f"File {file} does not exist.")
     try:
         PreviewManager.add_file_to_queue(file)
         return {"message": "Preview generation queued."}

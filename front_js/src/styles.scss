@@ -44,7 +44,6 @@
     --ac-gap: 16px;
     --ac-rail-width: 232px;
     --ac-rail-collapsed-width: 68px;
-    --ac-topbar-height: 56px;
     --ac-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 16px rgb(0 0 0 / 0.04);
   }
 
@@ -229,7 +228,10 @@
     max-height: calc(var(--ac-lines) * 1.5em);
     overflow: hidden;
     line-height: 1.5;
-    mask-image: linear-gradient(to bottom, black 60%, transparent);
+
+    &.overflowing {
+      mask-image: linear-gradient(to bottom, black 60%, transparent);
+    }
 
     h1,
     h2,

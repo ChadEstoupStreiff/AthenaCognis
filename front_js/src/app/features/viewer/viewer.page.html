@@ -83,7 +83,7 @@
     </div>
   </header>
 
-  <div class="layout">
+  <div class="layout" [style.--ac-inspector-width.px]="inspectorWidth()">
     <section class="stage ac-panel">
       <ac-file-renderer
         [path]="path()"
@@ -93,6 +93,15 @@
         [showScores]="showScores()"
       />
     </section>
+
+    <ac-resize-handle
+      class="splitter"
+      [(width)]="inspectorWidth"
+      [min]="280"
+      [reserve]="320"
+      label="Resize inspector"
+      (restore)="resetInspectorWidth()"
+    />
 
     <aside class="inspector ac-panel">
       <p-tabs [value]="activeTab()" (valueChange)="selectTab($event)" [scrollable]="true">

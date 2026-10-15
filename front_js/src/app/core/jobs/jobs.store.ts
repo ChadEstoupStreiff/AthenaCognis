@@ -14,13 +14,12 @@ const MAX_OPERATIONS = 20;
 export class JobsStore {
   private readonly api = inject(ApiClient);
   private readonly sync = inject(DataSync);
-  private readonly tick = signal(0);
   private lastPoll = Date.now();
   private nextId = 0;
 
-  /** Job service overview. */
+  /** Job service overview (polls reload it in place: the previous value stays visible). */
   readonly overview = resource({
-    params: () => [this.tick(), this.sync.version('jobs')()] as const,
+    params: () => this.sync.version('jobs')(),
     loader: () => loadJobsOverview(this.api),
   });
 
@@ -128,7 +127,7 @@ export class JobsStore {
       this.operations().some((op) => op.status === 'running');
     if (Date.now() - this.lastPoll >= (busy ? ACTIVE_POLL_MS : POLL_MS)) {
       this.lastPoll = Date.now();
-      this.tick.update((value) => value + 1);
+      this.overview.reload();
     }
   }
 }

@@ -1,10 +1,23 @@
 import logging
+import os
 import traceback
 
+from controllers.JobManager import JobAlreadyQueuedError
 from controllers.SummarizeManager import SummarizeManager
 from fastapi import APIRouter, HTTPException
 
 router = APIRouter(prefix="/summarize", tags=["Summarize"])
+
+
+@router.get("/health")
+async def health() -> str:
+    """
+    Get the summary daemon health
+
+    Returns:
+        str: RUNNING when the daemon thread is alive, DEAD otherwise
+    """
+    return "RUNNING" if SummarizeManager.is_alive() else "DEAD"
 
 
 @router.get("/running")
@@ -75,9 +88,13 @@ async def launch_summarize(file: str):
     """
     Launch summarization processing for a specific file.
     """
+    if not os.path.exists(file):
+        raise HTTPException(status_code=404, detail=f"File {file} does not exist.")
     try:
         SummarizeManager.add_file_to_queue(file)
         return {"message": f"Summarization launched for {file}."}
+    except JobAlreadyQueuedError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except Exception as e:
         logging.error(f"Error launching summarization for {file}: {str(e)}")
         logging.error(traceback.format_exc())

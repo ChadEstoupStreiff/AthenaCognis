@@ -1,4 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { RouterLink } from '@angular/router';
+import { ButtonModule } from 'primeng/button';
 import { PopoverModule } from 'primeng/popover';
 import { ProgressBarModule } from 'primeng/progressbar';
 import { TooltipModule } from 'primeng/tooltip';
@@ -10,10 +12,17 @@ import { TriathleteComponent } from './triathlete.component';
 const PERCENT = 100;
 const MAX_OPERATIONS = 8;
 
-/** Top-bar button with background jobs and front-side operations. */
+/** Sidebar button with background jobs and front-side operations. */
 @Component({
   selector: 'ac-jobs-indicator',
-  imports: [PopoverModule, ProgressBarModule, TooltipModule, TriathleteComponent],
+  imports: [
+    RouterLink,
+    ButtonModule,
+    PopoverModule,
+    ProgressBarModule,
+    TooltipModule,
+    TriathleteComponent,
+  ],
   templateUrl: './jobs-indicator.component.html',
   styleUrl: './jobs-indicator.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

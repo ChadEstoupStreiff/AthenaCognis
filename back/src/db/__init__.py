@@ -11,6 +11,7 @@ from db.models import (
     Transcription,
     TranscriptionTask,
     TaskStateEnum,
+    JobTask,
     Project,
     ProjectFile,
     Tag,

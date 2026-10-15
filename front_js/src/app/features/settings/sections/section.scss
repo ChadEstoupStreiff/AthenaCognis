@@ -114,63 +114,6 @@
   font-size: 13px;
 }
 
-.daemons {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.daemon {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  column-gap: 8px;
-  padding: 10px 12px;
-  border: 1px solid var(--ac-panel-border);
-  border-radius: 10px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-
-  small {
-    grid-column: 2;
-    font-size: 12px;
-  }
-
-  &.active {
-    border-color: var(--p-primary-color);
-    background: color-mix(in srgb, var(--p-primary-color) 8%, transparent);
-  }
-}
-
-.dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--p-surface-400);
-
-  &[data-health='RUNNING'] {
-    background: var(--p-green-500);
-  }
-
-  &[data-health='DEAD'] {
-    background: var(--p-red-500);
-  }
-}
-
-.link {
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--p-primary-color);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
 .tag-list {
   display: flex;
   flex-direction: column;

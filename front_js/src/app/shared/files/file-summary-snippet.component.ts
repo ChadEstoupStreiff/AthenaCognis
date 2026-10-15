@@ -4,6 +4,8 @@ import { FileDetailsApi } from '../../core/files/file-details.api';
 import { InViewDirective } from '../directives/in-view.directive';
 import { MarkdownViewComponent } from '../ui/markdown-view.component';
 
+const DEFAULT_LINES = 3;
+
 /** First lines of a file's AI summary, loaded when visible. */
 @Component({
   selector: 'ac-file-summary-snippet',
@@ -14,7 +16,7 @@ import { MarkdownViewComponent } from '../ui/markdown-view.component';
         @if (record.keywords.length > 0) {
           <div class="keywords">{{ record.keywords.slice(0, 6).join(' · ') }}</div>
         }
-        <ac-markdown-view [source]="record.summary" layout="compact" />
+        <ac-markdown-view [source]="record.summary" layout="compact" [lines]="lines()" />
       }
     </div>
   `,
@@ -38,6 +40,8 @@ export class FileSummarySnippetComponent {
 
   /** Shared path. */
   readonly path = input.required<string>();
+  /** Visible summary lines. */
+  readonly lines = input(DEFAULT_LINES);
 
   protected readonly summary = signal<SummaryRecord | null>(null);
 

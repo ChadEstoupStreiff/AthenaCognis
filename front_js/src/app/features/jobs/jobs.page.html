@@ -1,5 +1,8 @@
-<section class="group" id="jobs">
-  <h2>Background jobs</h2>
+<header class="titles">
+  <h1>Background jobs</h1>
+  <span class="ac-muted">Daemons and their task queues</span>
+</header>
+<section class="group">
   <div class="daemons">
     @for (item of jobs.overview.value()?.services ?? []; track item.service) {
       <button
@@ -38,6 +41,8 @@
     [value]="visibleTasks()"
     [paginator]="visibleTasks().length > rows"
     [rows]="rows"
+    [scrollable]="true"
+    scrollHeight="flex"
     [loading]="tasks.isLoading() && !tasks.hasValue()"
     size="small"
     styleClass="jobs-table"

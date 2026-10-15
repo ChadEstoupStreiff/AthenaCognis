@@ -69,11 +69,25 @@
         (apply)="applyAi($event)"
       />
 
-      <div class="panes" [attr.data-layout]="layout()">
+      <div
+        class="panes"
+        [attr.data-layout]="layout()"
+        [style.--ac-preview-width.px]="previewWidth() > 0 ? previewWidth() : null"
+      >
         @if (layout() !== 'preview') {
           <div class="pane ac-panel editor-pane">
             <ac-markdown-editor [value]="content()" (valueChange)="onEdit($event)" />
           </div>
+        }
+        @if (layout() === 'split') {
+          <ac-resize-handle
+            class="splitter"
+            [(width)]="previewWidth"
+            [min]="240"
+            [reserve]="240"
+            label="Resize editor and preview"
+            (restore)="resetPreviewWidth()"
+          />
         }
         @if (layout() !== 'edit') {
           <div class="pane ac-panel preview-pane">

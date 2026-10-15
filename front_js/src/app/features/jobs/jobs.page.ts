@@ -2,9 +2,11 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
   inject,
   resource,
   signal,
+  untracked,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
@@ -13,11 +15,11 @@ import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { JOB_SERVICES, type JobService, type JobState, type JobTask } from '@domain/contracts';
 import { fileNameOf } from '@domain/files';
-import { ApiClient, backendUrl } from '../../../core/api/api-client';
-import { latestRuns } from '../../../core/jobs/jobs-overview';
-import { JobsStore } from '../../../core/jobs/jobs.store';
-import { PeekService } from '../../../core/files/peek.service';
-import { RelativeDatePipe } from '../../../shared/pipes/relative-date.pipe';
+import { ApiClient, backendUrl } from '../../core/api/api-client';
+import { latestRuns } from '../../core/jobs/jobs-overview';
+import { JobsStore } from '../../core/jobs/jobs.store';
+import { PeekService } from '../../core/files/peek.service';
+import { RelativeDatePipe } from '../../shared/pipes/relative-date.pipe';
 
 const SERVICE_LABELS: Readonly<Record<JobService, string>> = {
   ocr: 'OCR & captions',
@@ -31,11 +33,11 @@ const STATE_SEVERITY: Readonly<Record<JobState, 'info' | 'warn' | 'success' | 'd
   COMPLETED: 'success',
   FAILED: 'danger',
 };
-const ROWS = 10;
+const ROWS = 50;
 
-/** Background job daemons and their queues. */
+/** Background jobs page: daemons and their queues. */
 @Component({
-  selector: 'ac-jobs-section',
+  selector: 'ac-jobs-page',
   imports: [
     FormsModule,
     ButtonModule,
@@ -44,11 +46,11 @@ const ROWS = 10;
     TagModule,
     RelativeDatePipe,
   ],
-  templateUrl: './jobs.section.html',
-  styleUrl: './section.scss',
+  templateUrl: './jobs.page.html',
+  styleUrl: './jobs.page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class JobsSectionComponent {
+export class JobsPage {
   private readonly api = inject(ApiClient);
   protected readonly jobs = inject(JobsStore);
   protected readonly peek = inject(PeekService);
@@ -62,11 +64,9 @@ export class JobsSectionComponent {
   protected readonly onlyOpen = signal(false);
 
   protected readonly tasks = resource({
-    params: () => ({ service: this.service(), tick: this.jobs.overview.value() }),
-    loader: async ({ params }) =>
-      latestRuns(
-        await this.api.get<JobTask[]>(backendUrl(`/${params.service}/tasks`), { silent: true }),
-      ),
+    params: () => this.service(),
+    loader: async ({ params: service }) =>
+      latestRuns(await this.api.get<JobTask[]>(backendUrl(`/${service}/tasks`), { silent: true })),
   });
   protected readonly visibleTasks = computed(() =>
     [...(this.tasks.value() ?? [])]
@@ -83,6 +83,14 @@ export class JobsSectionComponent {
     () =>
       this.jobs.overview.value()?.services.find((item) => item.service === this.service()) ?? null,
   );
+
+  /** Refresh the table in place on each jobs poll (no reset to the loading state). */
+  constructor() {
+    effect(() => {
+      this.jobs.overview.value();
+      untracked(() => this.tasks.reload());
+    });
+  }
 
   /**
    * Label of a service.

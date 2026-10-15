@@ -6,7 +6,6 @@ import { InputTextModule } from 'primeng/inputtext';
 import { AiSectionComponent } from './sections/ai.section';
 import { AssistantSectionComponent } from './sections/assistant.section';
 import { GeneralSectionComponent } from './sections/general.section';
-import { JobsSectionComponent } from './sections/jobs.section';
 import { ProcessingSectionComponent } from './sections/processing.section';
 import { ProvidersSectionComponent } from './sections/providers.section';
 import { TagsSectionComponent } from './sections/tags.section';
@@ -54,12 +53,6 @@ const SECTIONS: readonly SectionEntry[] = [
     icon: 'pi pi-cog',
     keywords: 'auto upload preview thumbnail quality summary ocr transcription archive',
   },
-  {
-    id: 'jobs',
-    label: 'Background jobs',
-    icon: 'pi pi-server',
-    keywords: 'queue daemon tasks failed pending health',
-  },
   { id: 'tags', label: 'Tags', icon: 'pi pi-tags', keywords: 'tag color rename delete projects' },
   {
     id: 'telemetry',
@@ -80,7 +73,6 @@ const SECTIONS: readonly SectionEntry[] = [
     AiSectionComponent,
     AssistantSectionComponent,
     GeneralSectionComponent,
-    JobsSectionComponent,
     ProcessingSectionComponent,
     ProvidersSectionComponent,
     TagsSectionComponent,

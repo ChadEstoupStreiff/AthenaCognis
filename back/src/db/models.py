@@ -1,11 +1,15 @@
 import uuid
+from datetime import datetime
 from enum import Enum
+from typing import Optional
 
 from sqlalchemy import TEXT, Column, DateTime, Float, ForeignKey, String
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy.orm import declarative_base, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-Base = declarative_base()
+
+class Base(DeclarativeBase):
+    """Declarative base of every table."""
 
 
 class StockPile(Base):
@@ -37,25 +41,31 @@ class TaskStateEnum(Enum):
     FAILED = "FAILED"
 
 
+class JobTask(Base):
+    """Run of a background job on one file (one table per job kind)."""
+
+    __abstract__ = True
+
+    file: Mapped[str] = mapped_column(String(512), primary_key=True, index=True)
+    state: Mapped[TaskStateEnum] = mapped_column(
+        SQLEnum(TaskStateEnum), nullable=False, default=TaskStateEnum.PENDING
+    )
+    added: Mapped[datetime] = mapped_column(DateTime, primary_key=True)
+    completed: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    result: Mapped[Optional[str]] = mapped_column(TEXT, nullable=True)
+
+
 class OCR(Base):
     __tablename__ = "OCR"
 
-    file = Column(String(512), primary_key=True, index=True)
-    date = Column(DateTime, nullable=False)
-    ocr = Column(TEXT, nullable=False)
-    blip = Column(TEXT, nullable=True)
+    file: Mapped[str] = mapped_column(String(512), primary_key=True, index=True)
+    date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    ocr: Mapped[str] = mapped_column(TEXT, nullable=False)
+    blip: Mapped[Optional[str]] = mapped_column(TEXT, nullable=True)
 
 
-class OCRTask(Base):
+class OCRTask(JobTask):
     __tablename__ = "OCRTask"
-
-    file = Column(String(512), primary_key=True, index=True)
-    state = Column(
-        SQLEnum(TaskStateEnum), nullable=False, default=TaskStateEnum.PENDING
-    )
-    added = Column(DateTime, primary_key=True)
-    completed = Column(DateTime, nullable=True)
-    result = Column(TEXT, nullable=True)
 
 
 class Embedding(Base):
@@ -69,42 +79,26 @@ class Embedding(Base):
 class Summary(Base):
     __tablename__ = "Summary"
 
-    file = Column(String(512), primary_key=True, index=True)
-    date = Column(DateTime, nullable=False)
-    summary = Column(TEXT, nullable=False)
-    keywords = Column(TEXT, nullable=False)
+    file: Mapped[str] = mapped_column(String(512), primary_key=True, index=True)
+    date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    summary: Mapped[str] = mapped_column(TEXT, nullable=False)
+    keywords: Mapped[str] = mapped_column(TEXT, nullable=False)
 
 
-class SummaryTask(Base):
+class SummaryTask(JobTask):
     __tablename__ = "SummaryTask"
-
-    file = Column(String(512), primary_key=True, index=True)
-    state = Column(
-        SQLEnum(TaskStateEnum), nullable=False, default=TaskStateEnum.PENDING
-    )
-    added = Column(DateTime, primary_key=True)
-    completed = Column(DateTime, nullable=True)
-    result = Column(TEXT, nullable=True)
 
 
 class Transcription(Base):
     __tablename__ = "Transcription"
 
-    file = Column(String(512), primary_key=True, index=True)
-    date = Column(DateTime, nullable=False)
-    transcription = Column(TEXT, nullable=False)
+    file: Mapped[str] = mapped_column(String(512), primary_key=True, index=True)
+    date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    transcription: Mapped[str] = mapped_column(TEXT, nullable=False)
 
 
-class TranscriptionTask(Base):
+class TranscriptionTask(JobTask):
     __tablename__ = "TranscriptionTask"
-
-    file = Column(String(512), primary_key=True, index=True)
-    state = Column(
-        SQLEnum(TaskStateEnum), nullable=False, default=TaskStateEnum.PENDING
-    )
-    added = Column(DateTime, primary_key=True)
-    completed = Column(DateTime, nullable=True)
-    result = Column(TEXT, nullable=True)
 
 
 class Tag(Base):
@@ -322,16 +316,8 @@ class KanbanColumnTask(Base):
     )
 
 
-class PreviewTask(Base):
+class PreviewTask(JobTask):
     __tablename__ = "PreviewTask"
-
-    file = Column(String(512), primary_key=True, index=True)
-    state = Column(
-        SQLEnum(TaskStateEnum), nullable=False, default=TaskStateEnum.PENDING
-    )
-    added = Column(DateTime, primary_key=True)
-    completed = Column(DateTime, nullable=True)
-    result = Column(TEXT, nullable=True)
 
 
 class Contact(Base):

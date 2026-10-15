@@ -20,11 +20,14 @@ import { buildSharedPath, fileKindOf, FILE_KIND_ICONS, supportsOcr } from '@doma
 import { parseOcr } from '@domain/mappers';
 import { FileDetailsApi } from '../../core/files/file-details.api';
 import { FilesApi, triggerDownload } from '../../core/files/files.api';
+import { LastOpenedService } from '../../core/files/last-opened.service';
 import { NotifyService } from '../../core/notify/notify.service';
 import { DataSync } from '../../core/state/data-sync.service';
 import { FileRendererComponent } from '../../shared/files/renderers/file-renderer.component';
 import { RelativeDatePipe } from '../../shared/pipes/relative-date.pipe';
 import { EmptyStateComponent } from '../../shared/ui/empty-state.component';
+import { persistedWidth } from '../../shared/ui/persisted-width';
+import { ResizeHandleComponent } from '../../shared/ui/resize-handle.component';
 import { AiTabComponent } from './ai-tab.component';
 import { InfoTabComponent } from './info-tab.component';
 import { LinksTabComponent } from './links-tab.component';
@@ -35,6 +38,8 @@ import { PeopleTabComponent } from './people-tab.component';
 type InspectorTab = 'info' | 'ai' | 'links' | 'notes' | 'people';
 
 const TABS: readonly InspectorTab[] = ['info', 'ai', 'links', 'notes', 'people'];
+const INSPECTOR_WIDTH_KEY = 'ac.viewer.inspectorWidth';
+const DEFAULT_INSPECTOR_WIDTH = 380;
 
 /** Full file viewer: renderer plus inspector (details, AI, links, notes, people). */
 @Component({
@@ -46,6 +51,7 @@ const TABS: readonly InspectorTab[] = ['info', 'ai', 'links', 'notes', 'people']
     TooltipModule,
     RelativeDatePipe,
     EmptyStateComponent,
+    ResizeHandleComponent,
     FileRendererComponent,
     InfoTabComponent,
     AiTabComponent,
@@ -61,6 +67,7 @@ export class ViewerPage {
   private readonly files = inject(FilesApi);
   private readonly details = inject(FileDetailsApi);
   private readonly sync = inject(DataSync);
+  private readonly lastOpened = inject(LastOpenedService);
   private readonly notify = inject(NotifyService);
   private readonly confirm = inject(ConfirmationService);
   private readonly router = inject(Router);
@@ -107,13 +114,22 @@ export class ViewerPage {
   protected readonly missing = computed(
     () => !this.metadata.isLoading() && this.metadata.value() === null,
   );
+  protected readonly inspectorWidth = persistedWidth(INSPECTOR_WIDTH_KEY, DEFAULT_INSPECTOR_WIDTH);
 
   /** Record visits for "recently opened". */
   constructor() {
     effect(() => {
       const path = this.path();
-      untracked(() => void this.details.recordOpened(path));
+      untracked(() => {
+        this.lastOpened.record(path);
+        void this.details.recordOpened(path);
+      });
     });
+  }
+
+  /** Restore the default inspector width. */
+  protected resetInspectorWidth(): void {
+    this.inspectorWidth.set(DEFAULT_INSPECTOR_WIDTH);
   }
 
   /**

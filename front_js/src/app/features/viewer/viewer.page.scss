@@ -38,8 +38,8 @@
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) auto var(--ac-inspector-width, 380px);
+  gap: 2px;
   align-items: start;
 }
 
@@ -59,6 +59,10 @@
 @media (max-width: 1100px) {
   .layout {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .splitter {
+    display: none;
   }
 
   .inspector {

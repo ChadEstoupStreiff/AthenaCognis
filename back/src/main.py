@@ -3,7 +3,6 @@ import os
 import shutil
 import time
 import traceback
-from threading import Thread
 
 import uvicorn
 from controllers.FileManager import FileManager
@@ -108,39 +107,6 @@ app.include_router(views.preview.router)
 import views.pinned
 
 app.include_router(views.pinned.router)
-
-
-@app.get("/ocr/health")
-def ocr_health():
-    """
-    Health check for the OCR service.
-    """
-    if ocr_thread.is_alive():
-        return "RUNNING"
-    else:
-        return "DEAD"
-
-
-@app.get("/transcription/health")
-def transcription_health():
-    """
-    Health check for the transcription service.
-    """
-    if transcription_thread.is_alive():
-        return "RUNNING"
-    else:
-        return "DEAD"
-
-
-@app.get("/summarize/health")
-def summarize_health():
-    """
-    Health check for the summarization service.
-    """
-    if summarize_thread.is_alive():
-        return "RUNNING"
-    else:
-        return "DEAD"
 
 
 def du_size(path: str) -> int:
@@ -281,21 +247,13 @@ if __name__ == "__main__":
     FileManager.setup()
 
     register_heif_opener()
-    transcription_thread = Thread(target=TranscriptionManager.start_thread)
-    transcription_thread.daemon = True  # Daemonize thread
-    transcription_thread.start()
-
-    summarize_thread = Thread(target=SummarizeManager.start_thread)
-    summarize_thread.daemon = True  # Daemonize thread
-    summarize_thread.start()
-
-    ocr_thread = Thread(target=OCRManager.start_thread)
-    ocr_thread.daemon = True  # Daemonize thread
-    ocr_thread.start()
-
-    preview_thread = Thread(target=PreviewManager.start_thread)
-    preview_thread.daemon = True
-    preview_thread.start()
+    for job_manager in (
+        TranscriptionManager,
+        SummarizeManager,
+        OCRManager,
+        PreviewManager,
+    ):
+        job_manager.start()
 
     # if len(list_models()) == 0:
     #     pull_model(get_setting("summarization_model"))

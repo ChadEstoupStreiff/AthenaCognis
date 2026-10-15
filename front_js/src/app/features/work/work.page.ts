@@ -61,6 +61,8 @@ const VIEWS = [
   { value: 'timeline', icon: 'pi pi-list', label: 'Timeline' },
 ];
 const DEFAULT_COLUMN_COLOR = '#7700a7';
+const CARD_DESCRIPTION_LINES = 8;
+const MAX_VISIBLE_COLUMNS = 6;
 
 /** Work: kanban boards with drag and drop, plus calendar and timeline views of due dates. */
 @Component({
@@ -103,6 +105,10 @@ export class WorkPage {
   readonly newTask = input<string | undefined>(undefined);
 
   protected readonly views = VIEWS;
+  protected readonly descriptionLines = CARD_DESCRIPTION_LINES;
+  protected readonly visibleColumns = computed(() =>
+    Math.max(1, Math.min(MAX_VISIBLE_COLUMNS, this.columns().length)),
+  );
   protected readonly priorities = [...TASK_PRIORITIES];
   protected readonly today = formatLocalDate(new Date());
   protected readonly filters = signal<TaskFilters>({

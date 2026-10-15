@@ -187,7 +187,7 @@
         [cdkDropListData]="columns()"
         (cdkDropListDropped)="dropColumn($event)"
       >
-        <div cdkDropListGroup class="board-lists">
+        <div cdkDropListGroup class="board-lists" [style.--ac-visible-columns]="visibleColumns()">
           @for (column of columns(); track column.id) {
             <section class="column" cdkDrag [cdkDragData]="column">
               <header class="column-head" cdkDragHandle>
@@ -267,7 +267,12 @@
       </button>
     </div>
     @if (task.description) {
-      <ac-markdown-view class="description" [source]="task.description" layout="compact" />
+      <ac-markdown-view
+        class="description"
+        [source]="task.description"
+        layout="compact"
+        [lines]="descriptionLines"
+      />
     }
     <div class="meta">
       @if (task.end_date) {

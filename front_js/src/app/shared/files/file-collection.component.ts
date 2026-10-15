@@ -28,6 +28,7 @@ import { FileThumbnailComponent } from './file-thumbnail.component';
 
 const PAGE_SIZE = 60;
 const TABLE_PAGE_SIZE = 50;
+const LIST_SUMMARY_LINES = 7;
 const NO_RELATIONS: FileRelations = { projects: [], tags: [], pinned: false };
 /** Delay before a single click opens Quick Look (a double click opens the viewer instead). */
 const SINGLE_CLICK_DELAY_MS = 220;
@@ -80,6 +81,7 @@ export class FileCollectionComponent {
   protected readonly limit = linkedSignal({ source: this.paths, computation: () => PAGE_SIZE });
   protected readonly tableFirst = linkedSignal({ source: this.paths, computation: () => 0 });
   protected readonly tablePageSize = TABLE_PAGE_SIZE;
+  protected readonly summaryLines = LIST_SUMMARY_LINES;
   protected readonly visibleRows = computed(() => this.rows().slice(0, this.limit()));
   protected readonly selectedSet = computed(() => new Set(this.selection()));
   protected readonly selectedRows = computed(() =>

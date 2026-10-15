@@ -19,8 +19,14 @@
       display: none;
     }
 
+    .rail-tools,
     .rail-actions {
       flex-direction: column;
+    }
+
+    .search-trigger {
+      justify-content: center;
+      padding: 9px 0;
     }
   }
 }
@@ -102,6 +108,28 @@
   }
 }
 
+.last-file {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-top: 1px solid var(--ac-panel-border);
+  padding-top: 8px;
+}
+
+.last-file-title {
+  padding: 0 12px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ac-muted);
+}
+
+.last-file-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .rail-footer {
   display: flex;
   flex-direction: column;
@@ -110,13 +138,22 @@
   padding-top: 8px;
 }
 
+.rail-tools,
 .rail-actions {
   display: flex;
   align-items: center;
   gap: 2px;
+}
 
-  .collapse-toggle {
-    margin-left: auto;
+.rail-actions {
+  justify-content: space-around;
+}
+
+.rail-tools .new-button {
+  flex: 1;
+
+  ::ng-deep .p-button {
+    width: 100%;
   }
 }
 
@@ -127,25 +164,10 @@
   height: 100%;
 }
 
-.topbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: var(--ac-topbar-height);
-  padding: 0 24px;
-  border-bottom: 1px solid var(--ac-panel-border);
-  background: var(--ac-rail-background);
-
-  .spacer {
-    flex: 1;
-  }
-}
-
 .search-trigger {
   display: flex;
   align-items: center;
   gap: 10px;
-  width: min(420px, 50vw);
   padding: 7px 12px;
   border: 1px solid var(--ac-panel-border);
   border-radius: 10px;
@@ -157,6 +179,9 @@
   span {
     flex: 1;
     text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   kbd {
@@ -198,12 +223,15 @@
 
   .brand,
   .label,
-  .rail-actions .collapse-toggle {
+  .last-file,
+  .collapse-toggle {
     display: none;
   }
 
   .nav,
-  .rail-footer {
+  .rail-footer,
+  .rail-tools,
+  .rail-actions {
     flex-direction: row;
     border-top: none;
     padding-top: 0;
@@ -211,25 +239,5 @@
 
   .content {
     padding: 16px;
-  }
-
-  .topbar {
-    padding: 0 12px;
-  }
-
-  .search-trigger {
-    width: auto;
-    flex: 1;
-    min-width: 0;
-
-    span {
-      overflow: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
-    }
-
-    kbd {
-      display: none;
-    }
   }
 }

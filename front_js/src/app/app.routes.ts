@@ -85,6 +85,11 @@ export const routes: Routes = [
           import('./features/assistant/assistant.page').then((m) => m.AssistantPage),
       },
       {
+        path: 'jobs',
+        title: 'Background jobs · AthenaCognis',
+        loadComponent: () => import('./features/jobs/jobs.page').then((m) => m.JobsPage),
+      },
+      {
         path: 'settings',
         title: 'Settings · AthenaCognis',
         loadComponent: () =>

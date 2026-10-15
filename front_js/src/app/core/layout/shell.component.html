@@ -22,18 +22,58 @@
       }
     </nav>
 
+    @if (lastFile(); as file) {
+      <div class="last-file">
+        <span class="last-file-title label">Last opened file</span>
+        <a
+          class="nav-item"
+          [routerLink]="file.commands"
+          [pTooltip]="collapsed() ? 'Last opened: ' + file.name : file.name"
+          tooltipPosition="right"
+          [attr.aria-label]="'Last opened file: ' + file.name"
+        >
+          <i [class]="file.icon" aria-hidden="true"></i>
+          <span class="label last-file-name">{{ file.name }}</span>
+        </a>
+      </div>
+    }
+
     <div class="rail-footer">
-      <a
-        class="nav-item"
-        [routerLink]="settingsNav.route"
-        routerLinkActive="active"
-        [pTooltip]="collapsed() ? settingsNav.label : undefined"
+      <button
+        type="button"
+        class="search-trigger"
+        [pTooltip]="collapsed() ? 'Search' : undefined"
         tooltipPosition="right"
+        aria-label="Search or jump to"
+        (click)="palette.open.set(true)"
       >
-        <i [class]="settingsNav.icon" aria-hidden="true"></i>
-        <span class="label">{{ settingsNav.label }}</span>
-      </a>
+        <i class="pi pi-search" aria-hidden="true"></i>
+        <span class="label">Search or jump to…</span>
+        <kbd class="label">{{ isMac ? '⌘' : 'Ctrl' }} K</kbd>
+      </button>
+      <div class="rail-tools">
+        <p-button
+          [label]="collapsed() ? undefined : 'New'"
+          icon="pi pi-plus"
+          size="small"
+          ariaLabel="New"
+          class="new-button"
+          (onClick)="newMenu.toggle($event)"
+        />
+        <p-menu #newMenu [model]="newItems" [popup]="true" appendTo="body" />
+      </div>
       <div class="rail-actions">
+        <a
+          class="nav-item"
+          [routerLink]="settingsNav.route"
+          routerLinkActive="active"
+          [pTooltip]="settingsNav.label"
+          tooltipPosition="right"
+          [attr.aria-label]="settingsNav.label"
+        >
+          <i [class]="settingsNav.icon" aria-hidden="true"></i>
+        </a>
+        <ac-jobs-indicator />
         <p-button
           [icon]="themeIcon()"
           [text]="true"
@@ -48,8 +88,8 @@
           [text]="true"
           [rounded]="true"
           severity="secondary"
-          [ariaLabel]="collapsed() ? 'Expand navigation' : 'Collapse navigation'"
           class="collapse-toggle"
+          [ariaLabel]="collapsed() ? 'Expand navigation' : 'Collapse navigation'"
           (onClick)="toggleRail()"
         />
       </div>
@@ -57,17 +97,6 @@
   </aside>
 
   <div class="main">
-    <header class="topbar">
-      <button type="button" class="search-trigger" (click)="palette.open.set(true)">
-        <i class="pi pi-search" aria-hidden="true"></i>
-        <span>Search or jump to…</span>
-        <kbd>{{ isMac ? '⌘' : 'Ctrl' }} K</kbd>
-      </button>
-      <span class="spacer"></span>
-      <ac-jobs-indicator />
-      <p-button label="New" icon="pi pi-plus" size="small" (onClick)="newMenu.toggle($event)" />
-      <p-menu #newMenu [model]="newItems" [popup]="true" appendTo="body" />
-    </header>
     <main class="content">
       <router-outlet />
     </main>
