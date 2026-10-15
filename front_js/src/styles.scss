@@ -77,6 +77,15 @@
 }
 
 @layer app {
+  /* Theme switch: slower, eased cross-fade of the whole page (see ThemeService). */
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 0.4s;
+    animation-timing-function: ease-in-out;
+  }
+}
+
+@layer app {
   /* The logo is a black glyph: invert it on dark surfaces. */
   :root.app-dark img[src='logo.png'] {
     filter: invert(1);

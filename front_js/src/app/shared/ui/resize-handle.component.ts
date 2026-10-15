@@ -24,13 +24,55 @@ export function clampPanelWidth(width: number, min: number, max: number): number
   return Math.round(Math.max(min, Math.min(max, width)));
 }
 
+/** Width limits and snap distance of a collapsible panel. */
+export interface SnapBounds {
+  /** Smallest expanded width. */
+  readonly min: number;
+  /** Largest expanded width. */
+  readonly max: number;
+  /** Drag distance past the minimum (collapse) or the collapse point (expand) that flips the mode. */
+  readonly snap: number;
+}
+
+/** Panel mode and width after a drag step. */
+export interface PanelSnap {
+  readonly collapsed: boolean;
+  readonly width: number;
+}
+
+/**
+ * Resolve a drag on a collapsible panel: dragging `snap` px under the minimum collapses it,
+ * dragging a collapsed panel `snap` px open expands it back at the minimum width.
+ *
+ * @param requested - Width the pointer asks for.
+ * @param anchor - Width where the current mode began (drag start or last flip).
+ * @param collapsed - Whether the panel is collapsed now.
+ * @param bounds - Width limits and snap distance.
+ * @returns New mode and expanded width.
+ */
+export function snapPanelWidth(
+  requested: number,
+  anchor: number,
+  collapsed: boolean,
+  bounds: SnapBounds,
+): PanelSnap {
+  if (collapsed) {
+    return { collapsed: requested - anchor <= bounds.snap, width: bounds.min };
+  }
+  if (requested < bounds.min - bounds.snap) {
+    return { collapsed: true, width: bounds.min };
+  }
+  return { collapsed: false, width: clampPanelWidth(requested, bounds.min, bounds.max) };
+}
+
 /** Which side of the handle the resized panel sits on. */
 export type PanelSide = 'before' | 'after';
 
 /**
  * Vertical drag handle resizing the panel before or after it (pointer or arrow keys).
  * Dragging toward the other side grows the panel; the width is clamped so the other side keeps
- * `reserve` pixels.
+ * `reserve` pixels. With `snap` set, the panel collapses when dragged past its minimum and
+ * expands when a collapsed panel is dragged open.
  */
 @Component({
   selector: 'ac-resize-handle',
@@ -90,6 +132,12 @@ export class ResizeHandleComponent {
   readonly width = model.required<number>();
   /** Smallest panel width. */
   readonly min = input(DEFAULT_MIN_WIDTH);
+  /** Largest panel width. */
+  readonly max = input(Infinity);
+  /** Snap distance enabling collapse; `null` = not collapsible. */
+  readonly snap = input<number | null>(null);
+  /** Whether the panel is collapsed (only changed when `snap` is set). */
+  readonly collapsed = model(false);
   /** Side of the resized panel. */
   readonly panel = input<PanelSide>('after');
   /** Pixels always left to the other side. */
@@ -121,7 +169,19 @@ export class ResizeHandleComponent {
     if (!this.dragging) {
       return;
     }
-    this.width.set(this.clamp(this.startWidth + this.growth(event.clientX - this.startX)));
+    const requested = this.startWidth + this.growth(event.clientX - this.startX);
+    const snap = this.snap();
+    if (snap === null) {
+      this.width.set(this.clamp(requested));
+      return;
+    }
+    const result = snapPanelWidth(requested, this.startWidth, this.collapsed(), this.bounds(snap));
+    if (result.collapsed !== this.collapsed()) {
+      this.startX = event.clientX;
+      this.startWidth = result.collapsed ? requested : result.width;
+      this.collapsed.set(result.collapsed);
+    }
+    this.width.set(result.width);
   }
 
   /**
@@ -146,7 +206,18 @@ export class ResizeHandleComponent {
    */
   protected nudge(event: Event, direction: 1 | -1): void {
     event.preventDefault();
-    this.width.set(this.clamp(this.currentWidth() + this.growth(direction * KEYBOARD_STEP)));
+    const growth = this.growth(direction * KEYBOARD_STEP);
+    const requested = this.currentWidth() + growth;
+    if (this.snap() === null) {
+      this.width.set(this.clamp(requested));
+      return;
+    }
+    if (this.collapsed()) {
+      this.collapsed.set(growth < 0);
+      return;
+    }
+    this.collapsed.set(requested < this.min());
+    this.width.set(this.clamp(requested));
   }
 
   /**
@@ -177,7 +248,26 @@ export class ResizeHandleComponent {
    * @returns Allowed width.
    */
   private clamp(width: number): number {
+    return clampPanelWidth(width, this.min(), this.maxWidth());
+  }
+
+  /**
+   * Largest width allowed by the `max` input and the container.
+   *
+   * @returns Width in pixels.
+   */
+  private maxWidth(): number {
     const container = this.host.nativeElement.parentElement?.clientWidth ?? Infinity;
-    return clampPanelWidth(width, this.min(), container - this.reserve());
+    return Math.min(this.max(), container - this.reserve());
+  }
+
+  /**
+   * Snap bounds for the current inputs.
+   *
+   * @param snap - Snap distance.
+   * @returns Width limits and snap distance.
+   */
+  private bounds(snap: number): SnapBounds {
+    return { min: this.min(), max: this.maxWidth(), snap };
   }
 }

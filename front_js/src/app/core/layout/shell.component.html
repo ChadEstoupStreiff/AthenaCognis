@@ -1,4 +1,4 @@
-<div class="shell" [class.collapsed]="collapsed()">
+<div class="shell" [class.collapsed]="collapsed()" [style.--ac-rail-width.px]="railWidth()">
   <aside class="rail" aria-label="Main navigation">
     <a class="brand" routerLink="/home" aria-label="AthenaCognis — Home">
       <img src="logo.png" alt="" class="logo" />
@@ -95,6 +95,19 @@
       </div>
     </div>
   </aside>
+
+  <ac-resize-handle
+    class="rail-handle"
+    panel="before"
+    [(width)]="railWidth"
+    [(collapsed)]="collapsed"
+    [min]="railMinWidth"
+    [max]="railMaxWidth"
+    [snap]="railSnapDistance"
+    [reserve]="0"
+    label="Resize navigation"
+    (restore)="resetRail()"
+  />
 
   <div class="main">
     <main class="content">

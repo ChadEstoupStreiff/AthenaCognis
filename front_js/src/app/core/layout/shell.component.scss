@@ -5,15 +5,20 @@
 
 .shell {
   display: grid;
-  grid-template-columns: var(--ac-rail-width) minmax(0, 1fr);
+  grid-template-columns: var(--ac-rail-width) 0 minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   /* Pinned to the viewport: the rail always spans the screen height, only the content scrolls. */
   position: fixed;
   inset: 0;
   transition: grid-template-columns 0.2s ease;
 
+  /* Follow the pointer while resizing. */
+  &:has(.rail-handle.dragging) {
+    transition: none;
+  }
+
   &.collapsed {
-    grid-template-columns: var(--ac-rail-collapsed-width) minmax(0, 1fr);
+    grid-template-columns: var(--ac-rail-collapsed-width) 0 minmax(0, 1fr);
 
     .label {
       display: none;
@@ -41,6 +46,26 @@
   background: var(--ac-rail-background);
   border-right: 1px solid var(--ac-panel-border);
   overflow-y: auto;
+}
+
+/* Zero-width grid column: the handle straddles the rail border without taking space. */
+.rail-handle {
+  position: relative;
+  z-index: 1;
+  margin-left: -6px;
+
+  ::ng-deep .grip {
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  &:hover,
+  &:focus-visible,
+  &.dragging {
+    ::ng-deep .grip {
+      opacity: 1;
+    }
+  }
 }
 
 .brand {
@@ -224,7 +249,8 @@
   .brand,
   .label,
   .last-file,
-  .collapse-toggle {
+  .collapse-toggle,
+  .rail-handle {
     display: none;
   }
 

@@ -15,6 +15,8 @@ import { DropOverlayComponent } from '../../features/capture/drop-overlay.compon
 import { UploadDialogComponent } from '../../features/capture/upload-dialog.component';
 import { VoiceDockComponent } from '../../features/capture/voice-dock.component';
 import { FilePeekComponent } from '../../features/viewer/file-peek.component';
+import { persistedWidth } from '../../shared/ui/persisted-width';
+import { ResizeHandleComponent } from '../../shared/ui/resize-handle.component';
 import { CaptureService } from '../capture/capture.service';
 import { fileKindOf, fileNameOf, FILE_KIND_ICONS } from '@domain/files';
 import { viewerCommands } from '../../shared/files/file-row';
@@ -30,6 +32,12 @@ import { MAIN_NAV, SETTINGS_NAV } from './nav-items';
 import { PaletteService } from './palette.service';
 
 const THEME_ICONS = { light: 'pi pi-sun', dark: 'pi pi-moon', system: 'pi pi-desktop' } as const;
+const RAIL_WIDTH_KEY = 'ac.shell.railWidth';
+const RAIL_DEFAULT_WIDTH = 232;
+const RAIL_MIN_WIDTH = 200;
+const RAIL_MAX_WIDTH = 400;
+/** Drag distance past the minimum (or open from collapsed) that toggles the rail. */
+const RAIL_SNAP_DISTANCE = 40;
 
 /** Application frame: navigation rail, top bar and routed content. */
 @Component({
@@ -48,6 +56,7 @@ const THEME_ICONS = { light: 'pi pi-sun', dark: 'pi pi-moon', system: 'pi pi-des
     VoiceDockComponent,
     FilePeekComponent,
     TelemetryConsentComponent,
+    ResizeHandleComponent,
   ],
   templateUrl: './shell.component.html',
   styleUrl: './shell.component.scss',
@@ -65,6 +74,10 @@ export class ShellComponent {
   protected readonly mainNav = MAIN_NAV;
   protected readonly settingsNav = SETTINGS_NAV;
   protected readonly collapsed = signal(false);
+  protected readonly railWidth = persistedWidth(RAIL_WIDTH_KEY, RAIL_DEFAULT_WIDTH);
+  protected readonly railMinWidth = RAIL_MIN_WIDTH;
+  protected readonly railMaxWidth = RAIL_MAX_WIDTH;
+  protected readonly railSnapDistance = RAIL_SNAP_DISTANCE;
   protected readonly themeIcon = computed(() => THEME_ICONS[this.theme.mode()]);
   protected readonly lastFile = computed(() => {
     const path = this.lastOpened.path();
@@ -128,5 +141,11 @@ export class ShellComponent {
   /** Collapse or expand the navigation rail. */
   protected toggleRail(): void {
     this.collapsed.update((value) => !value);
+  }
+
+  /** Expand the navigation rail at its default width. */
+  protected resetRail(): void {
+    this.collapsed.set(false);
+    this.railWidth.set(RAIL_DEFAULT_WIDTH);
   }
 }
