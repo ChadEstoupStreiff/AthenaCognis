@@ -107,21 +107,27 @@
         </section>
       }
 
-      <div class="stack">
-        <section class="block">
-          <h2>Recently added</h2>
+      <div class="columns recents">
+        <section class="block tray">
+          <h2>
+            <i class="pi pi-upload" aria-hidden="true"></i>Recently added
+            <span class="ac-muted count">{{ today.value()?.recentAdded?.length ?? 0 }}</span>
+          </h2>
           <ac-file-collection
             [paths]="today.value()?.recentAdded ?? []"
-            mode="list"
+            mode="cards"
             [selectable]="false"
             emptyTitle="Nothing yet"
           />
         </section>
-        <section class="block">
-          <h2>Recently opened</h2>
+        <section class="block tray">
+          <h2>
+            <i class="pi pi-eye" aria-hidden="true"></i>Recently opened
+            <span class="ac-muted count">{{ today.value()?.recentOpened?.length ?? 0 }}</span>
+          </h2>
           <ac-file-collection
             [paths]="today.value()?.recentOpened ?? []"
-            mode="list"
+            mode="cards"
             [selectable]="false"
             emptyTitle="Nothing yet"
           />

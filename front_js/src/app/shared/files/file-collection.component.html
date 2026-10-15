@@ -127,13 +127,6 @@
 <ng-template #chips let-path>
   @let relations = relationsOf(path);
   @if (relations.projects.length + relations.tags.length > 0) {
-    <div class="chips">
-      @for (project of relations.projects; track project) {
-        <ac-tag-chip [name]="project" kind="project" />
-      }
-      @for (tag of relations.tags; track tag) {
-        <ac-tag-chip [name]="tag" />
-      }
-    </div>
+    <ac-relation-chips class="chips" [projects]="relations.projects" [tags]="relations.tags" />
   }
 </ng-template>

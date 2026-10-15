@@ -81,11 +81,6 @@
   margin-bottom: 14px;
 }
 
-.stack {
-  display: flex;
-  flex-direction: column;
-}
-
 .block {
   display: flex;
   flex-direction: column;
@@ -105,6 +100,40 @@
 
 section.block:not(.ac-panel) {
   padding: 0;
+}
+
+.recents {
+  gap: 24px;
+}
+
+section.block.tray {
+  --ac-card-min: 200px;
+
+  padding: 14px;
+  border: 1px solid var(--ac-panel-border);
+  border-radius: var(--ac-radius);
+  background: color-mix(in srgb, var(--p-primary-color) 1.5%, transparent);
+
+  h2 {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--p-text-color);
+  }
+
+  h2 i {
+    font-size: 18px;
+    color: var(--p-primary-color);
+  }
+
+  .count {
+    padding: 0 8px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--p-primary-color) 12%, transparent);
+    color: var(--p-primary-color);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 20px;
+  }
 }
 
 .count {

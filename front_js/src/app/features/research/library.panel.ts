@@ -28,7 +28,7 @@ import {
 import { FilesApi } from '../../core/files/files.api';
 import { viewerCommands } from '../../shared/files/file-row';
 import { EmptyStateComponent } from '../../shared/ui/empty-state.component';
-import { TagChipComponent } from '../../shared/ui/tag-chip.component';
+import { RelationChipsComponent } from '../../shared/ui/relation-chips.component';
 import { ResearchStore } from './research.store';
 
 /** Library tab: progress, filters, bulk actions and paper rows. */
@@ -46,7 +46,7 @@ import { ResearchStore } from './research.store';
     SelectButtonModule,
     TooltipModule,
     EmptyStateComponent,
-    TagChipComponent,
+    RelationChipsComponent,
   ],
   templateUrl: './library.panel.html',
   styleUrl: './library.panel.scss',

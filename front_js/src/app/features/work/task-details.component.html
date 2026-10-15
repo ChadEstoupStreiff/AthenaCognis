@@ -53,14 +53,7 @@
   @if (current.projects.length + current.tags.length > 0) {
     <section>
       <h3>Projects & tags</h3>
-      <div class="chips">
-        @for (project of current.projects; track project) {
-          <ac-tag-chip [name]="project" kind="project" />
-        }
-        @for (tag of current.tags; track tag) {
-          <ac-tag-chip [name]="tag" />
-        }
-      </div>
+      <ac-relation-chips [projects]="current.projects" [tags]="current.tags" />
     </section>
   }
 

@@ -21,7 +21,7 @@ import { DataSync } from '../../core/state/data-sync.service';
 import { InViewDirective } from '../directives/in-view.directive';
 import { RelativeDatePipe } from '../pipes/relative-date.pipe';
 import { EmptyStateComponent } from '../ui/empty-state.component';
-import { TagChipComponent } from '../ui/tag-chip.component';
+import { RelationChipsComponent } from '../ui/relation-chips.component';
 import { type FileRow, toFileRow, viewerCommands } from './file-row';
 import { FileSummarySnippetComponent } from './file-summary-snippet.component';
 import { FileThumbnailComponent } from './file-thumbnail.component';
@@ -45,7 +45,7 @@ export type FileClickAction = 'peek' | 'select';
     CheckboxModule,
     TableModule,
     EmptyStateComponent,
-    TagChipComponent,
+    RelationChipsComponent,
     RelativeDatePipe,
     InViewDirective,
     FileThumbnailComponent,

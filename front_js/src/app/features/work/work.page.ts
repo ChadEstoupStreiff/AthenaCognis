@@ -31,7 +31,7 @@ import { DataSync } from '../../core/state/data-sync.service';
 import { WorkApi } from '../../core/work/work.api';
 import { ContactAvatarComponent } from '../../shared/ui/contact-avatar.component';
 import { EmptyStateComponent } from '../../shared/ui/empty-state.component';
-import { TagChipComponent } from '../../shared/ui/tag-chip.component';
+import { RelationChipsComponent } from '../../shared/ui/relation-chips.component';
 import { monthWeeks } from '../time/time-model';
 import { TaskDialogComponent } from './task-dialog.component';
 import { MarkdownViewComponent } from '../../shared/ui/markdown-view.component';
@@ -80,7 +80,7 @@ const DEFAULT_COLUMN_COLOR = '#7700a7';
     TooltipModule,
     ContactAvatarComponent,
     EmptyStateComponent,
-    TagChipComponent,
+    RelationChipsComponent,
     TaskDialogComponent,
     MarkdownViewComponent,
   ],

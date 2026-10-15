@@ -7,7 +7,7 @@ import { CatalogStore } from '../../core/catalog/catalog.store';
 import { PeekService } from '../../core/files/peek.service';
 import { ContactAvatarComponent } from '../../shared/ui/contact-avatar.component';
 import { MarkdownViewComponent } from '../../shared/ui/markdown-view.component';
-import { TagChipComponent } from '../../shared/ui/tag-chip.component';
+import { RelationChipsComponent } from '../../shared/ui/relation-chips.component';
 import { blockersOf, dueDay, priorityOf } from './work-model';
 
 const ISO_DATE_LENGTH = 10;
@@ -15,7 +15,7 @@ const ISO_DATE_LENGTH = 10;
 /** Read-only view of a task (the dialog switches to the form on Edit). */
 @Component({
   selector: 'ac-task-details',
-  imports: [RouterLink, ContactAvatarComponent, MarkdownViewComponent, TagChipComponent],
+  imports: [RouterLink, ContactAvatarComponent, MarkdownViewComponent, RelationChipsComponent],
   templateUrl: './task-details.component.html',
   styleUrl: './task-details.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -145,13 +145,15 @@
           @if (paper.info.source) {
             <span class="ac-muted"><i class="pi pi-database"></i>{{ paper.info.source }}</span>
           }
-          @for (project of labels(paper).projects; track project) {
-            <ac-tag-chip [name]="project" kind="project" />
-          }
-          @for (tag of labels(paper).tags; track tag) {
-            <ac-tag-chip [name]="tag" />
-          }
         </div>
+        @let paperLabels = labels(paper);
+        @if (paperLabels.projects.length + paperLabels.tags.length > 0) {
+          <ac-relation-chips
+            class="labels"
+            [projects]="paperLabels.projects"
+            [tags]="paperLabels.tags"
+          />
+        }
       </div>
       <div class="actions">
         @if (store.busy().has(paper.path)) {

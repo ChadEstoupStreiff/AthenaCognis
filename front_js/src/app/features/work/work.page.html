@@ -283,14 +283,7 @@
       }
     </div>
     @if (task.projects.length + task.tags.length > 0) {
-      <div class="chips">
-        @for (project of task.projects; track project) {
-          <ac-tag-chip [name]="project" kind="project" />
-        }
-        @for (tag of task.tags; track tag) {
-          <ac-tag-chip [name]="tag" />
-        }
-      </div>
+      <ac-relation-chips [projects]="task.projects" [tags]="task.tags" />
     }
     @if (task.contacts.length > 0) {
       <div class="people">
