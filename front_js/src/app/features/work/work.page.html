@@ -81,13 +81,18 @@
       appendTo="body"
       ariaLabel="Filter priorities"
     />
-    <label class="switch"
-      ><p-toggleswitch
-        [ngModel]="filters().showDone"
-        (ngModelChange)="filter({ showDone: $event })"
-      />
-      Done</label
-    >
+    <p-button
+      [icon]="filters().showDone ? 'pi pi-eye' : 'pi pi-eye-slash'"
+      label="Done"
+      styleClass="done-toggle"
+      size="small"
+      [text]="!filters().showDone"
+      severity="secondary"
+      [pTooltip]="filters().showDone ? 'Hide done tasks' : 'Show done tasks'"
+      [ariaLabel]="filters().showDone ? 'Hide done tasks' : 'Show done tasks'"
+      [attr.aria-pressed]="filters().showDone"
+      (onClick)="filter({ showDone: !filters().showDone })"
+    />
     <p-selectbutton
       [options]="views"
       optionValue="value"

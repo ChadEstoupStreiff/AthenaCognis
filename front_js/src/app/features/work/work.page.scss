@@ -27,12 +27,8 @@
   gap: 6px;
 }
 
-.switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  cursor: pointer;
+:host ::ng-deep .done-toggle .p-button-icon {
+  font-size: 1.15rem;
 }
 
 .board {

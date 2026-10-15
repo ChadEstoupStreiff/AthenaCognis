@@ -271,4 +271,11 @@
   textarea.p-textarea {
     min-height: calc(3lh + 1rem);
   }
+
+  /* Dropdown lists show more options than PrimeNG's 200px default (inline style, hence !important). */
+  .p-select-list-container,
+  .p-multiselect-list-container,
+  .p-autocomplete-list-container {
+    max-height: min(420px, 60vh) !important;
+  }
 }

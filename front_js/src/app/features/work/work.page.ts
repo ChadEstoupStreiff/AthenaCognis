@@ -22,7 +22,6 @@ import { InputTextModule } from 'primeng/inputtext';
 import { MultiSelectModule } from 'primeng/multiselect';
 import { SelectModule } from 'primeng/select';
 import { SelectButtonModule } from 'primeng/selectbutton';
-import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import { TooltipModule } from 'primeng/tooltip';
 import { TASK_PRIORITIES, type KanbanColumn, type TaskDetail } from '@domain/contracts';
 import { formatLocalDate } from '@domain/time';
@@ -78,7 +77,6 @@ const MAX_VISIBLE_COLUMNS = 6;
     MultiSelectModule,
     SelectModule,
     SelectButtonModule,
-    ToggleSwitchModule,
     TooltipModule,
     ContactAvatarComponent,
     EmptyStateComponent,
