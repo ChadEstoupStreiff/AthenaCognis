@@ -108,10 +108,14 @@ services:
     restart: unless-stopped
     depends_on:
       - back
+    environment:
+      USER_NAME: ${USER_NAME:-}
+      TELEMETRY_SERVER_URL: ${TELEMETRY_SERVER_URL:-}
+      TELEMETRY_DASHBOARD_URL: ${TELEMETRY_DASHBOARD_URL:-}
     ports:
-      - "${FRONT_PORT}:8501"
+      - "${FRONT_PORT:-8401}:80"
     volumes:
-      - .env:/.env
+      - ${DATA_PATH}/shared:/shared:ro
     hostname: front
     networks:
       - appnet
@@ -136,10 +140,6 @@ PMA_PORT=8402
 
 # MariaDB root password
 DATABASE_PASSWORD=change_me
-
-# Optional: protect the web UI with a password (leave empty to disable)
-APP_PWD=
-LOGIN_TIMEOUT=86400
 
 # Optional: pin a specific release instead of always pulling :latest
 ATHENACOGNIS_VERSION=latest
@@ -199,20 +199,12 @@ Go to **Settings → LLM Settings → Local Llama**, enter a model name (e.g.
 `llama3.2:8b`) and click **Pull Model**. Browse available models at
 [ollama.com/library](https://ollama.com/library).
 
-## Angular front (`front_js`)
-
-The repository also contains an alternative web UI, `front_js` (Angular, served by nginx). It is
-not published on Docker Hub: build it from a clone of the repository with
-`docker compose up -d --build front_js`, then open `http://localhost:<FRONT_JS_PORT>` (default
-`8405`). It uses the same backend and data as the Streamlit front. See
-[front_js/README.md](front_js/README.md).
-
 ## Network exposure
 
-Only the web fronts are meant to be opened from other machines. `BACK_PORT` (FastAPI) and
+Only the web front is meant to be opened from other machines. `BACK_PORT` (FastAPI) and
 `PMA_PORT` (phpMyAdmin) are published on the host too and have **no authentication**: anyone
-reaching them can read and change every file, setting and API key. `front_js` has no login either
-(`APP_PWD` only protects the Streamlit front). Keep the host on a trusted network, or bind these
+reaching them can read and change every file, setting and API key. The web front has no login
+either. Keep the host on a trusted network, or bind these
 ports to localhost (e.g. `"127.0.0.1:${BACK_PORT}:80"`) or firewall them.
 
 ## Updating

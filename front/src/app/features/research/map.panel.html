@@ -1,0 +1,248 @@
+@if (store.papers().length === 0) {
+  <p class="ac-muted empty">Add papers to the library to build the map.</p>
+} @else {
+  <section class="controls ac-panel">
+    <div class="row">
+      <p-selectbutton
+        [options]="modes"
+        optionValue="value"
+        [allowEmpty]="false"
+        [ngModel]="mode()"
+        (ngModelChange)="mode.set($event)"
+        size="small"
+        ariaLabel="Links"
+      />
+      <p-select
+        class="focus"
+        [options]="paperOptions()"
+        optionLabel="label"
+        optionValue="value"
+        [ngModel]="focus()"
+        (ngModelChange)="focusPath.set($event)"
+        [filter]="true"
+        [showClear]="true"
+        placeholder="Full graph — or start from a paper"
+        appendTo="body"
+        ariaLabel="Start from paper"
+      />
+      @if (focus() !== null) {
+        <label class="inline"
+          >Hops
+          <p-inputnumber
+            [ngModel]="depth()"
+            (ngModelChange)="depth.set($event ?? 1)"
+            [min]="1"
+            [max]="4"
+            [showButtons]="true"
+            inputStyleClass="hops"
+            ariaLabel="Hops"
+        /></label>
+      }
+      <label class="inline"
+        ><p-toggleswitch
+          [ngModel]="timeline()"
+          (ngModelChange)="timeline.set($event)"
+          ariaLabel="Timeline layout"
+        />
+        Timeline</label
+      >
+      <label class="inline"
+        ><p-toggleswitch
+          [ngModel]="hideUnconnected()"
+          (ngModelChange)="hideUnconnected.set($event)"
+          ariaLabel="Hide unconnected papers"
+        />
+        Hide unconnected</label
+      >
+    </div>
+    @if (mode() === 'citations') {
+      <div class="row">
+        <span class="ac-muted grow"
+          >References known for {{ store.records().size }} / {{ store.papers().length }} papers ·
+          OpenAlex, then GROBID bibliography extraction</span
+        >
+        <p-button
+          [label]="'Analyze ' + missing().length + ' new'"
+          icon="pi pi-search-plus"
+          size="small"
+          [disabled]="missing().length === 0 || recordsLoading()"
+          (onClick)="store.analyze(missing())"
+        />
+        <p-button
+          label="Re-analyze all"
+          icon="pi pi-refresh"
+          size="small"
+          severity="secondary"
+          [outlined]="true"
+          (onClick)="store.analyze(store.papers())"
+        />
+      </div>
+      <div class="row">
+        <label class="inline"
+          ><p-toggleswitch
+            [ngModel]="showShared()"
+            (ngModelChange)="showShared.set($event)"
+            ariaLabel="Show shared references"
+          />
+          Shared references outside the library</label
+        >
+        <label class="inline slider"
+          >Cited by at least {{ minCiting() }}
+          <p-slider
+            [ngModel]="minCiting()"
+            (ngModelChange)="minCiting.set($event)"
+            [min]="2"
+            [max]="6"
+            [disabled]="!showShared()"
+            ariaLabel="Minimum citing papers"
+          />
+        </label>
+        @if (externals.isLoading()) {
+          <span class="ac-muted"
+            ><i class="pi pi-spin pi-spinner"></i> Loading shared references…</span
+          >
+        }
+      </div>
+    } @else {
+      <div class="row">
+        <label class="inline slider grow"
+          >Keep relations of strength ≥ {{ minForce().toFixed(1) }}
+          <p-slider
+            [ngModel]="minForce()"
+            (ngModelChange)="minForce.set($event)"
+            [min]="0"
+            [max]="maxForce"
+            [step]="0.1"
+            ariaLabel="Minimum strength"
+          />
+        </label>
+        <p-button
+          [label]="'Find relations for ' + aiSources().length + ' paper(s)'"
+          icon="pi pi-sparkles"
+          size="small"
+          [disabled]="store.papers().length < 2"
+          (onClick)="relations.find(aiSources(), store.papers(), minForce())"
+        />
+      </div>
+      <p class="ac-muted hint">
+        Uses the papers selected in the Library tab, or all papers when none are selected.
+      </p>
+    }
+  </section>
+
+  <div class="stage">
+    <div class="graph-box">
+      <ac-graph
+        [nodes]="nodes()"
+        [edges]="edges()"
+        [options]="options()"
+        [height]="height"
+        (nodeClick)="clicked.set($event)"
+      />
+      <p class="ac-muted caption">{{ caption() }}</p>
+    </div>
+    <aside class="details ac-panel" aria-live="polite">
+      @if (details(); as item) {
+        @if (item.kind === 'paper') {
+          <h3>{{ item.paper.info.title || item.paper.path.split('/').at(-1) }}</h3>
+          <p class="ac-muted">
+            {{ item.paper.info.authors.split('|')[0] }} · {{ item.paper.info.year }} ·
+            {{ item.paper.info.journal }}
+          </p>
+          <div class="facts">
+            @if (item.paper.info.doi) {
+              <a
+                [href]="'https://doi.org/' + item.paper.info.doi"
+                target="_blank"
+                rel="noopener noreferrer"
+                >DOI</a
+              >
+            }
+            @if (item.record?.openalex_id) {
+              <a
+                [href]="'https://openalex.org/' + item.record?.openalex_id"
+                target="_blank"
+                rel="noopener noreferrer"
+                >OpenAlex</a
+              >
+            }
+            @if (item.record && item.record.source !== 'none') {
+              <span class="ac-muted"
+                >{{ item.record.cited_by_count }} citations overall ·
+                {{ item.record.references.length }} references ({{ item.record.source }})</span
+              >
+            }
+          </div>
+          <div class="buttons">
+            <p-button
+              label="Open"
+              icon="pi pi-eye"
+              size="small"
+              [outlined]="true"
+              (onClick)="peek.open(item.paper.path)"
+            />
+            <p-button
+              label="Focus"
+              icon="pi pi-bullseye"
+              size="small"
+              severity="secondary"
+              [outlined]="true"
+              [disabled]="focus() === item.paper.path"
+              (onClick)="focusPath.set(item.paper.path)"
+            />
+          </div>
+        } @else {
+          <h3>{{ item.work.title }}</h3>
+          <p class="ac-muted">
+            {{ item.work.firstAuthor }} · {{ item.work.year }} · not in library ·
+            {{ item.work.citedByCount }} citations overall
+          </p>
+          <div class="facts">
+            @if (item.work.doi) {
+              <a
+                [href]="'https://doi.org/' + item.work.doi"
+                target="_blank"
+                rel="noopener noreferrer"
+                >DOI</a
+              >
+            }
+            <a
+              [href]="'https://openalex.org/' + item.work.openalexId"
+              target="_blank"
+              rel="noopener noreferrer"
+              >OpenAlex</a
+            >
+          </div>
+        }
+        <h4>{{ item.connections.length }} connection(s)</h4>
+        <ul class="connections">
+          @for (connection of item.connections; track $index) {
+            <li>
+              <span class="relation" [attr.data-relation]="connection.relation">
+                {{
+                  connection.relation === 'cites'
+                    ? 'Cites'
+                    : connection.relation === 'cited-by'
+                      ? 'Cited by'
+                      : 'AI · ' + connection.force.toFixed(1)
+                }}
+              </span>
+              <button type="button" class="link" (click)="clicked.set(connection.other)">
+                {{ connection.title }}
+              </button>
+              @if (connection.comment) {
+                <small class="ac-muted"
+                  ><ac-markdown-view [source]="connection.comment" layout="inline"
+                /></small>
+              }
+            </li>
+          } @empty {
+            <li class="ac-muted">No connection.</li>
+          }
+        </ul>
+      } @else {
+        <p class="ac-muted">Click a node to see its details and connections.</p>
+      }
+    </aside>
+  </div>
+}

@@ -1,0 +1,205 @@
+<div class="people">
+  <aside class="list ac-panel">
+    <div class="list-head">
+      <p-iconfield>
+        <p-inputicon class="pi pi-search" />
+        <input
+          pInputText
+          placeholder="Search people…"
+          [ngModel]="query()"
+          (ngModelChange)="search($event)"
+          aria-label="Search people"
+        />
+      </p-iconfield>
+      <p-button icon="pi pi-plus" ariaLabel="New contact" (onClick)="dialog.set('create')" />
+    </div>
+    <nav class="entries" aria-label="People">
+      @for (person of list.value() ?? []; track person.id) {
+        <a class="entry" [routerLink]="['/people', person.id]" [class.active]="person.id === id()">
+          <ac-contact-avatar
+            [contactId]="person.id"
+            [name]="person.name"
+            [size]="36"
+            [version]="person.id === id() ? photoVersion() : 0"
+          />
+          <span class="entry-main">
+            <strong>{{ person.name }}</strong>
+            <small class="ac-muted">{{ subtitle(person.role, person.company) }}</small>
+          </span>
+        </a>
+      } @empty {
+        <p class="ac-muted empty">{{ list.isLoading() ? 'Loading…' : 'Nobody found.' }}</p>
+      }
+    </nav>
+  </aside>
+
+  <section class="detail">
+    @if (contact.value(); as person) {
+      <header class="hero ac-panel">
+        <label class="photo" title="Change photo">
+          <ac-contact-avatar
+            [contactId]="person.id"
+            [name]="person.name"
+            [size]="avatarSize"
+            [version]="photoVersion()"
+          />
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            class="ac-visually-hidden"
+            (change)="uploadPhoto($event)"
+          />
+          <span class="photo-hint"><i class="pi pi-camera"></i></span>
+        </label>
+        <div class="titles">
+          <h1>{{ person.name }}</h1>
+          <p class="ac-muted">{{ subtitle(person.role, person.company) }}</p>
+          <div class="contact-links">
+            @if (person.email) {
+              <a [href]="'mailto:' + person.email"
+                ><i class="pi pi-envelope"></i>{{ person.email }}</a
+              >
+            }
+            @if (person.phone) {
+              <a [href]="'tel:' + person.phone"><i class="pi pi-phone"></i>{{ person.phone }}</a>
+            }
+          </div>
+        </div>
+        <div class="actions">
+          <p-button
+            label="Edit"
+            icon="pi pi-pencil"
+            size="small"
+            severity="secondary"
+            [outlined]="true"
+            (onClick)="dialog.set('edit')"
+          />
+          <p-button
+            icon="pi pi-trash"
+            size="small"
+            severity="danger"
+            [text]="true"
+            ariaLabel="Delete contact"
+            (onClick)="remove()"
+          />
+        </div>
+      </header>
+
+      <p-tabs value="about">
+        <p-tablist>
+          <p-tab value="about">About</p-tab>
+          <p-tab value="notes">Notes</p-tab>
+          <p-tab value="files"
+            >Files <span class="count">{{ person.files.length }}</span></p-tab
+          >
+        </p-tablist>
+        <p-tabpanels>
+          <p-tabpanel value="about">
+            <div class="about">
+              <section class="ac-panel block">
+                <h2>Description</h2>
+                @if (person.description) {
+                  <ac-markdown-view [source]="person.description" />
+                } @else {
+                  <p class="ac-muted">No description.</p>
+                }
+              </section>
+              <section class="ac-panel block">
+                <h2>Projects</h2>
+                <p-multiselect
+                  [options]="projectOptions()"
+                  [ngModel]="person.projects"
+                  (ngModelChange)="setLinks('project', $event)"
+                  [filter]="true"
+                  [autofocusFilter]="true"
+                  display="chip"
+                  placeholder="None"
+                  [fluid]="true"
+                  appendTo="body"
+                  ariaLabel="Projects"
+                >
+                  <ng-template #item let-name
+                    ><ac-tag-chip [name]="name" kind="project"
+                  /></ng-template>
+                </p-multiselect>
+                <h2>Tags</h2>
+                <p-multiselect
+                  [options]="tagOptions()"
+                  [ngModel]="person.tags"
+                  (ngModelChange)="setLinks('tag', $event)"
+                  [filter]="true"
+                  [autofocusFilter]="true"
+                  display="chip"
+                  placeholder="None"
+                  [fluid]="true"
+                  appendTo="body"
+                  ariaLabel="Tags"
+                >
+                  <ng-template #item let-name><ac-tag-chip [name]="name" /></ng-template>
+                </p-multiselect>
+              </section>
+            </div>
+          </p-tabpanel>
+          <p-tabpanel value="notes">
+            <section class="ac-panel block">
+              <div class="block-head">
+                <h2>Notes</h2>
+                <ac-save-status [status]="notesSave.status()" />
+              </div>
+              <ac-ai-textarea
+                [value]="notes()"
+                (valueChange)="editNotes($event)"
+                [rows]="noteRows"
+                placeholder="Meeting notes, context, follow-ups…"
+                context="These are notes about a person."
+              />
+            </section>
+          </p-tabpanel>
+          <p-tabpanel value="files">
+            <div class="tab-actions">
+              <p-button
+                label="Link files…"
+                icon="pi pi-link"
+                size="small"
+                (onClick)="picking.set(true)"
+              />
+            </div>
+            <ac-file-collection
+              [paths]="person.files"
+              mode="list"
+              [selectable]="false"
+              emptyTitle="No linked files"
+            />
+          </p-tabpanel>
+        </p-tabpanels>
+      </p-tabs>
+
+      <ac-contact-dialog
+        [visible]="dialog() === 'edit'"
+        (visibleChange)="$event ? null : dialog.set(null)"
+        [contact]="person"
+      />
+      <ac-file-picker-dialog
+        [(visible)]="picking"
+        [title]="'Link files to ' + person.name"
+        confirmLabel="Link"
+        [exclude]="person.files"
+        (picked)="linkFiles($event)"
+      />
+    } @else if (!id()) {
+      <div class="ac-panel">
+        <ac-empty-state
+          icon="pi pi-users"
+          title="Pick someone"
+          message="Or add a new contact with the + button."
+        />
+      </div>
+    }
+  </section>
+</div>
+
+<ac-contact-dialog
+  [visible]="dialog() === 'create'"
+  (visibleChange)="$event ? null : dialog.set(null)"
+  (saved)="select($event)"
+/>

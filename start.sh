@@ -69,8 +69,6 @@ if [ ! -f .env ]; then
   read -rp "Database password [random: $DEFAULT_DB_PASSWORD]: " DATABASE_PASSWORD
   DATABASE_PASSWORD="${DATABASE_PASSWORD:-$DEFAULT_DB_PASSWORD}"
 
-  read -rp "Password to protect the web UI (leave blank for none): " APP_PWD
-
   mkdir -p "$DATA_PATH"
 
   cat > .env <<EOF
@@ -84,10 +82,6 @@ FRONT_PORT=$FRONT_PORT
 PMA_PORT=$PMA_PORT
 
 DATABASE_PASSWORD=$DATABASE_PASSWORD
-
-# Optional: protect the web UI with a password (leave empty to disable)
-APP_PWD=$APP_PWD
-LOGIN_TIMEOUT=86400
 
 # Telemetry (optional) - URL of the separately deployed telemetry service
 TELEMETRY_SERVER_URL=https://telemetryathenacognis.chades.fr

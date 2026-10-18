@@ -14,7 +14,7 @@
   <br/>
   <img src="https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python"/>
   <img src="https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI"/>
-  <img src="https://img.shields.io/badge/Streamlit-FF4B4B?style=flat-square&logo=streamlit&logoColor=white" alt="Streamlit"/>
+  <img src="https://img.shields.io/badge/Angular-DD0031?style=flat-square&logo=angular&logoColor=white" alt="Angular"/>
   <img src="https://img.shields.io/badge/MariaDB-003545?style=flat-square&logo=mariadb&logoColor=white" alt="MariaDB"/>
   <img src="https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker"/>
   <br/>
@@ -209,7 +209,6 @@ You can visit my website for more of me: [https://chades.fr](https://chades.fr) 
 - **Project & tag management**, create, edit, and delete from the Settings UI
 - **Daemon health panel**, live status (RUNNING / DEAD) and current task for OCR, transcription, summarisation, and preview background workers
 - **Per-task AI model selection**, each AI task (chat, summary, OCR, image caption, transcription, auto-link, text refractor) independently selects a provider and model
-- **Password protection**, optional `APP_PWD` environment variable with cookie-based session persistence and configurable timeout
 
 ## 🤖 AI Providers
 
@@ -242,7 +241,7 @@ Each task selects its provider and model independently. Cloud providers require 
 | Layer | Technology |
 |-------|-----------|
 | Backend | Python 3, FastAPI, SQLAlchemy |
-| Frontend | Streamlit, and an Angular 21 + PrimeNG alternative ([front_js](front_js/README.md)) |
+| Frontend | Angular 21 + PrimeNG, served by nginx ([front](front/README.md)) |
 | Database | MariaDB 10.6 |
 | Keyword search | Inline substring matching with smart normalisation, streamed via NDJSON |
 | Semantic search | `sentence-transformers` (`all-MiniLM-L6-v2`), cosine similarity, lazy embedding cache |
@@ -277,8 +276,7 @@ The application runs as Docker services on a shared internal network:
 | `pma` | `phpmyadmin/phpmyadmin` | Web-based database admin UI | `PMA_PORT` |
 | `ollama` | `ollama/ollama` | Local LLM inference server; models stored in `DATA_PATH/ollama` |, (internal) |
 | `back` | Custom (FastAPI) | REST API + background AI daemons + file management | `BACK_PORT` |
-| `front` | Custom (Streamlit) | Web UI; communicates with the backend over the internal network | `FRONT_PORT` |
-| `front_js` | Custom (nginx + Angular build) | Alternative web UI, same backend and data; see [front_js/README.md](front_js/README.md) | `FRONT_JS_PORT` |
+| `front` | Custom (nginx + Angular build) | Web UI; proxies `/api` to the backend over the internal network; see [front/README.md](front/README.md) | `FRONT_PORT` |
 
 **Background daemons** (run as threads inside the `back` container):
 
@@ -325,8 +323,7 @@ Open `.env` and fill in the values (see [Configuration](#%EF%B8%8F-configuration
 ./up.sh
 ```
 
-The frontend will be available at `http://localhost:<FRONT_PORT>`, and the Angular front at
-`http://localhost:<FRONT_JS_PORT>` (both share the same data).
+The frontend will be available at `http://localhost:<FRONT_PORT>`.
 
 > **Prefer double-clicking?** `start.sh` (Linux), `start.command` (macOS), and
 > `start.bat` (Windows) do the same thing, but also check that Docker is
@@ -384,12 +381,9 @@ All core configuration is done via the `.env` file:
 | `USER_NAME` | ✅ | Your name, shown in the dashboard greeting | `chad` |
 | `DATA_PATH` | ✅ | Absolute path on the host for all persistent data (files, database, models, caches) | `/data/athenacognis` |
 | `BACK_PORT` | ✅ | Host port for the FastAPI backend | `8400` |
-| `FRONT_PORT` | ✅ | Host port for the Streamlit frontend | `8401` |
+| `FRONT_PORT` | ✅ | Host port for the web frontend | `8401` |
 | `PMA_PORT` | ✅ | Host port for phpMyAdmin | `8402` |
-| `FRONT_JS_PORT` | | Host port for the Angular front (`front_js`) | `8405` |
 | `DATABASE_PASSWORD` | ✅ | MariaDB root password | `supersecret` |
-| `APP_PWD` | ☑️ optional | Password to protect the web UI; leave empty to disable authentication | `mypassword` |
-| `LOGIN_TIMEOUT` | ☑️ optional | Session duration in seconds when `APP_PWD` is set (default: 86400) | `86400` |
 
 API keys for cloud AI providers (Mistral, OpenAI, Gemini, Groq) are stored in the application database and configured through **Settings → LLM Settings**, they do not need to be set in `.env`.
 

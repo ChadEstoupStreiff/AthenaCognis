@@ -1,0 +1,208 @@
+<section class="progress ac-panel" aria-label="Validation progress">
+  <div
+    class="bar"
+    role="img"
+    [attr.aria-label]="store.counts().Validated + ' of ' + store.papers().length + ' validated'"
+  >
+    @if (store.papers().length > 0) {
+      <span class="validated" [style.flex-grow]="store.counts().Validated"></span>
+      <span class="review" [style.flex-grow]="store.counts()['To review']"></span>
+      <span class="missing" [style.flex-grow]="store.counts()['Missing info']"></span>
+    }
+  </div>
+  <p>
+    <strong>{{ store.counts().Validated }} / {{ store.papers().length }}</strong> validated ·
+    <span class="dot review"></span>{{ store.counts()['To review'] }} to review ·
+    <span class="dot missing"></span>{{ store.counts()['Missing info'] }} missing info
+  </p>
+</section>
+
+<div class="toolbar">
+  <p-selectbutton
+    [options]="statuses"
+    optionValue="value"
+    [allowEmpty]="false"
+    [ngModel]="store.status()"
+    (ngModelChange)="store.status.set($event)"
+    size="small"
+    ariaLabel="Status"
+  />
+  <p-iconfield class="grow">
+    <p-inputicon styleClass="pi pi-filter" />
+    <input
+      pInputText
+      type="search"
+      placeholder="Filter by title, author, journal…"
+      [ngModel]="store.query()"
+      (ngModelChange)="store.query.set($event)"
+      aria-label="Filter papers"
+    />
+  </p-iconfield>
+  <p-select
+    [options]="sorts"
+    [ngModel]="store.sort()"
+    (ngModelChange)="store.sort.set($event)"
+    ariaLabel="Sort"
+  />
+</div>
+
+<div class="bulk ac-panel">
+  <p-checkbox
+    [binary]="true"
+    [ngModel]="allVisibleSelected()"
+    (ngModelChange)="toggleAll()"
+    ariaLabel="Select all shown"
+  />
+  <span
+    ><strong>{{ store.selected().size }}</strong> selected ·
+    {{ store.visible().length }} shown</span
+  >
+  <span class="grow"></span>
+  <p-button
+    label="Find info"
+    icon="pi pi-search-plus"
+    size="small"
+    severity="secondary"
+    [outlined]="true"
+    [disabled]="lookupTargets().length === 0"
+    pTooltip="Read the PDF with GROBID, then match on CrossRef, PubMed and arXiv. Validated papers are skipped."
+    (onClick)="store.findInfo(lookupTargets())"
+  />
+  <p-button
+    label="Validate"
+    icon="pi pi-verified"
+    size="small"
+    severity="secondary"
+    [outlined]="true"
+    [disabled]="store.selected().size === 0"
+    (onClick)="store.setValidated(store.selection(), true)"
+  />
+  <p-button
+    label="Unvalidate"
+    icon="pi pi-undo"
+    size="small"
+    severity="secondary"
+    [text]="true"
+    [disabled]="store.selected().size === 0"
+    (onClick)="store.setValidated(store.selection(), false)"
+  />
+  <p-button
+    [label]="store.selected().size > 0 ? 'Cite' : 'Cite all'"
+    icon="pi pi-book"
+    size="small"
+    [disabled]="store.visible().length === 0"
+    (onClick)="cite.emit(store.selected().size > 0 ? store.selection() : store.visible())"
+  />
+</div>
+
+<div class="papers">
+  @for (paper of store.visible(); track paper.path) {
+    <article class="paper" [class.selected]="store.selected().has(paper.path)">
+      <p-checkbox
+        [binary]="true"
+        [ngModel]="store.selected().has(paper.path)"
+        (ngModelChange)="store.toggle(paper.path)"
+        [ariaLabel]="'Select ' + title(paper)"
+      />
+      <div class="body">
+        <button type="button" class="title" (click)="edit.emit(paper)">{{ title(paper) }}</button>
+        <p class="details ac-muted">{{ details(paper) || 'No reference information yet' }}</p>
+        <div class="meta">
+          <span class="status" [attr.data-status]="status(paper)">
+            <i
+              [class]="
+                status(paper) === 'Validated'
+                  ? 'pi pi-verified'
+                  : status(paper) === 'To review'
+                    ? 'pi pi-eye'
+                    : 'pi pi-exclamation-circle'
+              "
+            ></i
+            >{{ status(paper) }}
+          </span>
+          @if (paper.info.doi) {
+            <a
+              [href]="'https://doi.org/' + paper.info.doi"
+              target="_blank"
+              rel="noopener noreferrer"
+              ><i class="pi pi-link"></i>DOI</a
+            >
+          }
+          @if (paper.info.url) {
+            <a [href]="paper.info.url" target="_blank" rel="noopener noreferrer"
+              ><i class="pi pi-external-link"></i>Publication</a
+            >
+          }
+          <span class="ac-muted"><i class="pi pi-file"></i>{{ fileName(paper) }}</span>
+          @if (paper.info.source) {
+            <span class="ac-muted"><i class="pi pi-database"></i>{{ paper.info.source }}</span>
+          }
+        </div>
+        @let paperLabels = labels(paper);
+        @if (paperLabels.projects.length + paperLabels.tags.length > 0) {
+          <ac-relation-chips
+            class="labels"
+            [projects]="paperLabels.projects"
+            [tags]="paperLabels.tags"
+          />
+        }
+      </div>
+      <div class="actions">
+        @if (store.busy().has(paper.path)) {
+          <i class="pi pi-spin pi-spinner busy" aria-label="Working"></i>
+        }
+        <p-button
+          icon="pi pi-eye"
+          [text]="true"
+          [rounded]="true"
+          severity="secondary"
+          pTooltip="Open document"
+          ariaLabel="Open document"
+          (onClick)="peek.open(paper.path)"
+        />
+        <p-button
+          icon="pi pi-pencil"
+          [text]="true"
+          [rounded]="true"
+          severity="secondary"
+          pTooltip="Edit reference"
+          ariaLabel="Edit reference"
+          (onClick)="edit.emit(paper)"
+        />
+        @if (!paper.info.validated) {
+          <p-button
+            icon="pi pi-search-plus"
+            [text]="true"
+            [rounded]="true"
+            severity="secondary"
+            pTooltip="Find reference online"
+            ariaLabel="Find reference online"
+            [disabled]="store.busy().has(paper.path)"
+            (onClick)="store.findInfo([paper])"
+          />
+        }
+        <p-button
+          [icon]="paper.info.validated ? 'pi pi-undo' : 'pi pi-check-circle'"
+          [text]="true"
+          [rounded]="true"
+          [severity]="paper.info.validated ? 'secondary' : 'success'"
+          [pTooltip]="paper.info.validated ? 'Mark to review' : 'Validate reference'"
+          [ariaLabel]="paper.info.validated ? 'Mark to review' : 'Validate reference'"
+          (onClick)="store.setValidated([paper], !paper.info.validated)"
+        />
+      </div>
+    </article>
+  } @empty {
+    @if (store.loading()) {
+      <p class="ac-muted loading"><i class="pi pi-spin pi-spinner"></i> Loading the library…</p>
+    } @else if (store.papers().length === 0) {
+      <ac-empty-state
+        icon="pi pi-inbox"
+        title="No paper with this tag yet"
+        message="Tag PDFs with the SOTA tag (Library → Edit projects & tags), or import a Zotero export."
+      />
+    } @else {
+      <ac-empty-state icon="pi pi-filter-slash" title="No reference matches these filters" />
+    }
+  }
+</div>

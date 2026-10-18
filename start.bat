@@ -62,9 +62,6 @@ if not exist ".env" (
   set /p "DATABASE_PASSWORD=Database password [random: !DEFAULT_DB_PASSWORD!]: "
   if "!DATABASE_PASSWORD!"=="" set "DATABASE_PASSWORD=!DEFAULT_DB_PASSWORD!"
 
-  set "APP_PWD="
-  set /p "APP_PWD=Password to protect the web UI (leave blank for none): "
-
   if not exist "!DATA_PATH!" mkdir "!DATA_PATH!"
 
   (
@@ -78,9 +75,6 @@ if not exist ".env" (
     echo PMA_PORT=!PMA_PORT!
     echo.
     echo DATABASE_PASSWORD=!DATABASE_PASSWORD!
-    echo.
-    echo APP_PWD=!APP_PWD!
-    echo LOGIN_TIMEOUT=86400
     echo.
     echo TELEMETRY_SERVER_URL=https://telemetryathenacognis.chades.fr
     echo TELEMETRY_DASHBOARD_URL=https://athenacognis.chades.fr

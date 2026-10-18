@@ -8,7 +8,12 @@ from datetime import datetime
 from io import BytesIO
 from typing import List
 
-from controllers.FileManager import FileManager
+from controllers.FileManager import (
+    SEARCH_ENGINE_CONTAINS,
+    SEARCH_ENGINE_SEMANTIC,
+    FileManager,
+    SearchEngine,
+)
 from controllers.NoteManager import NoteManager
 from controllers.OCRManager import OCRManager
 from controllers.PreviewManager import PreviewManager
@@ -531,10 +536,14 @@ def search_files_stream(
     exclude_subfolders: bool = False,
     exclude_projects: bool = False,
     exclude_tags: bool = False,
-    semantic: bool = False,
+    semantic: bool = False,  # legacy alias of engine=semantic
     similarity_threshold: float = 0.4,
+    exact: bool = False,
+    engine: SearchEngine = SEARCH_ENGINE_CONTAINS,
 ):
     """Search for files and stream progress + results as NDJSON."""
+    if semantic and engine == SEARCH_ENGINE_CONTAINS:
+        engine = SEARCH_ENGINE_SEMANTIC
     if text is not None and len(text) == 0:
         text = None
     if types is not None and len(types) == 0:
@@ -560,8 +569,9 @@ def search_files_stream(
             exclude_subfolders=exclude_subfolders,
             exclude_projects=exclude_projects,
             exclude_tags=exclude_tags,
-            semantic=semantic,
+            engine=engine,
             similarity_threshold=similarity_threshold,
+            exact=exact,
         ):
             yield json.dumps(event) + "\n"
 

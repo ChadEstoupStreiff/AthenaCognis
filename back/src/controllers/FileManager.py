@@ -2,7 +2,7 @@ import logging
 import os
 import re
 from datetime import datetime
-from typing import List
+from typing import Dict, Iterator, List, Literal, Optional, Tuple, Union
 
 from controllers.NoteManager import NoteManager
 from controllers.SummarizeManager import SummarizeManager
@@ -16,6 +16,153 @@ from whoosh.fields import ID, NGRAM, Schema
 from whoosh.index import create_in
 from whoosh.qparser import MultifieldParser, OrGroup
 from whoosh.query import Every
+
+SPECIAL_CHARACTERS = re.compile(r"[^a-zA-Z0-9\s]")
+NON_ALPHANUMERIC_LOWER = re.compile(r"[^a-z0-9\s]")
+
+SearchEngine = Literal["contains", "fuzzy", "semantic"]
+SearchEvent = Dict[str, Union[str, int]]
+SEARCH_ENGINE_CONTAINS: SearchEngine = "contains"
+SEARCH_ENGINE_FUZZY: SearchEngine = "fuzzy"
+SEARCH_ENGINE_SEMANTIC: SearchEngine = "semantic"
+FUZZY_FIELDS = ["file_name", "keywords", "summary", "note", "content"]
+SEARCH_MODE_QUICK = 0
+SEARCH_MODE_DEEP = 2
+
+
+def normalize_text(text: str) -> str:
+    """
+    Lowercase text and strip special characters
+
+    Args:
+        text (str): raw text
+    Returns:
+        str: lowercase text with only letters, digits and whitespace
+    """
+    return NON_ALPHANUMERIC_LOWER.sub("", text.lower())
+
+
+def build_query_terms(text: Optional[str], exact: bool) -> Tuple[List[str], bool]:
+    """
+    Build the substring terms a file must contain to match a search text
+
+    Args:
+        text (Optional[str]): search text
+        exact (bool): match the whole text as one case-insensitive phrase
+    Returns:
+        Tuple[List[str], bool]: terms (any one matches) and whether haystacks
+            must be normalized
+    """
+    stripped = (text or "").strip()
+    if not stripped:
+        return [], False
+    if exact:
+        return [stripped.lower()], False
+    # Without special characters in the query, strip them from both sides
+    # so "UNet" matches "U-net", "u_net", "U:Net", etc.
+    if SPECIAL_CHARACTERS.search(stripped):
+        return stripped.lower().split(), False
+    terms = [normalize_text(word) for word in stripped.split()]
+    return [term for term in terms if term], True
+
+
+def progress_event(current: int, total: int, file: str) -> SearchEvent:
+    """
+    Build a search progress event
+
+    Args:
+        current (int): 1-based position of the file
+        total (int): number of files
+        file (str): file path
+    Returns:
+        SearchEvent: progress event
+    """
+    return {
+        "type": "progress",
+        "current": current,
+        "total": total,
+        "file": os.path.basename(file),
+    }
+
+
+def file_haystack(file: str, search_mode: int, normalize: bool) -> str:
+    """
+    Gather the searchable text of a file for a search depth
+
+    Args:
+        file (str): file path
+        search_mode (int): 0 quick, 1 normal (+ summary), 2 deep (+ content)
+        normalize (bool): strip special characters
+    Returns:
+        str: lowercase text of name, keywords, summary, content and note
+    """
+    summary_keywords = SummarizeManager.get(file) or {}
+    note = NoteManager.get(file)
+    parts = [os.path.basename(file), ",".join(summary_keywords.get("keywords", []))]
+    if search_mode != SEARCH_MODE_QUICK:
+        parts.append(summary_keywords.get("summary", ""))
+    if search_mode == SEARCH_MODE_DEEP:
+        parts.append(read_content(file, force_read=True) or "")
+    parts.append(note.get("note", "") if note else "")
+    combined = " ".join(part for part in parts if part)
+    return normalize_text(combined) if normalize else combined.lower()
+
+
+def index_document(file: str, search_mode: int) -> Dict[str, str]:
+    """
+    Build the full-text index fields of a file for a search depth
+
+    Args:
+        file (str): file path
+        search_mode (int): 0 quick, 1 normal (+ summary), 2 deep (+ content)
+    Returns:
+        Dict[str, str]: index fields
+    """
+    summary_keywords = SummarizeManager.get(file) or {}
+    note = NoteManager.get(file)
+    summary = (
+        summary_keywords.get("summary", "") if search_mode != SEARCH_MODE_QUICK else ""
+    )
+    content = (
+        read_content(file, force_read=True) if search_mode == SEARCH_MODE_DEEP else ""
+    )
+    return {
+        "file": file,
+        "file_name": os.path.basename(file),
+        "keywords": ",".join(summary_keywords.get("keywords", [])),
+        "summary": summary or "",
+        "note": note.get("note", "") if note else "",
+        "content": content or "",
+    }
+
+
+def stream_semantic(
+    text: str, files: List[str], similarity_threshold: float
+) -> Iterator[SearchEvent]:
+    """
+    Yield files whose embedding is close enough to the text
+
+    Args:
+        text (str): search text
+        files (List[str]): candidate files
+        similarity_threshold (float): minimum cosine similarity
+    Returns:
+        Iterator[SearchEvent]: semantic_searching then result events
+    """
+    from controllers.EmbeddingManager import EmbeddingManager
+
+    yield {"type": "semantic_searching", "count": len(files)}
+    query_vector = EmbeddingManager.encode_query(text)
+    missing = [file for file in files if EmbeddingManager.get(file) is None]
+    if missing:
+        EmbeddingManager.batch_generate(missing)
+    for file, _score in EmbeddingManager.search(
+        query_vector,
+        top_k=len(files),
+        min_similarity=similarity_threshold,
+        include_files=files,
+    ):
+        yield {"type": "result", "path": file}
 
 
 class FileManager:
@@ -155,74 +302,87 @@ class FileManager:
         return files
 
     @classmethod
-    def index_files(cls, files, search_mode: int = 0):
+    def index_files(cls, files: List[str], search_mode: int = 0) -> None:
+        """
+        Rebuild the full-text index from files
+
+        Args:
+            files (List[str]): files to index
+            search_mode (int): 0 quick, 1 normal (+ summaries), 2 deep (+ contents)
+        Returns:
+            None: nothing
+        """
+        for _ in cls.iter_index_files(files, search_mode):
+            pass
+
+    @classmethod
+    def iter_index_files(cls, files: List[str], search_mode: int = 0) -> Iterator[str]:
+        """
+        Rebuild the full-text index from files, yielding each file once added
+
+        Args:
+            files (List[str]): files to index
+            search_mode (int): 0 quick, 1 normal (+ summaries), 2 deep (+ contents)
+        Returns:
+            Iterator[str]: indexed files, in order
+        Raises:
+            RuntimeError: index not initialized
+        """
         if not cls.ix:
-            raise Exception("Index not initialized. Call setup() first.")
+            raise RuntimeError("Index not initialized. Call setup() first.")
         writer = cls.ix.writer()
         writer.mergetype = writing.CLEAR  # clear existing index
-        count = 0
-
-        for file in files:
-            filename = os.path.basename(file)
-            dp = os.path.dirname(file)
-
-            file = os.path.join(dp, filename)
-            mime_file = guess_mime(file)
-            mime_file = mime_file or "application/octet-stream"
-
-            content = ""
-            summary = ""
-            keywords = []
-
-            summary_keywords = SummarizeManager.get(file)
-            if summary_keywords is not None:
-                # Always keywords
-                keywords = summary_keywords.get("keywords", [])
-
-                if search_mode != 0:
-                    # Summary only if search mode is NORMAL or DEEP
-                    summary = summary_keywords.get("summary", "")
-
-            if search_mode == 2:
-                # Read content only if search mode is DEEP
-                content = read_content(file, force_read=True)
-
-            note = NoteManager.get(file)
-            note = note.get("note", "") if note else ""
-            writer.add_document(
-                file=file,
-                file_name=filename,
-                # mime=mime_file or "application/octet-stream",
-                # date=date,
-                # subfolder=subfolder,
-                keywords=",".join(keywords) if keywords else "",
-                summary=summary,
-                note=note,
-                content=content,
-            )
-            count += 1
-
+        try:
+            for file in files:
+                writer.add_document(**index_document(file, search_mode))
+                yield file
+        except BaseException:
+            writer.cancel()
+            raise
         writer.commit()
 
     @classmethod
     def stream_search(
         cls,
-        text: str = None,
-        start_date: str = None,
-        end_date: str = None,
-        subfolders: List[str] = None,
-        types: List[list] = None,
-        projects: List[str] = None,
-        tags: List[str] = None,
+        text: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        subfolders: Optional[List[str]] = None,
+        types: Optional[List[str]] = None,
+        projects: Optional[List[str]] = None,
+        tags: Optional[List[str]] = None,
         search_mode: int = 0,
         exclude_file_types: bool = False,
         exclude_subfolders: bool = False,
         exclude_projects: bool = False,
         exclude_tags: bool = False,
-        semantic: bool = False,
+        engine: SearchEngine = SEARCH_ENGINE_CONTAINS,
         similarity_threshold: float = 0.4,
-    ):
-        """Sync generator that yields event dicts for streaming search results."""
+        exact: bool = False,
+    ) -> Iterator[SearchEvent]:
+        """
+        Search files, yielding total, progress, result and error events
+
+        Args:
+            text (Optional[str]): search text
+            start_date (Optional[str]): first day
+            end_date (Optional[str]): last day
+            subfolders (Optional[List[str]]): subfolder filter
+            types (Optional[List[str]]): mime filter
+            projects (Optional[List[str]]): project filter
+            tags (Optional[List[str]]): tag filter
+            search_mode (int): 0 quick, 1 normal, 2 deep
+            exclude_file_types (bool): invert the mime filter
+            exclude_subfolders (bool): invert the subfolder filter
+            exclude_projects (bool): invert the project filter
+            exclude_tags (bool): invert the tag filter
+            engine (SearchEngine): contains (substring), fuzzy (Whoosh n-grams,
+                ranked) or semantic (contains + embeddings)
+            similarity_threshold (float): minimum similarity of semantic matches
+            exact (bool): match the whole text as one phrase (contains engine only)
+        Returns:
+            Iterator[SearchEvent]: search events
+        """
         try:
             files = cls.list_files(
                 start_date=start_date,
@@ -236,92 +396,85 @@ class FileManager:
                 exclude_projects=exclude_projects,
                 exclude_tags=exclude_tags,
             )
-            files.sort()
-            files.reverse()
-            total = len(files)
-            yield {"type": "total", "count": total}
-
-            # If the query contains no special characters, strip them from both
-            # sides so "UNet" matches "U-net", "u_net", "U:Net", etc.
-            _special = re.compile(r'[^a-zA-Z0-9\s]')
-            _strip = re.compile(r'[^a-z0-9\s]')
-            normalize = text is not None and not _special.search(text.strip())
-
-            if text:
-                raw_words = text.strip().lower().split()
-                if normalize:
-                    query_words = [re.sub(r'[^a-z0-9]', '', w) for w in raw_words]
-                    query_words = [w for w in query_words if w]
-                else:
-                    query_words = raw_words
-            else:
-                query_words = []
-
-            def prep(s):
-                if not s:
-                    return ''
-                return _strip.sub('', s.lower()) if normalize else s.lower()
-
-            # When semantic boost is on, collect files that didn't match the
-            # substring filter so we can check them semantically afterwards.
-            # Only meaningful when there is a text query to embed.
-            non_substring = [] if (semantic and query_words) else None
-
-            for i, file in enumerate(files):
-                filename = os.path.basename(file)
-
-                yield {"type": "progress", "current": i + 1, "total": total, "file": filename}
-
-                if query_words:
-                    parts = [prep(filename)]
-
-                    summary_keywords = SummarizeManager.get(file)
-                    if summary_keywords is not None:
-                        parts.append(prep(",".join(summary_keywords.get("keywords", []))))
-                        if search_mode != 0:
-                            parts.append(prep(summary_keywords.get("summary", "")))
-
-                    if search_mode == 2:
-                        content = read_content(file, force_read=True)
-                        if content:
-                            parts.append(prep(content))
-
-                    note = NoteManager.get(file)
-                    if note:
-                        parts.append(prep(note.get("note", "")))
-
-                    combined = " ".join(parts)
-                    if any(word in combined for word in query_words):
-                        yield {"type": "result", "path": file}
-                    elif non_substring is not None:
-                        non_substring.append(file)
-                else:
-                    yield {"type": "result", "path": file}
-
-            # Semantic expansion phase — find files not caught by substring
-            # that are semantically close enough to the query.
-            if non_substring:
-                from controllers.EmbeddingManager import EmbeddingManager
-
-                yield {"type": "semantic_searching", "count": len(non_substring)}
-
-                query_vec = EmbeddingManager.encode_query(text)
-
-                missing = [f for f in non_substring if EmbeddingManager.get(f) is None]
-                if missing:
-                    EmbeddingManager.batch_generate(missing)
-
-                for file, _score in EmbeddingManager.search(
-                    query_vec,
-                    top_k=len(non_substring),
-                    min_similarity=similarity_threshold,
-                    include_files=non_substring,
-                ):
-                    yield {"type": "result", "path": file}
-
+            files.sort(reverse=True)
+            yield {"type": "total", "count": len(files)}
+            query = (text or "").strip()
+            if engine == SEARCH_ENGINE_FUZZY and query:
+                yield from cls._stream_fuzzy(files, query, search_mode)
+                return
+            threshold = (
+                similarity_threshold if engine == SEARCH_ENGINE_SEMANTIC else None
+            )
+            yield from cls._stream_contains(files, query, search_mode, exact, threshold)
         except Exception as e:
             logging.error(f"Error in stream_search: {str(e)}")
             yield {"type": "error", "message": str(e)}
+
+    @classmethod
+    def _stream_fuzzy(
+        cls, files: List[str], text: str, search_mode: int
+    ) -> Iterator[SearchEvent]:
+        """
+        Index files then yield Whoosh n-gram matches, best first
+
+        Args:
+            files (List[str]): candidate files
+            text (str): non-empty search text
+            search_mode (int): 0 quick, 1 normal, 2 deep
+        Returns:
+            Iterator[SearchEvent]: progress then result events
+        """
+        total = len(files)
+        for position, file in enumerate(
+            cls.iter_index_files(files, search_mode), start=1
+        ):
+            yield progress_event(position, total, file)
+        with cls.ix.searcher() as searcher:
+            parser = MultifieldParser(FUZZY_FIELDS, schema=cls.schema, group=OrGroup)
+            hits = searcher.search(
+                parser.parse(text), limit=get_setting("search_limit")
+            )
+            for hit in hits:
+                yield {"type": "result", "path": hit["file"]}
+
+    @classmethod
+    def _stream_contains(
+        cls,
+        files: List[str],
+        text: str,
+        search_mode: int,
+        exact: bool,
+        similarity_threshold: Optional[float],
+    ) -> Iterator[SearchEvent]:
+        """
+        Yield files containing the text, then semantic matches when a threshold is given
+
+        Args:
+            files (List[str]): candidate files
+            text (str): search text (empty matches every file)
+            search_mode (int): 0 quick, 1 normal, 2 deep
+            exact (bool): match the whole text as one phrase (no semantic phase)
+            similarity_threshold (Optional[float]): semantic threshold, None skips it
+        Returns:
+            Iterator[SearchEvent]: progress then result events
+        """
+        query_words, normalize = build_query_terms(text, exact)
+        use_semantic = (
+            similarity_threshold is not None and bool(query_words) and not exact
+        )
+        unmatched: List[str] = []
+        total = len(files)
+        for position, file in enumerate(files, start=1):
+            yield progress_event(position, total, file)
+            haystack = (
+                file_haystack(file, search_mode, normalize) if query_words else ""
+            )
+            if not query_words or any(word in haystack for word in query_words):
+                yield {"type": "result", "path": file}
+            elif use_semantic:
+                unmatched.append(file)
+        if unmatched and similarity_threshold is not None:
+            yield from stream_semantic(text, unmatched, similarity_threshold)
 
     @classmethod
     def search_files(

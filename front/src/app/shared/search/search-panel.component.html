@@ -1,0 +1,210 @@
+@let state = value();
+<div class="panel" [class.wide]="layout() === 'wide'">
+  <div class="top">
+    <form (ngSubmit)="submitted.emit()">
+      <p-iconfield>
+        <p-inputicon class="pi pi-search" />
+        <input
+          pInputText
+          type="search"
+          name="text"
+          class="search-input"
+          placeholder="Search files, notes, OCR, summaries…"
+          [ngModel]="state.text"
+          (ngModelChange)="patch({ text: $event })"
+          aria-label="Search text"
+        />
+        <p-inputicon>
+          <button
+            type="button"
+            class="exact-toggle"
+            [class.on]="state.exact && state.engine === 'contains'"
+            [attr.aria-pressed]="state.exact && state.engine === 'contains'"
+            [disabled]="state.engine !== 'contains'"
+            aria-label="Exact match"
+            [pTooltip]="
+              state.engine === 'contains'
+                ? 'Exact match: whole phrase, special characters kept'
+                : 'Exact match works with Contains only'
+            "
+            tooltipPosition="bottom"
+            (click)="setFlag('exact', !state.exact)"
+          >
+            <i class="pi pi-equals" aria-hidden="true"></i>
+          </button>
+        </p-inputicon>
+      </p-iconfield>
+    </form>
+
+    <div class="depth">
+      <p-selectbutton
+        [options]="modes"
+        optionLabel="label"
+        optionValue="value"
+        [allowEmpty]="false"
+        size="small"
+        [ngModel]="state.mode"
+        (ngModelChange)="patch({ mode: $event })"
+        ariaLabel="Search depth"
+      >
+        <ng-template #item let-option>
+          <span [pTooltip]="option.hint">{{ option.label }}</span>
+        </ng-template>
+      </p-selectbutton>
+      <p-selectbutton
+        [options]="engines"
+        optionLabel="label"
+        optionValue="value"
+        [allowEmpty]="false"
+        size="small"
+        [ngModel]="state.engine"
+        (ngModelChange)="patch({ engine: $event })"
+        ariaLabel="Matching engine"
+      >
+        <ng-template #item let-option>
+          <span [pTooltip]="option.hint">{{ option.label }}</span>
+        </ng-template>
+      </p-selectbutton>
+    </div>
+
+    @if (layout() === 'wide') {
+      <p-button
+        class="filters-toggle"
+        [label]="activeFilters() > 0 ? 'Filters · ' + activeFilters() : 'Filters'"
+        [icon]="filtersOpen() ? 'pi pi-chevron-up' : 'pi pi-sliders-h'"
+        size="small"
+        [severity]="activeFilters() > 0 ? 'primary' : 'secondary'"
+        [outlined]="true"
+        [ariaExpanded]="filtersOpen()"
+        (onClick)="filtersOpen.set(!filtersOpen())"
+      />
+    }
+  </div>
+
+  @if (layout() === 'stack' || filtersOpen()) {
+    <div class="filters">
+      <section>
+        <h3>Date</h3>
+        <div class="chip-row">
+          @for (range of ranges; track range.value) {
+            <button
+              type="button"
+              class="chip"
+              [class.on]="state.range === range.value"
+              (click)="setRange(range.value)"
+            >
+              {{ range.label }}
+            </button>
+          }
+        </div>
+        <p-datepicker
+          selectionMode="range"
+          [ngModel]="customRange()"
+          (ngModelChange)="setCustomRange($event)"
+          [readonlyInput]="true"
+          placeholder="Custom range…"
+          dateFormat="yy-mm-dd"
+          [showIcon]="true"
+          [fluid]="true"
+          size="small"
+          appendTo="body"
+        />
+      </section>
+
+      <section>
+        <h3>
+          Type
+          <label class="exclude"
+            ><p-checkbox
+              [binary]="true"
+              [ngModel]="state.excludeCategories"
+              (ngModelChange)="setFlag('excludeCategories', $event)"
+            />exclude</label
+          >
+        </h3>
+        <div class="chip-row">
+          @for (category of categories; track category.key) {
+            <button
+              type="button"
+              class="chip"
+              [class.on]="state.categories.includes(category.key)"
+              (click)="toggleItem('categories', category.key)"
+            >
+              <i [class]="category.icon" aria-hidden="true"></i>{{ category.label }}
+            </button>
+          }
+        </div>
+      </section>
+
+      <section>
+        <h3>
+          Projects
+          <label class="exclude"
+            ><p-checkbox
+              [binary]="true"
+              [ngModel]="state.excludeProjects"
+              (ngModelChange)="setFlag('excludeProjects', $event)"
+            />exclude</label
+          >
+        </h3>
+        <p-multiselect
+          [options]="projectOptions()"
+          [ngModel]="state.projects"
+          (ngModelChange)="patch({ projects: $event })"
+          [filter]="true"
+          [autofocusFilter]="true"
+          display="chip"
+          placeholder="Any project"
+          [fluid]="true"
+          size="small"
+          appendTo="body"
+          ariaLabel="Projects"
+        >
+          <ng-template #item let-name><ac-tag-chip [name]="name" kind="project" /></ng-template>
+        </p-multiselect>
+      </section>
+
+      @if (!hideTags()) {
+        <section>
+          <h3>
+            Tags
+            <label class="exclude"
+              ><p-checkbox
+                [binary]="true"
+                [ngModel]="state.excludeTags"
+                (ngModelChange)="setFlag('excludeTags', $event)"
+              />exclude</label
+            >
+          </h3>
+          <p-multiselect
+            [options]="tagOptions()"
+            [ngModel]="state.tags"
+            (ngModelChange)="patch({ tags: $event })"
+            [filter]="true"
+            [autofocusFilter]="true"
+            display="chip"
+            placeholder="Any tag"
+            [fluid]="true"
+            size="small"
+            appendTo="body"
+            ariaLabel="Tags"
+          >
+            <ng-template #item let-name><ac-tag-chip [name]="name" /></ng-template>
+          </p-multiselect>
+        </section>
+      }
+
+      <div class="filters-foot">
+        <p-button
+          label="Reset filters"
+          icon="pi pi-filter-slash"
+          size="small"
+          [text]="true"
+          severity="secondary"
+          [disabled]="activeFilters() === 0"
+          (onClick)="reset()"
+        />
+      </div>
+    </div>
+  }
+</div>

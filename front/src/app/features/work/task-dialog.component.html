@@ -1,0 +1,219 @@
+@let state = form();
+@let shown = current();
+<p-dialog
+  [header]="shown === null ? 'New task' : editing() ? 'Edit task' : 'Task'"
+  [modal]="true"
+  [(visible)]="visible"
+  [style]="{ width: 'min(720px, 98vw)' }"
+  [dismissableMask]="true"
+>
+  @if (shown !== null && !editing()) {
+    <ac-task-details [task]="shown" [allTasks]="allTasks()" />
+  } @else {
+    <form class="grid" (ngSubmit)="save()">
+      <label class="field wide">
+        <span>Title</span>
+        <input
+          pInputText
+          name="title"
+          [ngModel]="state.title"
+          (ngModelChange)="patch({ title: $event })"
+          required
+        />
+      </label>
+      <div class="field wide">
+        <span>Description</span>
+        <ac-ai-textarea
+          [value]="state.description"
+          (valueChange)="patch({ description: $event })"
+          [rows]="4"
+          context="This is the description of a task."
+        />
+      </div>
+      <label class="field">
+        <span>Priority</span>
+        <p-select
+          name="priority"
+          [options]="priorities"
+          optionLabel="label"
+          optionValue="value"
+          [ngModel]="state.priority"
+          (ngModelChange)="patch({ priority: $event })"
+          [fluid]="true"
+          appendTo="body"
+        >
+          <ng-template #item let-option
+            ><span class="priority"
+              ><i [class]="option.icon" [style.color]="option.color"></i>{{ option.label }}</span
+            ></ng-template
+          >
+          <ng-template #selectedItem let-option
+            ><span class="priority"
+              ><i [class]="option.icon" [style.color]="option.color"></i>{{ option.label }}</span
+            ></ng-template
+          >
+        </p-select>
+      </label>
+      <div class="field-row">
+        <label class="field">
+          <span>Start</span>
+          <p-datepicker
+            name="start"
+            [ngModel]="state.start"
+            (ngModelChange)="patch({ start: $event })"
+            dateFormat="yy-mm-dd"
+            [showClear]="true"
+            [fluid]="true"
+            appendTo="body"
+          />
+        </label>
+        <label class="field">
+          <span>Due</span>
+          <p-datepicker
+            name="due"
+            [ngModel]="state.due"
+            (ngModelChange)="patch({ due: $event })"
+            dateFormat="yy-mm-dd"
+            [showClear]="true"
+            [fluid]="true"
+            appendTo="body"
+          />
+        </label>
+      </div>
+      <label class="field">
+        <span>Projects</span>
+        <p-multiselect
+          name="projects"
+          [options]="projectOptions()"
+          [ngModel]="state.projects"
+          (ngModelChange)="patch({ projects: $event })"
+          [filter]="true"
+          [autofocusFilter]="true"
+          display="chip"
+          placeholder="None"
+          [fluid]="true"
+          appendTo="body"
+        >
+          <ng-template #item let-name><ac-tag-chip [name]="name" kind="project" /></ng-template>
+        </p-multiselect>
+      </label>
+      <label class="field">
+        <span>Tags</span>
+        <p-multiselect
+          name="tags"
+          [options]="tagOptions()"
+          [ngModel]="state.tags"
+          (ngModelChange)="patch({ tags: $event })"
+          [filter]="true"
+          [autofocusFilter]="true"
+          display="chip"
+          placeholder="None"
+          [fluid]="true"
+          appendTo="body"
+        >
+          <ng-template #item let-name><ac-tag-chip [name]="name" /></ng-template>
+        </p-multiselect>
+      </label>
+      <label class="field">
+        <span>People</span>
+        <p-multiselect
+          name="contacts"
+          [options]="contactOptions()"
+          [ngModel]="state.contacts"
+          (ngModelChange)="patch({ contacts: $event })"
+          [filter]="true"
+          [autofocusFilter]="true"
+          display="chip"
+          placeholder="Nobody"
+          [fluid]="true"
+          appendTo="body"
+        />
+      </label>
+      <label class="field">
+        <span>Depends on</span>
+        <p-multiselect
+          name="dependencies"
+          [options]="dependencyOptions()"
+          [ngModel]="state.dependencies"
+          (ngModelChange)="patch({ dependencies: $event })"
+          [filter]="true"
+          [autofocusFilter]="true"
+          display="chip"
+          placeholder="Nothing"
+          [fluid]="true"
+          appendTo="body"
+        />
+      </label>
+      <div class="field wide">
+        <span>Files</span>
+        <div class="files">
+          @for (path of state.files; track path) {
+            <span class="file">
+              <a [routerLink]="viewerOf(path)" (click)="visible.set(false)">{{ nameOf(path) }}</a>
+              <button
+                type="button"
+                [attr.aria-label]="'Detach ' + nameOf(path)"
+                (click)="patch({ files: state.files.filter((item) => item !== path) })"
+              >
+                <i class="pi pi-times"></i>
+              </button>
+            </span>
+          }
+          <p-button
+            label="Attach files…"
+            icon="pi pi-paperclip"
+            size="small"
+            [text]="true"
+            (onClick)="picking.set(true)"
+          />
+        </div>
+      </div>
+    </form>
+
+    @if (editing() && blockers().length > 0) {
+      <p class="blocked">
+        <i class="pi pi-lock"></i> Blocked by
+        {{
+          blockers()
+            .map((blocker) => blocker.title)
+            .join(', ')
+        }}
+      </p>
+    }
+  }
+
+  <ng-template #footer>
+    @if (shown !== null && !editing()) {
+      <p-button
+        class="left"
+        label="Delete"
+        icon="pi pi-trash"
+        severity="danger"
+        [text]="true"
+        (onClick)="remove()"
+      />
+      <p-button
+        [label]="shown.completed ? 'Reopen' : 'Mark done'"
+        [icon]="shown.completed ? 'pi pi-replay' : 'pi pi-check-circle'"
+        severity="secondary"
+        [outlined]="true"
+        [disabled]="!shown.completed && blockers().length > 0"
+        [pTooltip]="
+          !shown.completed && blockers().length > 0 ? 'Finish its dependencies first' : ''
+        "
+        (onClick)="toggleDone()"
+      />
+      <p-button label="Edit" icon="pi pi-pencil" (onClick)="startEditing()" />
+    } @else {
+      <p-button label="Cancel" severity="secondary" [text]="true" (onClick)="cancel()" />
+      <p-button label="Save" icon="pi pi-check" [loading]="saving()" (onClick)="save()" />
+    }
+  </ng-template>
+</p-dialog>
+
+<ac-file-picker-dialog
+  [(visible)]="picking"
+  title="Attach files to the task"
+  confirmLabel="Attach"
+  (picked)="attach($event)"
+/>

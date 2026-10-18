@@ -34,7 +34,7 @@ to run the app:
 | Image | Role |
 |-------|------|
 | `chadesdev/athenacognis-back` | FastAPI REST API, background AI daemons (OCR, transcription, summarisation, embeddings, chat), file management |
-| `chadesdev/athenacognis-front` | Streamlit web UI |
+| `chadesdev/athenacognis-front` | Angular web UI (nginx) |
 
 Tags: `latest` (newest build) or a pinned version, e.g. `1.0.0`.
 
@@ -70,10 +70,14 @@ services:
     restart: unless-stopped
     depends_on:
       - back
+    environment:
+      USER_NAME: ${USER_NAME:-}
+      TELEMETRY_SERVER_URL: ${TELEMETRY_SERVER_URL:-}
+      TELEMETRY_DASHBOARD_URL: ${TELEMETRY_DASHBOARD_URL:-}
     ports:
-      - "${FRONT_PORT}:8501"
+      - "${FRONT_PORT:-8401}:80"
     volumes:
-      - .env:/.env
+      - ${DATA_PATH}/shared:/shared:ro
 ```
 
 (`back_db`, `pma`, `ollama`, and `grobid` services and the rest of `.env` are covered in
@@ -84,7 +88,7 @@ services:
 | Layer | Technology |
 |-------|-----------|
 | Backend | Python 3, FastAPI, SQLAlchemy |
-| Frontend | Streamlit |
+| Frontend | Angular + PrimeNG (nginx) |
 | Database | MariaDB 10.6 |
 | Local LLM inference | Ollama |
 | Scientific PDF metadata | GROBID |

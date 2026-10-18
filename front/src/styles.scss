@@ -1,0 +1,290 @@
+/* Layer order: PrimeNG component styles first, app styles override them. */
+@layer theme, base, primeng, app;
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    margin: 0;
+    height: 100%;
+  }
+
+  body {
+    font-family:
+      'Inter',
+      system-ui,
+      -apple-system,
+      'Segoe UI',
+      sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--p-text-color);
+    background: var(--ac-app-background);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a {
+    color: var(--p-primary-color);
+  }
+}
+
+@layer app {
+  :root {
+    --ac-app-background: var(--p-surface-50);
+    --ac-panel-background: var(--p-surface-0);
+    --ac-panel-border: var(--p-surface-200);
+    --ac-rail-background: var(--p-surface-0);
+    --ac-muted: var(--p-text-muted-color);
+    --ac-radius: 12px;
+    --ac-gap: 16px;
+    --ac-rail-width: 232px;
+    --ac-rail-collapsed-width: 68px;
+    --ac-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 16px rgb(0 0 0 / 0.04);
+  }
+
+  :root.app-dark {
+    --ac-app-background: var(--p-surface-950);
+    --ac-panel-background: var(--p-surface-900);
+    --ac-panel-border: var(--p-surface-800);
+    --ac-rail-background: var(--p-surface-900);
+    --ac-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+  }
+
+  .ac-panel {
+    background: var(--ac-panel-background);
+    border: 1px solid var(--ac-panel-border);
+    border-radius: var(--ac-radius);
+    box-shadow: var(--ac-shadow);
+  }
+
+  .ac-muted {
+    color: var(--ac-muted);
+  }
+
+  .ac-visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+
+@layer app {
+  /* Theme switch only (pages change instantly): eased cross-fade, see ThemeService. */
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 0.4s;
+    animation-timing-function: ease-in-out;
+  }
+}
+
+@layer app {
+  /* The logo is a black glyph: invert it on dark surfaces. */
+  :root.app-dark img[src='logo.png'] {
+    filter: invert(1);
+  }
+}
+
+@layer app {
+  :root {
+    --ac-code-background: var(--p-surface-100);
+    --ac-hl-keyword: #8b2fc9;
+    --ac-hl-string: #0a7a3e;
+    --ac-hl-number: #b45309;
+    --ac-hl-comment: #6b7280;
+    --ac-hl-title: #1d4ed8;
+    --ac-hl-attr: #be185d;
+  }
+
+  :root.app-dark {
+    --ac-code-background: var(--p-surface-800);
+    --ac-hl-keyword: #d6a4ff;
+    --ac-hl-string: #86efac;
+    --ac-hl-number: #fdba74;
+    --ac-hl-comment: #9ca3af;
+    --ac-hl-title: #93c5fd;
+    --ac-hl-attr: #f9a8d4;
+  }
+
+  .hljs-keyword,
+  .hljs-selector-tag,
+  .hljs-built_in,
+  .hljs-literal {
+    color: var(--ac-hl-keyword);
+  }
+  .hljs-string,
+  .hljs-regexp,
+  .hljs-addition {
+    color: var(--ac-hl-string);
+  }
+  .hljs-number,
+  .hljs-symbol {
+    color: var(--ac-hl-number);
+  }
+  .hljs-comment,
+  .hljs-quote,
+  .hljs-deletion {
+    color: var(--ac-hl-comment);
+    font-style: italic;
+  }
+  .hljs-title,
+  .hljs-section,
+  .hljs-name {
+    color: var(--ac-hl-title);
+  }
+  .hljs-attr,
+  .hljs-attribute,
+  .hljs-variable,
+  .hljs-template-variable,
+  .hljs-property {
+    color: var(--ac-hl-attr);
+  }
+
+  .ac-markdown {
+    line-height: 1.65;
+    overflow-wrap: anywhere;
+
+    h1,
+    h2,
+    h3,
+    h4 {
+      margin: 1.2em 0 0.5em;
+      line-height: 1.3;
+      letter-spacing: -0.01em;
+    }
+    h1 {
+      font-size: 1.6em;
+    }
+    h2 {
+      font-size: 1.3em;
+    }
+    h3 {
+      font-size: 1.12em;
+    }
+    > :first-child {
+      margin-top: 0;
+    }
+    > :last-child {
+      margin-bottom: 0;
+    }
+    p,
+    ul,
+    ol,
+    blockquote,
+    table,
+    pre {
+      margin: 0 0 0.9em;
+    }
+    ul,
+    ol {
+      padding-left: 1.4em;
+    }
+    code {
+      padding: 0.1em 0.35em;
+      border-radius: 5px;
+      background: var(--ac-code-background);
+      font:
+        0.88em ui-monospace,
+        'SF Mono',
+        Menlo,
+        Consolas,
+        monospace;
+    }
+    pre {
+      padding: 12px 14px;
+      border-radius: 10px;
+      background: var(--ac-code-background);
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      background: none;
+    }
+    blockquote {
+      padding: 2px 14px;
+      border-left: 3px solid var(--p-primary-color);
+      color: var(--ac-muted);
+    }
+    table {
+      border-collapse: collapse;
+      display: block;
+      overflow-x: auto;
+    }
+    th,
+    td {
+      padding: 6px 10px;
+      border: 1px solid var(--ac-panel-border);
+    }
+    img {
+      max-width: 100%;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid var(--ac-panel-border);
+    }
+  }
+
+  /* Clamped preview: blocks flattened to plain lines, faded when cut. */
+  .ac-markdown.compact {
+    --ac-lines: 3;
+    max-height: calc(var(--ac-lines) * 1.5em);
+    overflow: hidden;
+    line-height: 1.5;
+
+    &.overflowing {
+      mask-image: linear-gradient(to bottom, black 60%, transparent);
+    }
+
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+      margin: 0;
+      font-size: 1em;
+    }
+    p,
+    ul,
+    ol,
+    blockquote,
+    table,
+    pre {
+      margin: 0;
+    }
+    pre {
+      padding: 4px 8px;
+    }
+    img {
+      display: none;
+    }
+  }
+
+  .ac-markdown.inline {
+    line-height: inherit;
+
+    p {
+      display: inline;
+      margin: 0;
+    }
+  }
+
+  /* Expandable text areas never shrink below three lines, even when empty. */
+  textarea.p-textarea {
+    min-height: calc(3lh + 1rem);
+  }
+
+  /* Dropdown lists show more options than PrimeNG's 200px default (inline style, hence !important). */
+  .p-select-list-container,
+  .p-multiselect-list-container,
+  .p-autocomplete-list-container {
+    max-height: min(420px, 60vh) !important;
+  }
+}
