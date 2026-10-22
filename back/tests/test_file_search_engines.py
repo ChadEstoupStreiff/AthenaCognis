@@ -105,15 +105,16 @@ def results(events: Iterator[SearchEvent]) -> List[str]:
 
 
 @pytest.mark.usefixtures("search_index")
-def test_contains_matches_any_word() -> None:
+def test_contains_matches_whole_phrase_not_any_word() -> None:
     """
-    Match files containing any query word, normalized
+    Match only files containing the whole normalized phrase, not any word
 
     Returns:
         None: nothing
     """
-    found = results(FileManager.stream_search(text="UNet brain", engine="contains"))
-    assert found == FILES
+    assert results(FileManager.stream_search(text="UNet brain", engine="contains")) == []
+    found = results(FileManager.stream_search(text="brain MRI", engine="contains"))
+    assert found == [FILES[1]]
 
 
 @pytest.mark.usefixtures("search_index")

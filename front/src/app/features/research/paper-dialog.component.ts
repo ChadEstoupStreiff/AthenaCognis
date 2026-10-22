@@ -8,10 +8,8 @@ import {
   signal,
   untracked,
 } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
-import { InputTextModule } from 'primeng/inputtext';
 import {
   EMPTY_INFO,
   type Paper,
@@ -19,12 +17,13 @@ import {
   paperFileName,
   paperUploadDate,
 } from '@domain/sota';
+import { PaperFormComponent } from './paper-form.component';
 import { ResearchStore } from './research.store';
 
 /** Edit the reference of one paper. */
 @Component({
   selector: 'ac-paper-dialog',
-  imports: [FormsModule, ButtonModule, DialogModule, InputTextModule],
+  imports: [ButtonModule, DialogModule, PaperFormComponent],
   template: `
     <p-dialog
       header="Edit reference"
@@ -37,82 +36,7 @@ import { ResearchStore } from './research.store';
         <p class="ac-muted caption">
           <i class="pi pi-file"></i> {{ fileName(current) }} · added {{ uploadDate(current) }}
         </p>
-        <form class="form" (ngSubmit)="save(false)">
-          <label class="field wide"
-            ><span>Title</span
-            ><input
-              pInputText
-              name="title"
-              [ngModel]="draft().title"
-              (ngModelChange)="set('title', $event)"
-          /></label>
-          <label class="field wide">
-            <span>Authors <small>separate with |, e.g. Doe, John | Smith, Ann</small></span>
-            <input
-              pInputText
-              name="authors"
-              [ngModel]="draft().authors"
-              (ngModelChange)="set('authors', $event)"
-            />
-          </label>
-          <label class="field"
-            ><span>Year</span
-            ><input
-              pInputText
-              name="year"
-              [ngModel]="draft().year"
-              (ngModelChange)="set('year', $event)"
-          /></label>
-          <label class="field span3"
-            ><span>Journal</span
-            ><input
-              pInputText
-              name="journal"
-              [ngModel]="draft().journal"
-              (ngModelChange)="set('journal', $event)"
-          /></label>
-          <label class="field"
-            ><span>Volume</span
-            ><input
-              pInputText
-              name="volume"
-              [ngModel]="draft().volume"
-              (ngModelChange)="set('volume', $event)"
-          /></label>
-          <label class="field"
-            ><span>Issue</span
-            ><input
-              pInputText
-              name="issue"
-              [ngModel]="draft().issue"
-              (ngModelChange)="set('issue', $event)"
-          /></label>
-          <label class="field span2"
-            ><span>Pages</span
-            ><input
-              pInputText
-              name="pages"
-              [ngModel]="draft().pages"
-              (ngModelChange)="set('pages', $event)"
-          /></label>
-          <label class="field span2"
-            ><span>DOI</span
-            ><input
-              pInputText
-              name="doi"
-              [ngModel]="draft().doi"
-              (ngModelChange)="set('doi', $event)"
-          /></label>
-          <label class="field span2"
-            ><span>URL</span
-            ><input
-              pInputText
-              name="url"
-              [ngModel]="draft().url"
-              (ngModelChange)="set('url', $event)"
-          /></label>
-          <button type="submit" hidden></button>
-        </form>
+        <ac-paper-form [(info)]="draft" (submitted)="save(false)" />
       }
       <ng-template #footer>
         <p-button label="Cancel" severity="secondary" [text]="true" (onClick)="closed.emit()" />
@@ -157,16 +81,6 @@ export class PaperDialogComponent {
         this.draft.set(paper?.info ?? EMPTY_INFO);
       });
     });
-  }
-
-  /**
-   * Change one field.
-   *
-   * @param field - Field.
-   * @param value - Value.
-   */
-  protected set(field: keyof PaperInfo, value: string): void {
-    this.draft.update((draft) => ({ ...draft, [field]: value }));
   }
 
   /**

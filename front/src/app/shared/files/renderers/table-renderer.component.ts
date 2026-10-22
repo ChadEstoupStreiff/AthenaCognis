@@ -13,7 +13,7 @@ import { TableModule } from 'primeng/table';
 import { FilesApi } from '../../../core/files/files.api';
 import { toApiProblem } from '../../../core/api/api-error';
 
-const SCROLL_HEIGHT = '70vh';
+const SCROLL_HEIGHT = 'var(--table-scroll-height, 70vh)';
 const VIRTUAL_ROW_HEIGHT = 33;
 
 /** CSV/TSV/XLSX preview (parsed by the BFF). */

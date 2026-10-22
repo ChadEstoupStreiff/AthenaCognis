@@ -1,8 +1,13 @@
-<div class="shell" [class.collapsed]="collapsed()" [style.--ac-rail-width.px]="railWidth()">
+<div
+  class="shell"
+  [class.collapsed]="collapsed()"
+  [class.compact]="compact()"
+  [style.--ac-rail-width.px]="railWidth()"
+>
   <aside class="rail" aria-label="Main navigation">
     <a class="brand" routerLink="/home" aria-label="AthenaCognis — Home">
       <img src="logo.png" alt="" class="logo" />
-      @if (!collapsed()) {
+      @if (!compact()) {
         <span class="name">AthenaCognis</span>
       }
     </a>
@@ -53,7 +58,7 @@
       </button>
       <div class="rail-tools">
         <p-button
-          [label]="collapsed() ? undefined : 'New'"
+          [label]="compact() ? undefined : 'New'"
           icon="pi pi-plus"
           size="small"
           ariaLabel="New"

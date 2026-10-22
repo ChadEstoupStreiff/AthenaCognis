@@ -1,12 +1,4 @@
-import {
-  computed,
-  DestroyRef,
-  inject,
-  Injectable,
-  linkedSignal,
-  resource,
-  signal,
-} from '@angular/core';
+import { computed, inject, Injectable, linkedSignal, resource, signal } from '@angular/core';
 import {
   analyzePaper,
   type CitationRecord,
@@ -72,19 +64,6 @@ export class ResearchStore {
     const id = this.lookupId();
     return id === null ? null : (this.jobs.operations().find((op) => op.id === id) ?? null);
   });
-
-  /** Warn before closing the tab while a lookup runs (it runs in this tab). */
-  constructor() {
-    const warn = (event: BeforeUnloadEvent): void => {
-      if (this.lookupOperation()?.status === 'running') {
-        event.preventDefault();
-      }
-    };
-    window.addEventListener('beforeunload', warn);
-    inject(DestroyRef).onDestroy(() => {
-      window.removeEventListener('beforeunload', warn);
-    });
-  }
 
   /** Papers matching the filters, sorted. */
   readonly visible = computed(() =>

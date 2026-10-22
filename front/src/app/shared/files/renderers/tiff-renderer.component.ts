@@ -60,7 +60,7 @@ interface TiffPage {
   styles: `
     canvas {
       max-width: 100%;
-      max-height: 80vh;
+      max-height: var(--media-max-height, 80vh);
       border-radius: 8px;
     }
     .pager {

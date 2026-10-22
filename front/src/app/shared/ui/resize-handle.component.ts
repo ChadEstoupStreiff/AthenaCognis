@@ -68,11 +68,14 @@ export function snapPanelWidth(
 /** Which side of the handle the resized panel sits on. */
 export type PanelSide = 'before' | 'after';
 
+/** Separator line: `vertical` resizes widths (panels side by side), `horizontal` resizes heights (stacked). */
+export type HandleOrientation = 'vertical' | 'horizontal';
+
 /**
- * Vertical drag handle resizing the panel before or after it (pointer or arrow keys).
- * Dragging toward the other side grows the panel; the width is clamped so the other side keeps
- * `reserve` pixels. With `snap` set, the panel collapses when dragged past its minimum and
- * expands when a collapsed panel is dragged open.
+ * Drag handle resizing the panel before or after it (pointer or arrow keys).
+ * Dragging toward the other side grows the panel; the size is clamped so the other side keeps
+ * `reserve` pixels (unless `fitContainer` is off). With `snap` set, the panel collapses when
+ * dragged past its minimum and expands when a collapsed panel is dragged open.
  */
 @Component({
   selector: 'ac-resize-handle',
@@ -80,7 +83,8 @@ export type PanelSide = 'before' | 'after';
   host: {
     role: 'separator',
     tabindex: '0',
-    'aria-orientation': 'vertical',
+    '[attr.aria-orientation]': 'orientation()',
+    '[class.horizontal]': "orientation() === 'horizontal'",
     '[attr.aria-valuenow]': 'width()',
     '[attr.aria-valuemin]': 'min()',
     '[attr.aria-label]': 'label()',
@@ -89,8 +93,10 @@ export type PanelSide = 'before' | 'after';
     '(pointerup)': 'stop($event)',
     '(pointercancel)': 'stop($event)',
     '(dblclick)': 'restore.emit()',
-    '(keydown.arrowleft)': 'nudge($event, -1)',
-    '(keydown.arrowright)': 'nudge($event, 1)',
+    '(keydown.arrowleft)': "nudgeKey($event, 'vertical', -1)",
+    '(keydown.arrowright)': "nudgeKey($event, 'vertical', 1)",
+    '(keydown.arrowup)': "nudgeKey($event, 'horizontal', -1)",
+    '(keydown.arrowdown)': "nudgeKey($event, 'horizontal', 1)",
   },
   styles: `
     :host {
@@ -116,6 +122,16 @@ export type PanelSide = 'before' | 'after';
     :host(.dragging) .grip {
       background: var(--p-primary-color);
     }
+    :host(.horizontal) {
+      width: auto;
+      height: 12px;
+      align-self: auto;
+      cursor: row-resize;
+    }
+    :host(.horizontal) .grip {
+      width: 48px;
+      height: 4px;
+    }
     :host(:focus-visible) {
       outline: none;
     }
@@ -124,12 +140,16 @@ export type PanelSide = 'before' | 'after';
 })
 export class ResizeHandleComponent {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
-  private startX = 0;
+  private startPosition = 0;
   private startWidth = 0;
   private dragging = false;
 
-  /** Width of the resized panel in pixels. */
+  /** Size of the resized panel in pixels (its height when `orientation` is horizontal). */
   readonly width = model.required<number>();
+  /** Separator direction. */
+  readonly orientation = input<HandleOrientation>('vertical');
+  /** Cap the size so the container keeps `reserve` pixels; off for panels that may grow the page. */
+  readonly fitContainer = input(true);
   /** Smallest panel width. */
   readonly min = input(DEFAULT_MIN_WIDTH);
   /** Largest panel width. */
@@ -154,7 +174,7 @@ export class ResizeHandleComponent {
    */
   protected start(event: PointerEvent): void {
     this.dragging = true;
-    this.startX = event.clientX;
+    this.startPosition = this.position(event);
     this.startWidth = this.currentWidth();
     this.host.nativeElement.setPointerCapture(event.pointerId);
     this.host.nativeElement.classList.add('dragging');
@@ -169,7 +189,7 @@ export class ResizeHandleComponent {
     if (!this.dragging) {
       return;
     }
-    const requested = this.startWidth + this.growth(event.clientX - this.startX);
+    const requested = this.startWidth + this.growth(this.position(event) - this.startPosition);
     const snap = this.snap();
     if (snap === null) {
       this.width.set(this.clamp(requested));
@@ -177,7 +197,7 @@ export class ResizeHandleComponent {
     }
     const result = snapPanelWidth(requested, this.startWidth, this.collapsed(), this.bounds(snap));
     if (result.collapsed !== this.collapsed()) {
-      this.startX = event.clientX;
+      this.startPosition = this.position(event);
       this.startWidth = result.collapsed ? requested : result.width;
       this.collapsed.set(result.collapsed);
     }
@@ -199,12 +219,25 @@ export class ResizeHandleComponent {
   }
 
   /**
+   * Resize with the arrow keys of the handle's axis (others are left to the page).
+   *
+   * @param event - Key event.
+   * @param axis - Orientation the arrow belongs to.
+   * @param direction - Arrow direction: -1 left/up, 1 right/down.
+   */
+  protected nudgeKey(event: Event, axis: HandleOrientation, direction: 1 | -1): void {
+    if (axis === this.orientation()) {
+      this.nudge(event, direction);
+    }
+  }
+
+  /**
    * Resize with the keyboard.
    *
    * @param event - Key event.
-   * @param direction - Arrow direction: -1 left, 1 right.
+   * @param direction - Arrow direction: -1 left/up, 1 right/down.
    */
-  protected nudge(event: Event, direction: 1 | -1): void {
+  private nudge(event: Event, direction: 1 | -1): void {
     event.preventDefault();
     const growth = this.growth(direction * KEYBOARD_STEP);
     const requested = this.currentWidth() + growth;
@@ -221,24 +254,38 @@ export class ResizeHandleComponent {
   }
 
   /**
-   * Rendered width of the resized panel (the bound width may be a placeholder).
+   * Pointer coordinate along the drag axis.
    *
-   * @returns Width in pixels.
+   * @param event - Pointer event.
+   * @returns X for a vertical handle, Y for a horizontal one.
+   */
+  private position(event: PointerEvent): number {
+    return this.orientation() === 'vertical' ? event.clientX : event.clientY;
+  }
+
+  /**
+   * Rendered size of the resized panel (the bound size may be a placeholder).
+   *
+   * @returns Width (or height) in pixels.
    */
   private currentWidth(): number {
     const host = this.host.nativeElement;
     const panel = this.panel() === 'after' ? host.nextElementSibling : host.previousElementSibling;
-    return panel?.getBoundingClientRect().width ?? this.width();
+    const rect = panel?.getBoundingClientRect();
+    if (rect === undefined) {
+      return this.width();
+    }
+    return this.orientation() === 'vertical' ? rect.width : rect.height;
   }
 
   /**
-   * Width change caused by a horizontal move.
+   * Size change caused by a move along the drag axis.
    *
-   * @param deltaX - Move in pixels (positive = right).
-   * @returns Width change.
+   * @param delta - Move in pixels (positive = right/down).
+   * @returns Size change.
    */
-  private growth(deltaX: number): number {
-    return this.panel() === 'after' ? -deltaX : deltaX;
+  private growth(delta: number): number {
+    return this.panel() === 'after' ? -delta : delta;
   }
 
   /**
@@ -252,12 +299,17 @@ export class ResizeHandleComponent {
   }
 
   /**
-   * Largest width allowed by the `max` input and the container.
+   * Largest size allowed by the `max` input and (with `fitContainer`) the container.
    *
    * @returns Width in pixels.
    */
   private maxWidth(): number {
-    const container = this.host.nativeElement.parentElement?.clientWidth ?? Infinity;
+    if (!this.fitContainer()) {
+      return this.max();
+    }
+    const parent = this.host.nativeElement.parentElement;
+    const container =
+      (this.orientation() === 'vertical' ? parent?.clientWidth : parent?.clientHeight) ?? Infinity;
     return Math.min(this.max(), container - this.reserve());
   }
 

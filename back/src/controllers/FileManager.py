@@ -19,6 +19,7 @@ from whoosh.query import Every
 
 SPECIAL_CHARACTERS = re.compile(r"[^a-zA-Z0-9\s]")
 NON_ALPHANUMERIC_LOWER = re.compile(r"[^a-z0-9\s]")
+WHITESPACE_RUN = re.compile(r"\s+")
 
 SearchEngine = Literal["contains", "fuzzy", "semantic"]
 SearchEvent = Dict[str, Union[str, int]]
@@ -30,40 +31,40 @@ SEARCH_MODE_QUICK = 0
 SEARCH_MODE_DEEP = 2
 
 
-def normalize_text(text: str) -> str:
+def fold_text(text: str, normalize: bool) -> str:
     """
-    Lowercase text and strip special characters
+    Lowercase text, collapse whitespace and optionally strip special characters
 
     Args:
         text (str): raw text
+        normalize (bool): strip special characters
     Returns:
-        str: lowercase text with only letters, digits and whitespace
+        str: folded text with single spaces between words
     """
-    return NON_ALPHANUMERIC_LOWER.sub("", text.lower())
+    lowered = text.lower()
+    if normalize:
+        lowered = NON_ALPHANUMERIC_LOWER.sub("", lowered)
+    return WHITESPACE_RUN.sub(" ", lowered).strip()
 
 
-def build_query_terms(text: Optional[str], exact: bool) -> Tuple[List[str], bool]:
+def build_query_phrase(text: Optional[str], exact: bool) -> Tuple[str, bool]:
     """
-    Build the substring terms a file must contain to match a search text
+    Build the phrase a file must contain to match a search text
 
     Args:
         text (Optional[str]): search text
-        exact (bool): match the whole text as one case-insensitive phrase
+        exact (bool): keep special characters even when the text has none
     Returns:
-        Tuple[List[str], bool]: terms (any one matches) and whether haystacks
-            must be normalized
+        Tuple[str, bool]: phrase (empty matches every file) and whether
+            haystacks must be normalized
     """
     stripped = (text or "").strip()
     if not stripped:
-        return [], False
-    if exact:
-        return [stripped.lower()], False
+        return "", False
     # Without special characters in the query, strip them from both sides
-    # so "UNet" matches "U-net", "u_net", "U:Net", etc.
-    if SPECIAL_CHARACTERS.search(stripped):
-        return stripped.lower().split(), False
-    terms = [normalize_text(word) for word in stripped.split()]
-    return [term for term in terms if term], True
+    # so "UNet paper" matches "U-net paper", "u_net paper", etc.
+    normalize = not exact and not SPECIAL_CHARACTERS.search(stripped)
+    return fold_text(stripped, normalize), normalize
 
 
 def progress_event(current: int, total: int, file: str) -> SearchEvent:
@@ -94,7 +95,7 @@ def file_haystack(file: str, search_mode: int, normalize: bool) -> str:
         search_mode (int): 0 quick, 1 normal (+ summary), 2 deep (+ content)
         normalize (bool): strip special characters
     Returns:
-        str: lowercase text of name, keywords, summary, content and note
+        str: folded text of name, keywords, summary, content and note
     """
     summary_keywords = SummarizeManager.get(file) or {}
     note = NoteManager.get(file)
@@ -105,7 +106,7 @@ def file_haystack(file: str, search_mode: int, normalize: bool) -> str:
         parts.append(read_content(file, force_read=True) or "")
     parts.append(note.get("note", "") if note else "")
     combined = " ".join(part for part in parts if part)
-    return normalize_text(combined) if normalize else combined.lower()
+    return fold_text(combined, normalize)
 
 
 def index_document(file: str, search_mode: int) -> Dict[str, str]:
@@ -376,10 +377,10 @@ class FileManager:
             exclude_subfolders (bool): invert the subfolder filter
             exclude_projects (bool): invert the project filter
             exclude_tags (bool): invert the tag filter
-            engine (SearchEngine): contains (substring), fuzzy (Whoosh n-grams,
+            engine (SearchEngine): contains (whole phrase), fuzzy (Whoosh n-grams,
                 ranked) or semantic (contains + embeddings)
             similarity_threshold (float): minimum similarity of semantic matches
-            exact (bool): match the whole text as one phrase (contains engine only)
+            exact (bool): keep special characters (contains engine only)
         Returns:
             Iterator[SearchEvent]: search events
         """
@@ -447,29 +448,24 @@ class FileManager:
         similarity_threshold: Optional[float],
     ) -> Iterator[SearchEvent]:
         """
-        Yield files containing the text, then semantic matches when a threshold is given
+        Yield files containing the whole text, then semantic matches when a threshold is given
 
         Args:
             files (List[str]): candidate files
             text (str): search text (empty matches every file)
             search_mode (int): 0 quick, 1 normal, 2 deep
-            exact (bool): match the whole text as one phrase (no semantic phase)
+            exact (bool): keep special characters (no semantic phase)
             similarity_threshold (Optional[float]): semantic threshold, None skips it
         Returns:
             Iterator[SearchEvent]: progress then result events
         """
-        query_words, normalize = build_query_terms(text, exact)
-        use_semantic = (
-            similarity_threshold is not None and bool(query_words) and not exact
-        )
+        phrase, normalize = build_query_phrase(text, exact)
+        use_semantic = similarity_threshold is not None and bool(phrase) and not exact
         unmatched: List[str] = []
         total = len(files)
         for position, file in enumerate(files, start=1):
             yield progress_event(position, total, file)
-            haystack = (
-                file_haystack(file, search_mode, normalize) if query_words else ""
-            )
-            if not query_words or any(word in haystack for word in query_words):
+            if not phrase or phrase in file_haystack(file, search_mode, normalize):
                 yield {"type": "result", "path": file}
             elif use_semantic:
                 unmatched.append(file)

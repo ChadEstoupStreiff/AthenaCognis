@@ -1,4 +1,17 @@
+/* Fill the content area: toolbar on top, preview and inspector take the remaining height. */
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Preview height picked with the handle: the page grows and scrolls instead. */
+:host(.sized) {
+  height: auto;
+}
+
 .toolbar {
+  flex: none;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -37,28 +50,56 @@
 }
 
 .layout {
+  flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto var(--ac-inspector-width, 380px);
+  grid-template-rows: minmax(0, 1fr);
   gap: 2px;
-  align-items: start;
+}
+
+.stage-column {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .stage {
+  flex: 1;
+  min-height: 0;
   padding: 12px;
-  min-height: 60vh;
 }
 
+:host(.sized) .stage {
+  flex: none;
+  height: var(--ac-stage-height);
+}
+
+.stage-handle {
+  flex: none;
+}
+
+/* Size containment: the row follows the preview column, long inspector content scrolls. */
 .inspector {
-  position: sticky;
-  top: 0;
-  max-height: calc(100vh - 120px);
+  contain: size;
+  min-height: 0;
   overflow-y: auto;
   padding: 4px 4px 12px;
 }
 
+/* Stacked: the page scrolls, the preview keeps a viewport-sized frame. */
 @media (max-width: 1100px) {
+  :host {
+    height: auto;
+  }
+
   .layout {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+  }
+
+  .stage {
+    height: 80dvh;
   }
 
   .splitter {
@@ -66,8 +107,8 @@
   }
 
   .inspector {
-    position: static;
-    max-height: none;
+    contain: none;
+    overflow-y: visible;
   }
 }
 

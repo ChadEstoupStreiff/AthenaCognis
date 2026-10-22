@@ -99,6 +99,7 @@ function storeView(kind: RenderableKind, view: SourceView): void {
   templateUrl: './file-renderer.component.html',
   styleUrl: './file-renderer.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { '[class.fill]': 'fill()' },
 })
 export class FileRendererComponent {
   private readonly files = inject(FilesApi);
@@ -110,6 +111,8 @@ export class FileRendererComponent {
   readonly metadata = input<FileMetadata | null | undefined>(undefined);
   /** Smaller frames (drawer). */
   readonly compact = input(false);
+  /** Size the preview to the host height (host must have a definite height). */
+  readonly fill = input(false);
   /** OCR boxes for images. */
   readonly ocrBoxes = input<readonly OcrBox[]>([]);
   /** Show OCR boxes. */

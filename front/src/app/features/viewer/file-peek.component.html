@@ -6,6 +6,7 @@
   styleClass="file-peek"
   [modal]="true"
   [dismissible]="true"
+  (onShow)="revealBody()"
 >
   <ng-template #header>
     @if (row(); as file) {
@@ -74,64 +75,66 @@
       />
     </div>
 
-    <div class="body">
-      <div class="preview">
-        <ac-file-renderer
-          [path]="file.path"
-          [compact]="true"
-          [metadata]="metadata.value() ?? null"
-          [ocrBoxes]="ocr().boxes"
-          [showBoxes]="showBoxes()"
-          [showScores]="showScores()"
-        />
-      </div>
+    @if (bodyReady()) {
+      <div class="body">
+        <div class="preview">
+          <ac-file-renderer
+            [path]="file.path"
+            [compact]="true"
+            [metadata]="metadata.value() ?? null"
+            [ocrBoxes]="ocr().boxes"
+            [showBoxes]="showBoxes()"
+            [showScores]="showScores()"
+          />
+        </div>
 
-      <p-tabs [value]="tab()" (valueChange)="selectTab($event)" [scrollable]="true">
-        <p-tablist>
-          <p-tab value="overview">Overview</p-tab>
-          <p-tab value="ai">AI</p-tab>
-          <p-tab value="links">Links</p-tab>
-          <p-tab value="notes">Note</p-tab>
-        </p-tablist>
-        <p-tabpanels>
-          <p-tabpanel value="overview">
-            @if (tab() === 'overview') {
-              <div class="overview">
-                <ac-summary-block [path]="file.path" [collapsedLines]="8" />
-                <ac-info-tab
+        <p-tabs [value]="tab()" (valueChange)="selectTab($event)" [scrollable]="true">
+          <p-tablist>
+            <p-tab value="overview">Overview</p-tab>
+            <p-tab value="ai">AI</p-tab>
+            <p-tab value="links">Links</p-tab>
+            <p-tab value="notes">Note</p-tab>
+          </p-tablist>
+          <p-tabpanels>
+            <p-tabpanel value="overview">
+              @if (tab() === 'overview') {
+                <div class="overview">
+                  <ac-summary-block [path]="file.path" [collapsedLines]="8" />
+                  <ac-info-tab
+                    [path]="file.path"
+                    [metadata]="metadata.value() ?? null"
+                    [navigateOnMove]="false"
+                    (moved)="peek.open($event)"
+                  />
+                  <ac-people-tab [path]="file.path" />
+                </div>
+              }
+            </p-tabpanel>
+            <p-tabpanel value="ai">
+              @if (tab() === 'ai') {
+                <ac-ai-tab
                   [path]="file.path"
-                  [metadata]="metadata.value() ?? null"
-                  [navigateOnMove]="false"
-                  (moved)="peek.open($event)"
+                  [kind]="kind()"
+                  [ocrRecord]="ocrRecord.value() ?? null"
+                  [ocr]="ocr()"
+                  [(showBoxes)]="showBoxes"
+                  [(showScores)]="showScores"
                 />
-                <ac-people-tab [path]="file.path" />
-              </div>
-            }
-          </p-tabpanel>
-          <p-tabpanel value="ai">
-            @if (tab() === 'ai') {
-              <ac-ai-tab
-                [path]="file.path"
-                [kind]="kind()"
-                [ocrRecord]="ocrRecord.value() ?? null"
-                [ocr]="ocr()"
-                [(showBoxes)]="showBoxes"
-                [(showScores)]="showScores"
-              />
-            }
-          </p-tabpanel>
-          <p-tabpanel value="links">
-            @if (tab() === 'links') {
-              <ac-links-tab [path]="file.path" />
-            }
-          </p-tabpanel>
-          <p-tabpanel value="notes">
-            @if (tab() === 'notes') {
-              <ac-notes-tab [path]="file.path" />
-            }
-          </p-tabpanel>
-        </p-tabpanels>
-      </p-tabs>
-    </div>
+              }
+            </p-tabpanel>
+            <p-tabpanel value="links">
+              @if (tab() === 'links') {
+                <ac-links-tab [path]="file.path" />
+              }
+            </p-tabpanel>
+            <p-tabpanel value="notes">
+              @if (tab() === 'notes') {
+                <ac-notes-tab [path]="file.path" />
+              }
+            </p-tabpanel>
+          </p-tabpanels>
+        </p-tabs>
+      </div>
+    }
   }
 </p-drawer>

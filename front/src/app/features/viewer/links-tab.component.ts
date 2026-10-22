@@ -19,6 +19,7 @@ import type { Options } from 'vis-network/standalone';
 import type { FileLink, LinkSuggestion } from '@domain/contracts';
 import { fileNameOf } from '@domain/files';
 import { FileDetailsApi } from '../../core/files/file-details.api';
+import { JobsStore } from '../../core/jobs/jobs.store';
 import { NotifyService } from '../../core/notify/notify.service';
 import { DataSync } from '../../core/state/data-sync.service';
 import { FilePickerDialogComponent } from '../../shared/files/file-picker-dialog.component';
@@ -26,6 +27,7 @@ import { viewerCommands } from '../../shared/files/file-row';
 import { GraphComponent } from '../../shared/ui/graph.component';
 import { buildLinkGraph } from './link-graph';
 import { MarkdownViewComponent } from '../../shared/ui/markdown-view.component';
+import { OperationProgressDialogComponent } from '../../shared/ui/operation-progress-dialog.component';
 
 const MAX_TREE_FILES = 150;
 const DEFAULT_FORCE = 1;
@@ -58,6 +60,7 @@ interface ReviewedSuggestion {
     FilePickerDialogComponent,
     GraphComponent,
     MarkdownViewComponent,
+    OperationProgressDialogComponent,
   ],
   templateUrl: './links-tab.component.html',
   styleUrl: './inspector.scss',
@@ -66,6 +69,7 @@ interface ReviewedSuggestion {
 export class LinksTabComponent {
   private readonly details = inject(FileDetailsApi);
   private readonly notify = inject(NotifyService);
+  private readonly jobs = inject(JobsStore);
   private readonly sync = inject(DataSync);
   private readonly router = inject(Router);
 
@@ -76,7 +80,16 @@ export class LinksTabComponent {
   protected readonly pickerMode = signal<'link' | 'suggest' | null>(null);
   protected readonly force = signal(DEFAULT_FORCE);
   protected readonly comment = signal('');
-  protected readonly suggesting = signal(false);
+  /** Operation id of the AI suggestion run shown in the progress dialog. */
+  private readonly suggestId = signal<string | null>(null);
+  /** Name of the candidate being assessed. */
+  protected readonly suggestCurrent = signal<string | null>(null);
+  /** AI suggestion run shown in the progress dialog. */
+  protected readonly suggestOperation = computed(() => {
+    const id = this.suggestId();
+    return id === null ? null : (this.jobs.operations().find((op) => op.id === id) ?? null);
+  });
+  protected readonly suggesting = computed(() => this.suggestOperation()?.status === 'running');
   protected readonly review = linkedSignal<string, readonly ReviewedSuggestion[]>({
     source: this.path,
     computation: () => [],
@@ -135,7 +148,7 @@ export class LinksTabComponent {
   protected async onPicked(paths: readonly string[]): Promise<void> {
     const targets = paths.filter((path) => path !== this.path());
     if (this.pickerMode() === 'suggest') {
-      await this.suggest(targets);
+      this.suggest(targets);
       return;
     }
     for (const target of targets) {
@@ -182,27 +195,55 @@ export class LinksTabComponent {
     this.notify.success(`${String(accepted.length)} link(s) added.`);
   }
 
+  /** Hide the suggestion progress dialog. */
+  protected closeSuggest(): void {
+    this.suggestId.set(null);
+  }
+
   /**
-   * Ask the AI for suggestions.
+   * Ask the AI for suggestions in the background, one candidate at a time.
    *
    * @param targets - Candidate files.
    */
-  private async suggest(targets: readonly string[]): Promise<void> {
+  private suggest(targets: readonly string[]): void {
     if (targets.length === 0) {
       return;
     }
-    this.suggesting.set(true);
-    try {
-      const suggestions = await this.details.suggestLinks(this.path(), targets);
-      this.review.set(
-        suggestions.map((suggestion) => ({
-          suggestion,
-          accepted: suggestion.force >= SUGGESTION_PRESELECT,
-        })),
-      );
-    } finally {
-      this.suggesting.set(false);
-    }
+    const source = this.path();
+    const operation = this.jobs.track(
+      'link-suggest',
+      `Suggest links for ${fileNameOf(source)} among ${String(targets.length)} file(s)`,
+      async (progress) => {
+        progress.setTotal(targets.length);
+        const suggestions: LinkSuggestion[] = [];
+        try {
+          for (const target of targets) {
+            this.suggestCurrent.set(fileNameOf(target));
+            suggestions.push(...(await this.details.suggestLinks(source, [target])));
+            progress.step(`${String(suggestions.length)} suggestion(s)`);
+          }
+        } finally {
+          this.suggestCurrent.set(null);
+          this.showSuggestions(suggestions);
+        }
+        return `${String(suggestions.length)} suggestion(s) for ${String(targets.length)} file(s). Review them under "AI suggestions".`;
+      },
+    );
+    this.suggestId.set(operation.id);
+  }
+
+  /**
+   * Put suggestions up for review, preselecting strong ones.
+   *
+   * @param suggestions - AI suggestions.
+   */
+  private showSuggestions(suggestions: readonly LinkSuggestion[]): void {
+    this.review.set(
+      suggestions.map((suggestion) => ({
+        suggestion,
+        accepted: suggestion.force >= SUGGESTION_PRESELECT,
+      })),
+    );
   }
 
   /**

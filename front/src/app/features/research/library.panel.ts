@@ -21,13 +21,13 @@ import {
   type Paper,
   paperFileName,
   paperStatus,
-  shortAuthors,
   STATUS_FILTERS,
 } from '@domain/sota';
 import { FilesApi } from '../../core/files/files.api';
 import { EmptyStateComponent } from '../../shared/ui/empty-state.component';
 import { RelationChipsComponent } from '../../shared/ui/relation-chips.component';
 import { PeekService } from '../../core/files/peek.service';
+import { paperDetails, STATUS_ICONS } from './paper-labels';
 import { ResearchStore } from './research.store';
 
 /** Library tab: progress, filters, bulk actions and paper rows. */
@@ -55,6 +55,8 @@ export class LibraryPanelComponent {
   protected readonly store = inject(ResearchStore);
   protected readonly peek = inject(PeekService);
 
+  /** Open one paper. */
+  readonly open = output<Paper>();
   /** Edit one paper. */
   readonly edit = output<Paper>();
   /** Cite papers. */
@@ -77,19 +79,8 @@ export class LibraryPanelComponent {
   protected readonly title = displayTitle;
   protected readonly status = paperStatus;
   protected readonly fileName = paperFileName;
-
-  /**
-   * `authors · year · journal` line.
-   *
-   * @param paper - Paper.
-   * @returns Line, or empty.
-   */
-  protected details(paper: Paper): string {
-    return [shortAuthors(paper.info.authors), paper.info.year, paper.info.journal]
-      .map((part) => part.trim())
-      .filter(Boolean)
-      .join(' · ');
-  }
+  protected readonly details = paperDetails;
+  protected readonly statusIcons = STATUS_ICONS;
 
   /**
    * Projects and tags of a paper.

@@ -40,6 +40,10 @@ type InspectorTab = 'info' | 'ai' | 'links' | 'notes' | 'people';
 const TABS: readonly InspectorTab[] = ['info', 'ai', 'links', 'notes', 'people'];
 const INSPECTOR_WIDTH_KEY = 'ac.viewer.inspectorWidth';
 const DEFAULT_INSPECTOR_WIDTH = 380;
+const STAGE_HEIGHT_KEY = 'ac.viewer.stageHeight';
+/** Stored stage height meaning "fill the screen" (no height picked yet, or restored). */
+const FILL_STAGE_HEIGHT = 0;
+const STAGE_MIN_HEIGHT = 240;
 
 /** Full file viewer: renderer plus inspector (details, AI, links, notes, people). */
 @Component({
@@ -62,6 +66,7 @@ const DEFAULT_INSPECTOR_WIDTH = 380;
   templateUrl: './viewer.page.html',
   styleUrl: './viewer.page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { '[class.sized]': '!stageFills()' },
 })
 export class ViewerPage {
   private readonly files = inject(FilesApi);
@@ -115,6 +120,9 @@ export class ViewerPage {
     () => !this.metadata.isLoading() && this.metadata.value() === null,
   );
   protected readonly inspectorWidth = persistedWidth(INSPECTOR_WIDTH_KEY, DEFAULT_INSPECTOR_WIDTH);
+  protected readonly stageHeight = persistedWidth(STAGE_HEIGHT_KEY, FILL_STAGE_HEIGHT);
+  protected readonly stageFills = computed(() => this.stageHeight() === FILL_STAGE_HEIGHT);
+  protected readonly stageMinHeight = STAGE_MIN_HEIGHT;
 
   /** Record visits for "recently opened". */
   constructor() {
@@ -130,6 +138,11 @@ export class ViewerPage {
   /** Restore the default inspector width. */
   protected resetInspectorWidth(): void {
     this.inspectorWidth.set(DEFAULT_INSPECTOR_WIDTH);
+  }
+
+  /** Let the preview fill the screen height again. */
+  protected resetStageHeight(): void {
+    this.stageHeight.set(FILL_STAGE_HEIGHT);
   }
 
   /**

@@ -131,3 +131,12 @@
   [exclude]="[path()]"
   (picked)="onPicked($event)"
 />
+
+<ac-operation-progress-dialog
+  header="Suggesting links with AI"
+  unit="file(s)"
+  verb="Comparing with"
+  [operation]="suggestOperation()"
+  [item]="suggestCurrent()"
+  (closed)="closeSuggest()"
+/>

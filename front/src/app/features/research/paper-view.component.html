@@ -1,0 +1,168 @@
+@let current = paper();
+<div class="layout" [style.--ac-side-width.px]="sideWidth()">
+  <aside class="side ac-panel">
+    <header class="head">
+      <div class="titles">
+        <h2 id="paper-view-title">{{ title(current) }}</h2>
+        <p class="ac-muted">{{ details(current) || 'No reference information yet' }}</p>
+      </div>
+      <p-button
+        icon="pi pi-times"
+        [text]="true"
+        [rounded]="true"
+        severity="secondary"
+        pTooltip="Close"
+        ariaLabel="Close"
+        (onClick)="closed.emit()"
+      />
+    </header>
+
+    <div class="actions">
+      <p-button
+        [label]="current.info.validated ? 'Mark to review' : 'Validate'"
+        [icon]="current.info.validated ? 'pi pi-undo' : 'pi pi-verified'"
+        size="small"
+        [severity]="current.info.validated ? 'secondary' : 'success'"
+        [outlined]="current.info.validated"
+        (onClick)="store.setValidated([current], !current.info.validated)"
+      />
+      @if (!current.info.validated) {
+        <p-button
+          label="Find info"
+          icon="pi pi-search-plus"
+          size="small"
+          severity="secondary"
+          [outlined]="true"
+          [loading]="busy()"
+          pTooltip="Read the PDF with GROBID, then match on CrossRef, PubMed and arXiv."
+          (onClick)="store.findInfo([current])"
+        />
+      }
+      <p-button
+        label="Cite"
+        icon="pi pi-book"
+        size="small"
+        severity="secondary"
+        [outlined]="true"
+        (onClick)="cite.emit([current])"
+      />
+      <span class="spacer"></span>
+      <p-button
+        icon="pi pi-globe"
+        size="small"
+        [text]="true"
+        [rounded]="true"
+        severity="secondary"
+        [disabled]="webUrl() === null"
+        [pTooltip]="webUrl() === null ? 'No URL or DOI yet' : 'Open on the web'"
+        tooltipPosition="bottom"
+        ariaLabel="Open on the web"
+        (onClick)="openWeb()"
+      />
+      <p-button
+        icon="pi pi-external-link"
+        size="small"
+        [text]="true"
+        [rounded]="true"
+        severity="secondary"
+        pTooltip="Open in the file viewer"
+        ariaLabel="Open in the file viewer"
+        (onClick)="openViewer()"
+      />
+      <p-button
+        icon="pi pi-download"
+        size="small"
+        [text]="true"
+        [rounded]="true"
+        severity="secondary"
+        pTooltip="Download"
+        ariaLabel="Download"
+        (onClick)="download()"
+      />
+    </div>
+
+    <section class="info" aria-label="Paper information">
+      <div class="meta">
+        <span class="status" [attr.data-status]="status()">
+          <i [class]="statusIcons[status()]"></i>{{ status() }}
+        </span>
+        @if (current.info.doi) {
+          <a
+            [href]="'https://doi.org/' + current.info.doi"
+            target="_blank"
+            rel="noopener noreferrer"
+            ><i class="pi pi-link"></i>DOI</a
+          >
+        }
+        @if (current.info.url) {
+          <a [href]="current.info.url" target="_blank" rel="noopener noreferrer"
+            ><i class="pi pi-external-link"></i>Publication</a
+          >
+        }
+      </div>
+      <dl>
+        <dt>File</dt>
+        <dd>{{ fileName(current) }}</dd>
+        <dt>Added</dt>
+        <dd>{{ uploadDate(current) }}</dd>
+        @if (current.info.source) {
+          <dt>Source</dt>
+          <dd>{{ current.info.source }}</dd>
+        }
+      </dl>
+      @let labels = relations.value();
+      @if (labels && labels.projects.length + labels.tags.length > 0) {
+        <ac-relation-chips [projects]="labels.projects" [tags]="labels.tags" />
+      }
+    </section>
+
+    <section class="reference" aria-label="Reference">
+      <h3>Reference</h3>
+      <ac-paper-form [(info)]="draft" (submitted)="save(false)" />
+      <div class="form-actions">
+        @if (dirty()) {
+          <p-button
+            label="Revert"
+            size="small"
+            severity="secondary"
+            [text]="true"
+            (onClick)="revert()"
+          />
+        }
+        <p-button
+          label="Save"
+          icon="pi pi-save"
+          size="small"
+          severity="secondary"
+          [outlined]="true"
+          [disabled]="!dirty()"
+          [loading]="saving()"
+          (onClick)="save(false)"
+        />
+        @if (!current.info.validated) {
+          <p-button
+            label="Save & validate"
+            icon="pi pi-verified"
+            size="small"
+            [loading]="saving()"
+            (onClick)="save(true)"
+          />
+        }
+      </div>
+    </section>
+  </aside>
+
+  <ac-resize-handle
+    class="splitter"
+    panel="before"
+    [(width)]="sideWidth"
+    [min]="sideMinWidth"
+    [reserve]="previewMinWidth"
+    label="Resize side panel"
+    (restore)="resetSideWidth()"
+  />
+
+  <section class="stage ac-panel" aria-label="File preview">
+    <ac-file-renderer [path]="current.path" [fill]="true" />
+  </section>
+</div>

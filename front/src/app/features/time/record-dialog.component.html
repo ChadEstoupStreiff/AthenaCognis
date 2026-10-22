@@ -2,6 +2,7 @@
 <p-dialog
   [header]="record() ? 'Edit time entry' : 'Log time'"
   [modal]="true"
+  appendTo="body"
   [(visible)]="visible"
   [style]="{ width: 'min(640px, 98vw)' }"
   [dismissableMask]="true"

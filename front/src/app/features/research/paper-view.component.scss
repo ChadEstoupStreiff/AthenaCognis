@@ -1,0 +1,147 @@
+@use 'paper-status';
+
+/* Fill the popup height: side panel scrolls, preview takes the rest. */
+:host {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: var(--ac-side-width, 460px) auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 2px;
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 16px 16px;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+
+  .titles {
+    flex: 1;
+    min-width: 0;
+    padding-top: 4px;
+  }
+
+  h2 {
+    margin: 0;
+    font-size: 17px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  p {
+    margin: 4px 0 0;
+    font-size: 13px;
+  }
+}
+
+.actions,
+.form-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.form-actions {
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.info {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ac-panel-border);
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  font-size: 12px;
+
+  i {
+    margin-right: 4px;
+    font-size: 11px;
+  }
+
+  a {
+    color: var(--p-primary-color);
+    text-decoration: none;
+  }
+}
+
+dl {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 13px;
+}
+
+dt {
+  color: var(--ac-muted);
+}
+
+dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.reference {
+  padding-top: 14px;
+  border-top: 1px solid var(--ac-panel-border);
+
+  h3 {
+    margin: 0 0 10px;
+    font-size: 14px;
+  }
+}
+
+.stage {
+  min-height: 0;
+  padding: 12px;
+}
+
+/* Stacked: the page scrolls, the preview keeps a viewport-sized frame. */
+@media (max-width: 1100px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    gap: 12px;
+  }
+
+  .side {
+    overflow-y: visible;
+  }
+
+  .splitter {
+    display: none;
+  }
+
+  .stage {
+    height: 80dvh;
+  }
+}

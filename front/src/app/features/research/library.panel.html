@@ -105,20 +105,11 @@
         [ariaLabel]="'Select ' + title(paper)"
       />
       <div class="body">
-        <button type="button" class="title" (click)="edit.emit(paper)">{{ title(paper) }}</button>
+        <button type="button" class="title" (click)="open.emit(paper)">{{ title(paper) }}</button>
         <p class="details ac-muted">{{ details(paper) || 'No reference information yet' }}</p>
         <div class="meta">
           <span class="status" [attr.data-status]="status(paper)">
-            <i
-              [class]="
-                status(paper) === 'Validated'
-                  ? 'pi pi-verified'
-                  : status(paper) === 'To review'
-                    ? 'pi pi-eye'
-                    : 'pi pi-exclamation-circle'
-              "
-            ></i
-            >{{ status(paper) }}
+            <i [class]="statusIcons[status(paper)]"></i>{{ status(paper) }}
           </span>
           @if (paper.info.doi) {
             <a

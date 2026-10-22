@@ -3,6 +3,7 @@ import {
   Component,
   computed,
   inject,
+  linkedSignal,
   resource,
   signal,
 } from '@angular/core';
@@ -67,6 +68,14 @@ export class FilePeekComponent {
     const path = this.peek.path();
     return path === null ? null : toFileRow(path);
   });
+  /**
+   * Body rendered once the slide-in has painted (reset on open and close): rendering it with the drawer
+   * blocks the first animation frames, so the drawer and its mask pop in instead of sliding.
+   */
+  protected readonly bodyReady = linkedSignal({
+    source: () => this.peek.path() !== null,
+    computation: () => false,
+  });
   protected readonly tab = signal<PeekTab>('overview');
   protected readonly showBoxes = signal(false);
   protected readonly showScores = signal(false);
@@ -106,6 +115,15 @@ export class FilePeekComponent {
    */
   protected selectTab(value: string | number | undefined): void {
     this.tab.set(TABS.find((candidate) => candidate === value) ?? 'overview');
+  }
+
+  /** Render the body after the drawer's first animation frame has painted. */
+  protected revealBody(): void {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        this.bodyReady.set(true);
+      });
+    });
   }
 
   /** Open the full viewer. */

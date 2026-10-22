@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, signal } f
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ButtonModule } from 'primeng/button';
+import { DialogModule } from 'primeng/dialog';
 import { SelectModule } from 'primeng/select';
 import { TabsModule } from 'primeng/tabs';
 import type { Paper } from '@domain/sota';
@@ -14,6 +15,7 @@ import { LibraryPanelComponent } from './library.panel';
 import { LookupProgressDialogComponent } from './lookup-progress-dialog.component';
 import { MapPanelComponent } from './map.panel';
 import { PaperDialogComponent } from './paper-dialog.component';
+import { PaperViewComponent } from './paper-view.component';
 import { ResearchStore } from './research.store';
 
 /** Tab of the page. */
@@ -25,6 +27,7 @@ type ResearchTab = 'library' | 'map';
   imports: [
     FormsModule,
     ButtonModule,
+    DialogModule,
     SelectModule,
     TabsModule,
     EmptyStateComponent,
@@ -35,6 +38,7 @@ type ResearchTab = 'library' | 'map';
     LookupProgressDialogComponent,
     MapPanelComponent,
     PaperDialogComponent,
+    PaperViewComponent,
   ],
   templateUrl: './research.page.html',
   styleUrl: './research.page.scss',
@@ -47,11 +51,16 @@ export class ResearchPage {
 
   /** Query parameter: tab. */
   readonly tab = input<string | undefined>(undefined);
+  /** Query parameter: path of the paper shown in the paper view. */
+  readonly paper = input<string | undefined>(undefined);
 
   protected readonly activeTab = computed<ResearchTab>(() =>
     this.tab() === 'map' ? 'map' : 'library',
   );
   protected readonly tags = computed(() => this.catalog.tagList().map((tag) => tag.name));
+  protected readonly viewed = computed(
+    () => this.store.papers().find((paper) => paper.path === this.paper()) ?? null,
+  );
   protected readonly editing = signal<Paper | null>(null);
   protected readonly citing = signal<readonly Paper[] | null>(null);
   protected readonly exporting = signal(false);
@@ -67,6 +76,26 @@ export class ResearchPage {
       queryParams: { tab: tab === 'map' ? 'map' : null },
       queryParamsHandling: 'merge',
       replaceUrl: true,
+    });
+  }
+
+  /**
+   * Show one paper in the popup (kept in the URL so Back closes it).
+   *
+   * @param paper - Paper.
+   */
+  protected openPaper(paper: Paper): void {
+    void this.router.navigate([], {
+      queryParams: { paper: paper.path },
+      queryParamsHandling: 'merge',
+    });
+  }
+
+  /** Close the paper popup. */
+  protected closePaper(): void {
+    void this.router.navigate([], {
+      queryParams: { paper: null },
+      queryParamsHandling: 'merge',
     });
   }
 

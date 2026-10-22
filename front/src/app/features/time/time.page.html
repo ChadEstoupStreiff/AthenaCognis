@@ -113,6 +113,7 @@
 
 <p-drawer
   position="right"
+  appendTo="body"
   [visible]="selectedDay() !== null"
   (visibleChange)="$event ? null : selectedDay.set(null)"
   [style]="{ width: 'min(560px, 100vw)' }"

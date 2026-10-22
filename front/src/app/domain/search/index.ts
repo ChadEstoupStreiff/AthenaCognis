@@ -21,7 +21,7 @@ export const SEARCH_ENGINES: readonly {
   readonly label: string;
   readonly hint: string;
 }[] = [
-  { value: 'contains', label: 'Contains', hint: 'Text containing any word (or the exact phrase)' },
+  { value: 'contains', label: 'Contains', hint: 'Text containing the whole phrase' },
   { value: 'fuzzy', label: 'Fuzzy', hint: 'Partial words, ranked best first (n-gram index)' },
   { value: 'semantic', label: 'Semantic', hint: 'Contains, plus files close in meaning' },
 ];
@@ -39,7 +39,7 @@ export interface FileSearchQuery {
   readonly endDate: string;
   readonly mode: SearchMode;
   readonly engine: SearchEngine;
-  /** Match the whole text as one phrase (contains engine only). */
+  /** Keep special characters when matching the phrase (contains engine only). */
   readonly exact: boolean;
   readonly similarityThreshold: number;
   readonly mimes: SearchFilter;

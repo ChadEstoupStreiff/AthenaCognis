@@ -53,7 +53,11 @@
     </p-tablist>
     <p-tabpanels>
       <p-tabpanel value="library">
-        <ac-research-library (edit)="editing.set($event)" (cite)="citing.set($event)" />
+        <ac-research-library
+          (open)="openPaper($event)"
+          (edit)="editing.set($event)"
+          (cite)="citing.set($event)"
+        />
       </p-tabpanel>
       <p-tabpanel value="map">
         @if (activeTab() === 'map') {
@@ -65,6 +69,37 @@
   <ac-import-dialog [(visible)]="importing" [tag]="store.tag.value() ?? ''" />
 }
 
+<p-dialog
+  [modal]="true"
+  [visible]="paper() !== undefined"
+  (visibleChange)="$event ? null : closePaper()"
+  [showHeader]="false"
+  [dismissableMask]="true"
+  [closeOnEscape]="true"
+  [style]="{ width: '96vw', height: '92dvh' }"
+  [contentStyle]="{
+    display: 'flex',
+    flexDirection: 'column',
+    flex: '1',
+    minHeight: '0',
+    padding: '12px',
+  }"
+  ariaLabelledBy="paper-view-title"
+>
+  @if (viewed(); as current) {
+    <ac-paper-view [paper]="current" (closed)="closePaper()" (cite)="citing.set($event)" />
+  } @else if (store.loading()) {
+    <p class="ac-muted"><i class="pi pi-spin pi-spinner"></i> Loading…</p>
+  } @else {
+    <ac-empty-state
+      icon="pi pi-question-circle"
+      title="Paper not in the library"
+      message="It does not carry the SOTA tag anymore, or was deleted."
+    >
+      <p-button label="Close" (onClick)="closePaper()" />
+    </ac-empty-state>
+  }
+</p-dialog>
 <ac-paper-dialog [paper]="editing()" (closed)="editing.set(null)" />
 <ac-cite-dialog [papers]="citing()" (closed)="citing.set(null)" />
 <ac-export-dialog [(visible)]="exporting" />

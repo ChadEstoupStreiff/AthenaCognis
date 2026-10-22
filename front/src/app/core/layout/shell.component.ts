@@ -38,6 +38,8 @@ const RAIL_MIN_WIDTH = 200;
 const RAIL_MAX_WIDTH = 400;
 /** Drag distance past the minimum (or open from collapsed) that toggles the rail. */
 const RAIL_SNAP_DISTANCE = 40;
+/** Rail width transition length; keep in sync with `.shell` transition in shell.component.scss. */
+const RAIL_TRANSITION_MS = 200;
 
 /** Application frame: navigation rail, top bar and routed content. */
 @Component({
@@ -74,6 +76,8 @@ export class ShellComponent {
   protected readonly mainNav = MAIN_NAV;
   protected readonly settingsNav = SETTINGS_NAV;
   protected readonly collapsed = signal(false);
+  /** Icon-only content; lags `collapsed` on expand so labels appear once the rail is wide. */
+  protected readonly compact = signal(false);
   protected readonly railWidth = persistedWidth(RAIL_WIDTH_KEY, RAIL_DEFAULT_WIDTH);
   protected readonly railMinWidth = RAIL_MIN_WIDTH;
   protected readonly railMaxWidth = RAIL_MAX_WIDTH;
@@ -135,6 +139,18 @@ export class ShellComponent {
       if (this.telemetry.consent() === true) {
         void this.telemetry.pingIfDue();
       }
+    });
+    effect((onCleanup) => {
+      if (this.collapsed()) {
+        this.compact.set(true);
+        return;
+      }
+      const timer = setTimeout(() => {
+        this.compact.set(false);
+      }, RAIL_TRANSITION_MS);
+      onCleanup(() => {
+        clearTimeout(timer);
+      });
     });
   }
 

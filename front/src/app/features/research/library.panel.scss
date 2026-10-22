@@ -1,3 +1,5 @@
+@use 'paper-status';
+
 :host {
   display: flex;
   flex-direction: column;
@@ -150,27 +152,6 @@
 
 .labels {
   margin-top: 6px;
-}
-
-.status {
-  padding: 1px 8px;
-  border-radius: 999px;
-  font-weight: 600;
-
-  &[data-status='Validated'] {
-    background: color-mix(in srgb, var(--p-green-500) 15%, transparent);
-    color: var(--p-green-600);
-  }
-
-  &[data-status='To review'] {
-    background: color-mix(in srgb, var(--p-orange-400) 18%, transparent);
-    color: var(--p-orange-600);
-  }
-
-  &[data-status='Missing info'] {
-    background: color-mix(in srgb, var(--p-red-400) 15%, transparent);
-    color: var(--p-red-600);
-  }
 }
 
 .actions {

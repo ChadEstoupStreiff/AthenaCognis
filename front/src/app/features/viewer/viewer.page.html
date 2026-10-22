@@ -83,16 +83,34 @@
     </div>
   </header>
 
-  <div class="layout" [style.--ac-inspector-width.px]="inspectorWidth()">
-    <section class="stage ac-panel">
-      <ac-file-renderer
-        [path]="path()"
-        [metadata]="metadata.value() ?? null"
-        [ocrBoxes]="ocr().boxes"
-        [showBoxes]="showBoxes()"
-        [showScores]="showScores()"
+  <div
+    class="layout"
+    [style.--ac-inspector-width.px]="inspectorWidth()"
+    [style.--ac-stage-height.px]="stageFills() ? null : stageHeight()"
+  >
+    <div class="stage-column">
+      <section class="stage ac-panel">
+        <ac-file-renderer
+          [path]="path()"
+          [fill]="true"
+          [metadata]="metadata.value() ?? null"
+          [ocrBoxes]="ocr().boxes"
+          [showBoxes]="showBoxes()"
+          [showScores]="showScores()"
+        />
+      </section>
+
+      <ac-resize-handle
+        class="stage-handle"
+        orientation="horizontal"
+        panel="before"
+        [fitContainer]="false"
+        [(width)]="stageHeight"
+        [min]="stageMinHeight"
+        label="Resize preview height"
+        (restore)="resetStageHeight()"
       />
-    </section>
+    </div>
 
     <ac-resize-handle
       class="splitter"

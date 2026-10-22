@@ -86,6 +86,34 @@
 }
 
 @layer app {
+  /* Drawer masks fade with opacity (compositor) instead of background: no page flash while the main thread renders. */
+  .p-drawer-mask.p-overlay-mask-enter-active,
+  .p-drawer-mask.p-overlay-mask-leave-active {
+    background: var(--px-mask-background, var(--p-mask-background));
+  }
+
+  .p-drawer-mask.p-overlay-mask-enter-active {
+    animation-name: ac-drawer-mask-enter;
+  }
+
+  .p-drawer-mask.p-overlay-mask-leave-active {
+    animation-name: ac-drawer-mask-leave;
+  }
+
+  @keyframes ac-drawer-mask-enter {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes ac-drawer-mask-leave {
+    to {
+      opacity: 0;
+    }
+  }
+}
+
+@layer app {
   /* The logo is a black glyph: invert it on dark surfaces. */
   :root.app-dark img[src='logo.png'] {
     filter: invert(1);

@@ -19,7 +19,14 @@
 
   &.collapsed {
     grid-template-columns: var(--ac-rail-collapsed-width) 0 minmax(0, 1fr);
+  }
 
+  /* Labels fade in once the expand transition has finished. */
+  &:not(.compact) :is(.label, .name) {
+    animation: rail-label-in 0.15s ease;
+  }
+
+  &.compact {
     .label {
       display: none;
     }
@@ -36,6 +43,12 @@
   }
 }
 
+@keyframes rail-label-in {
+  from {
+    opacity: 0;
+  }
+}
+
 .rail {
   display: flex;
   flex-direction: column;
@@ -45,6 +58,7 @@
   padding: 12px 10px;
   background: var(--ac-rail-background);
   border-right: 1px solid var(--ac-panel-border);
+  overflow-x: hidden;
   overflow-y: auto;
 }
 
