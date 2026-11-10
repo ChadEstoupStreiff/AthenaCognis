@@ -13,6 +13,7 @@ const PROBES: Readonly<Record<string, KeyProbe>> = {
   mistral_api_key: { url: () => 'https://api.mistral.ai/v1/models', headers: bearer },
   openai_api_key: { url: () => 'https://api.openai.com/v1/models', headers: bearer },
   groq_api_key: { url: () => 'https://api.groq.com/openai/v1/models', headers: bearer },
+  deepseek_api_key: { url: () => 'https://api.deepseek.com/models', headers: bearer },
   gemini_api_key: {
     url: (key) =>
       `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`,

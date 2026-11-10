@@ -116,6 +116,10 @@ import views.usage
 
 app.include_router(views.usage.router)
 
+import views.ai_models
+
+app.include_router(views.ai_models.router)
+
 
 def du_size(path: str) -> int:
     """Approximate `du -sb path` (sum of file sizes, no symlink following)."""

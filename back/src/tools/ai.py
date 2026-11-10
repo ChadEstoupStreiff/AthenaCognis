@@ -54,7 +54,18 @@ def get_context_size(model_name: str, default: int = 4096) -> str:
     return default
 
 
+# OpenAI-compatible chat completions: provider -> (URL, API key setting)
+OPENAI_COMPATIBLE = {
+    "ChatGPT": ("https://api.openai.com/v1/chat/completions", "openai_api_key"),
+    "DeepSeek": ("https://api.deepseek.com/chat/completions", "deepseek_api_key"),
+    "Groq": ("https://api.groq.com/openai/v1/chat/completions", "groq_api_key"),
+}
+# Providers whose chat API only accepts plain-text message content
+TEXT_ONLY_PROVIDERS = ("DeepSeek",)
+
 DEFAULT_CONTEXT_WINDOWS = {
+    "DeepSeek": 128000,
+    "Groq": 128000,
     "Mistral": 128000,
     "ChatGPT": 128000,
     "Gemini": 1000000,
@@ -84,6 +95,7 @@ _VISION_MODEL_PATTERNS = {
     "Claude": ("instant",),  # supported unless it's the legacy text-only "instant" line
     "ChatGPT": ("gpt-4o", "gpt-4-turbo", "gpt-4.1", "gpt-5", "o3", "o4"),
     "Mistral": ("pixtral", "medium", "large"),
+    "Groq": ("llama-4", "vision"),
     "llama": ("llava", "vision", "bakllava", "moondream", "minicpm-v", "gemma3", "llama3.2-vision", "llama4"),
 }
 
@@ -190,9 +202,10 @@ def request_llm(
                         logging.warning(f"AI >> Malformed Mistral chunk skipped: {e!r} raw={line!r}")
             return ai_type, model, output
 
-    # ChatGPT
-    elif ai_type == "ChatGPT":
-        api_key = get_setting("openai_api_key")
+    # ChatGPT / DeepSeek (OpenAI-compatible)
+    elif ai_type in OPENAI_COMPATIBLE:
+        url, key_setting = OPENAI_COMPATIBLE[ai_type]
+        api_key = get_setting(key_setting)
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
@@ -202,11 +215,10 @@ def request_llm(
             "messages": [{"role": "user", "content": prompt}],
             "stream": True,
         }
-        url = "https://api.openai.com/v1/chat/completions"
 
         with requests.post(url, headers=headers, json=payload, stream=True, timeout=3600) as response:
             if response.status_code != 200:
-                raise Exception(f"OpenAI error {response.status_code}: {response.text}")
+                raise Exception(f"{ai_type} error {response.status_code}: {response.text}")
 
             output = ""
             for line in response.iter_lines():
@@ -221,7 +233,7 @@ def request_llm(
                         if stream_callback:
                             stream_callback(chunk)
                     except Exception as e:
-                        logging.warning(f"AI >> Malformed OpenAI chunk skipped: {e!r} raw={line!r}")
+                        logging.warning(f"AI >> Malformed {ai_type} chunk skipped: {e!r} raw={line!r}")
             return ai_type, model, output
 
     # Gemini
@@ -365,14 +377,14 @@ def request_chat_llm(
                     logging.warning(f"AI >> Malformed Ollama chat chunk skipped: {e!r} raw={line!r}")
             return ai_type, model, output
 
-    # Mistral / ChatGPT (OpenAI-compatible chat completions)
-    elif ai_type in ("Mistral", "ChatGPT"):
-        api_key = get_setting("mistral_api_key" if ai_type == "Mistral" else "openai_api_key")
-        url = (
-            "https://api.mistral.ai/v1/chat/completions"
+    # Mistral / ChatGPT / DeepSeek (OpenAI-compatible chat completions)
+    elif ai_type == "Mistral" or ai_type in OPENAI_COMPATIBLE:
+        url, key_setting = (
+            ("https://api.mistral.ai/v1/chat/completions", "mistral_api_key")
             if ai_type == "Mistral"
-            else "https://api.openai.com/v1/chat/completions"
+            else OPENAI_COMPATIBLE[ai_type]
         )
+        api_key = get_setting(key_setting)
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
         api_messages = []
@@ -388,7 +400,11 @@ def request_chat_llm(
                         content_parts.append({"type": "image_url", "image_url": data_url})
                     else:
                         content_parts.append({"type": "image_url", "image_url": {"url": data_url}})
-            api_messages.append({"role": msg["role"], "content": content_parts})
+            if ai_type in TEXT_ONLY_PROVIDERS:
+                text = "\n".join(part["text"] for part in content_parts if part["type"] == "text")
+                api_messages.append({"role": msg["role"], "content": text})
+            else:
+                api_messages.append({"role": msg["role"], "content": content_parts})
 
         payload = {"model": model, "messages": api_messages, "stream": True}
         with requests.post(url, headers=headers, json=payload, stream=True, timeout=timeout) as response:

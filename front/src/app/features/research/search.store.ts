@@ -1,15 +1,19 @@
-import { computed, inject, Injectable, signal } from '@angular/core';
+import { computed, inject, Injectable, linkedSignal, signal } from '@angular/core';
 import {
+  aiPaperContext,
   applyResultFilters,
   combineHits,
   type DiscoverRequest,
+  defaultDiscoverRequest,
   discoverRange,
   filterHits,
   NO_RESULT_FILTERS,
   type ResultFilters,
   findInLibrary,
   hitFileName,
+  isTextScope,
   type Paper,
+  type PaperScope,
   SEARCH_SOURCES,
   type SearchHit,
   type SearchQuery,
@@ -18,6 +22,7 @@ import {
   seedPapers,
   type SeedTopic,
   sortHits,
+  type TextScope,
 } from '@domain/sota';
 import { FilesApi } from '../../core/files/files.api';
 import { JobsStore } from '../../core/jobs/jobs.store';
@@ -56,7 +61,51 @@ export type ResultsOrigin =
       readonly seeds: number;
       readonly resolved: number;
       readonly topics: readonly SeedTopic[];
+      /** Run by the AI search. */
+      readonly ai: boolean;
+      /** Queries written by the AI. */
+      readonly queries: readonly string[];
     };
+
+/** One discovery to run. */
+interface DiscoveryRun {
+  readonly request: DiscoverRequest;
+  readonly ai: boolean;
+  /** Number of seed papers (0 for text scopes). */
+  readonly seeds: number;
+  /** Reason not to run, or null. */
+  readonly blocker: string | null;
+  readonly task: () => Promise<DiscoverOutcome>;
+}
+
+/** Message when a text scope has no text. */
+const TEXT_BLOCKERS: Readonly<Record<TextScope, string>> = {
+  subject: 'Write your subject in Settings → Research first.',
+  custom: 'Write what to look for in the Custom box first.',
+};
+
+/** Reason shown on hits of a text scope. */
+const TEXT_REASONS: Readonly<Record<TextScope, string>> = {
+  subject: 'Matches your subject',
+  custom: 'Matches your text',
+};
+
+/**
+ * Reason not to run a discovery based on library papers.
+ *
+ * @param scope - Scope.
+ * @param seeds - Number of seed papers.
+ * @param untitled - The AI would get no title.
+ * @returns Message, or null to run.
+ */
+function seedBlocker(scope: PaperScope, seeds: number, untitled: boolean): string | null {
+  if (seeds === 0) {
+    return scope === 'recent'
+      ? 'No paper was added to the library in the last month.'
+      : 'The library is empty.';
+  }
+  return untitled ? 'None of these papers has a title yet (Library → Find info).' : null;
+}
 
 const DEFAULT_FILTERS: SearchFilters = {
   sources: SEARCH_SOURCES,
@@ -85,13 +134,14 @@ export class SearchStore {
   readonly filters = signal<SearchFilters>(DEFAULT_FILTERS);
   /** Search or discovery form shown. */
   readonly mode = signal<SearchMode>('search');
-  /** Discovery settings. */
-  readonly discoverRequest = signal<DiscoverRequest>({
-    scope: 'library',
-    period: 1,
-    from: null,
-    to: null,
-  });
+  /** Default "Based on" selection (Settings → Research). */
+  private readonly defaultScope = computed(() => this.settings.get('research_default_scope'));
+  /** Default "Published" selection (Settings → Research). */
+  private readonly defaultPeriod = computed(() => this.settings.get('research_default_period'));
+  /** Discovery settings (reset when the default selections change). */
+  readonly discoverRequest = linkedSignal<DiscoverRequest>(() =>
+    defaultDiscoverRequest(this.defaultScope(), this.defaultPeriod()),
+  );
   /** Filters of the shown results. */
   readonly resultFilters = signal<ResultFilters>(NO_RESULT_FILTERS);
   /** Subject written in Settings → Research. */
@@ -179,28 +229,14 @@ export class SearchStore {
     this.resultFilters.update((current) => ({ ...current, ...patch }));
   }
 
-  /** Find papers related to the library, the papers added last month, or the subject. */
+  /** Find papers related to the library, the papers added last month, the subject or a custom text. */
   async discover(): Promise<void> {
-    const request = this.discoverRequest();
-    const library = this.research.papers();
-    const range = discoverRange(request, new Date());
-    if (request.scope === 'subject') {
-      const subject = this.subject();
-      await this.runDiscovery(
-        request,
-        0,
-        subject === '' ? 'Write your subject in Settings → Research first.' : null,
-        () => this.discoverer.bySubject(subject, library, range),
-      );
-      return;
-    }
-    const seeds = seedPapers(library, request.scope, new Date());
-    await this.runDiscovery(
-      request,
-      seeds.length,
-      seeds.length === 0 ? 'No paper was added to the library in the last month.' : null,
-      () => this.discoverer.discover(seeds, library, range),
-    );
+    await this.runDiscovery(this.discoveryRun(false));
+  }
+
+  /** Let the paper-search AI write OpenAlex queries from the "Based on" selection, then run them. */
+  async discoverWithAi(): Promise<void> {
+    await this.runDiscovery(this.discoveryRun(true));
   }
 
   /** Load the next page of the current search. */
@@ -259,31 +295,60 @@ export class SearchStore {
   }
 
   /**
+   * Discovery of the current "Based on" selection.
+   *
+   * @param ai - Let the AI write the queries.
+   * @returns Run.
+   */
+  private discoveryRun(ai: boolean): DiscoveryRun {
+    const request = this.discoverRequest();
+    const library = this.research.papers();
+    const range = discoverRange(request, new Date());
+    if (isTextScope(request.scope)) {
+      const scope = request.scope;
+      const text = scope === 'subject' ? this.subject() : request.custom.trim();
+      return {
+        request,
+        ai,
+        seeds: 0,
+        blocker: text === '' ? TEXT_BLOCKERS[scope] : null,
+        task: ai
+          ? () => this.discoverer.byAi(text, 'description', library, range)
+          : () => this.discoverer.bySubject(text, library, range, TEXT_REASONS[scope]),
+      };
+    }
+    const seeds = seedPapers(library, request.scope, new Date());
+    const context = aiPaperContext(seeds);
+    return {
+      request,
+      ai,
+      seeds: seeds.length,
+      blocker: seedBlocker(request.scope, seeds.length, ai && context === ''),
+      task: ai
+        ? () => this.discoverer.byAi(context, 'papers', library, range)
+        : () => this.discoverer.discover(seeds, library, range),
+    };
+  }
+
+  /**
    * Show the outcome of a discovery.
    *
-   * @param request - Request.
-   * @param seeds - Number of seed papers.
-   * @param blocker - Reason not to run, or null.
-   * @param task - Discovery.
+   * @param run - Discovery.
    */
-  private async runDiscovery(
-    request: DiscoverRequest,
-    seeds: number,
-    blocker: string | null,
-    task: () => Promise<DiscoverOutcome>,
-  ): Promise<void> {
+  private async runDiscovery(run: DiscoveryRun): Promise<void> {
+    const { request, ai, seeds, blocker } = run;
     this.hits.set([]);
     this.failures.set([]);
     this.exhausted.set(true);
     this.error.set(blocker);
-    this.origin.set({ kind: 'discover', request, seeds, resolved: 0, topics: [] });
+    this.origin.set({ kind: 'discover', request, seeds, resolved: 0, topics: [], ai, queries: [] });
     if (blocker !== null) {
       return;
     }
     this.loading.set(true);
     this.telemetry.track('research_discoveries');
     try {
-      const outcome = await task();
+      const outcome = await run.task();
       this.hits.set(outcome.hits);
       this.origin.set({
         kind: 'discover',
@@ -291,6 +356,8 @@ export class SearchStore {
         seeds,
         resolved: outcome.resolved,
         topics: outcome.topics,
+        ai,
+        queries: outcome.queries,
       });
     } catch (error) {
       this.error.set(error instanceof Error ? error.message : String(error));

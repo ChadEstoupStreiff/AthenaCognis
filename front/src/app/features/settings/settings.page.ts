@@ -41,7 +41,8 @@ const SECTIONS: readonly SectionEntry[] = [
     id: 'ai',
     label: 'AI routing',
     icon: 'pi pi-sitemap',
-    keywords: 'model provider assistant rewrite link summary caption ocr transcription whisper',
+    keywords:
+      'model provider assistant rewrite link summary caption ocr transcription whisper paper search research',
   },
   {
     id: 'providers',
@@ -66,7 +67,8 @@ const SECTIONS: readonly SectionEntry[] = [
     id: 'research',
     label: 'Research',
     icon: 'pi pi-book',
-    keywords: 'my subject research papers discover topic keywords state of the art sota',
+    keywords:
+      'my subject research papers discover topic keywords state of the art sota default based on published period',
   },
   { id: 'tags', label: 'Tags', icon: 'pi pi-tags', keywords: 'tag color rename delete projects' },
   {

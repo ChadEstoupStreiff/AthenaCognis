@@ -76,6 +76,32 @@
   width: 9.5rem;
 }
 
+.ai-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.custom {
+  width: 100%;
+  font-size: 13px;
+}
+
+.ai-queries {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+
+  code {
+    overflow-wrap: anywhere;
+  }
+}
+
 .subject {
   display: flex;
   align-items: baseline;

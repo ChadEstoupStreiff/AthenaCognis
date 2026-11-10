@@ -13,6 +13,8 @@ interface KnownSettings {
   readonly projects_default_representation_mode: number;
   readonly enable_auto_preview: boolean;
   readonly research_subject: string;
+  readonly research_default_scope: string;
+  readonly research_default_period: string;
 }
 
 /** Defaults (mirror `back/src/views/settings.py`). */
@@ -25,6 +27,8 @@ export const SETTING_DEFAULTS: KnownSettings = {
   projects_default_representation_mode: 1,
   enable_auto_preview: true,
   research_subject: '',
+  research_default_scope: 'library',
+  research_default_period: '1',
 };
 
 /** Keys with typed defaults. */

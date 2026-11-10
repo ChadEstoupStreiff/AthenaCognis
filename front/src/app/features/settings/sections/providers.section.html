@@ -1,15 +1,37 @@
 <section class="group" id="providers">
-  <h2>Providers &amp; keys</h2>
+  <div class="heading">
+    <h2>Providers &amp; keys</h2>
+    <p-button
+      label="Reload models"
+      icon="pi pi-refresh"
+      size="small"
+      severity="secondary"
+      [outlined]="true"
+      [loading]="models.loading()"
+      pTooltip="Ask each provider (and Ollama) which models your keys can use. AI routing lists them until the page is reloaded."
+      (onClick)="models.reload()"
+    />
+  </div>
   <p class="ac-muted intro">
-    Keys are stored in the backend database. “Check” calls the provider from this browser.
+    Keys are stored in the backend database. “Check” calls the provider from this browser. “Reload
+    models” asks the providers through the backend, then AI routing lists their models.
   </p>
+  @if (models.error(); as error) {
+    <p-tag severity="danger" [value]="'Model reload failed: ' + error" />
+  }
   @for (item of keys; track item.key) {
     <div class="row">
       <div class="label">
         <strong>{{ item.label }}</strong>
-        <a class="ac-muted" [href]="item.url" target="_blank" rel="noopener noreferrer"
-          >Get a key</a
-        >
+        <span class="links">
+          <a class="ac-muted" [href]="item.url" target="_blank" rel="noopener noreferrer"
+            >Get a key</a
+          >
+          <span class="ac-muted" aria-hidden="true">·</span>
+          <a class="ac-muted" [href]="item.modelsUrl" target="_blank" rel="noopener noreferrer"
+            >Models description</a
+          >
+        </span>
       </div>
       <div class="inline key">
         <p-password
@@ -39,6 +61,13 @@
           }
           @case ('unreachable') {
             <p-tag severity="warn" value="Can't check from browser" />
+          }
+        }
+        @if (models.catalog()[item.provider]; as live) {
+          @if (live.error === null) {
+            <p-tag severity="info" [value]="modelCount(live) + ' models'" icon="pi pi-list" />
+          } @else if (text(item.key) !== '') {
+            <p-tag severity="warn" [value]="live.error + ' · built-in list'" />
           }
         }
       </div>

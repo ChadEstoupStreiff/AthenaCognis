@@ -11,6 +11,24 @@
   }
 }
 
+.heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+
+  h2 {
+    margin: 0;
+  }
+}
+
+.links {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .intro {
   margin: -4px 0 12px;
   font-size: 13px;

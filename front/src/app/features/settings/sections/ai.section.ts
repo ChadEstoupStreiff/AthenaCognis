@@ -4,6 +4,7 @@ import { SelectModule } from 'primeng/select';
 import { ApiClient, backendUrl } from '../../../core/api/api-client';
 import { SettingsStore } from '../../../core/settings/settings.store';
 import { AI_TASKS, type AiTask, modelsFor, type ProviderOption, providersFor } from '../ai-routing';
+import { ModelCatalogStore } from '../model-catalog.store';
 import { SettingsSection } from './settings-section';
 
 /** Installed Ollama model (`GET /ollama/list`). */
@@ -29,7 +30,8 @@ interface RoutingRow {
       <h2>AI routing</h2>
       <p class="ac-muted intro">
         Pick the engine of each task. Cloud providers need an API key (Providers below). Ollama
-        models must be installed first.
+        models must be installed first. Model lists are built in until you press “Reload models”
+        under Providers.
       </p>
       <div class="matrix">
         @for (row of rows(); track row.task.key) {
@@ -73,8 +75,10 @@ interface RoutingRow {
 export class AiSectionComponent extends SettingsSection {
   private readonly api = inject(ApiClient);
   private readonly settings = inject(SettingsStore);
+  private readonly models = inject(ModelCatalogStore);
 
   private readonly ollama = resource({
+    params: () => this.models.reloads(),
     loader: () => this.api.get<OllamaModel[]>(backendUrl('/ollama/list'), { silent: true }),
   });
   private readonly installed = computed(() =>
@@ -95,7 +99,7 @@ export class AiSectionComponent extends SettingsSection {
    */
   protected setProvider(task: AiTask, provider: string): void {
     this.save(`${task.key}_type`, provider, true);
-    const first = modelsFor(task, provider, this.installed())[0];
+    const first = modelsFor(task, provider, this.installed(), this.models.catalog())[0];
     if (first !== undefined) {
       this.save(`${task.key}_model`, first, true);
     }
@@ -111,7 +115,7 @@ export class AiSectionComponent extends SettingsSection {
   private rowOf(task: AiTask, installed: readonly string[]): RoutingRow {
     const provider = this.text(`${task.key}_type`);
     const model = this.text(`${task.key}_model`);
-    const list = modelsFor(task, provider, installed);
+    const list = modelsFor(task, provider, installed, this.models.catalog());
     const models =
       list.length === 0 || list.includes(model) || model === '' ? [...list] : [model, ...list];
     return { task, provider, model, providers: [...providersFor(task)], models };

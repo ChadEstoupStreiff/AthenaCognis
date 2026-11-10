@@ -15,6 +15,7 @@ import { InputNumberModule } from 'primeng/inputnumber';
 import { InputTextModule } from 'primeng/inputtext';
 import { SelectModule } from 'primeng/select';
 import { SelectButtonModule } from 'primeng/selectbutton';
+import { TextareaModule } from 'primeng/textarea';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import { TooltipModule } from 'primeng/tooltip';
 import {
@@ -32,6 +33,7 @@ import {
   SOURCE_LABELS,
 } from '@domain/sota';
 import { formatLocalDate } from '@domain/time';
+import { BrainIconComponent } from '../../shared/ui/brain-icon.component';
 import { EmptyStateComponent } from '../../shared/ui/empty-state.component';
 import { type SearchMode, SearchStore } from './search.store';
 
@@ -50,8 +52,10 @@ const MIN_YEAR = 1900;
     InputTextModule,
     SelectModule,
     SelectButtonModule,
+    TextareaModule,
     ToggleSwitchModule,
     TooltipModule,
+    BrainIconComponent,
     EmptyStateComponent,
   ],
   templateUrl: './search.panel.html',
@@ -131,6 +135,17 @@ export class SearchPanelComponent {
    */
   protected setDiscover(patch: Partial<DiscoverRequest>): void {
     this.store.discoverRequest.update((current) => ({ ...current, ...patch }));
+  }
+
+  /**
+   * Whether a discovery of a kind is running.
+   *
+   * @param ai - AI search (true) or OpenAlex search (false).
+   * @returns Running.
+   */
+  protected discoverLoading(ai: boolean): boolean {
+    const origin = this.store.origin();
+    return this.store.loading() && origin?.kind === 'discover' && origin.ai === ai;
   }
 
   /** Clear every result filter. */

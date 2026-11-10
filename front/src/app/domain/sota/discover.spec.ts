@@ -1,5 +1,10 @@
 import {
+  aiPaperContext,
+  aiQueryHits,
+  defaultDiscoverRequest,
   discoverRange,
+  isTextScope,
+  MAX_AI_SEED_PAPERS,
   parseCandidate,
   parseSeedWork,
   periodStart,
@@ -85,7 +90,7 @@ describe('discovery of related papers', () => {
   });
 
   it('computes preset and custom publication ranges', () => {
-    const base = { scope: 'library' as const, from: null, to: null };
+    const base = { scope: 'library' as const, from: null, to: null, custom: '' };
     expect(discoverRange({ ...base, period: 3 }, NOW)).toEqual({
       from: '2026-08-10',
       to: '2026-11-10',
@@ -111,5 +116,64 @@ describe('discovery of related papers', () => {
     const hits = subjectHits([owned, fresh], library);
     expect(hits.map((hit) => hit.info.title)).toEqual(['Fresh work']);
     expect(hits[0]?.reasons).toEqual(['Matches your subject']);
+  });
+
+  it('uses a custom reason for text matches', () => {
+    const hit = parseCandidate(makeWork('W2', 'Fresh work', [], []));
+    expect(subjectHits([hit], [], 'Matches your text')[0]?.reasons).toEqual(['Matches your text']);
+  });
+
+  it('tells text scopes from paper scopes', () => {
+    expect(isTextScope('subject')).toBe(true);
+    expect(isTextScope('custom')).toBe(true);
+    expect(isTextScope('library')).toBe(false);
+    expect(isTextScope('recent')).toBe(false);
+  });
+
+  it('builds the default request from stored settings, ignoring invalid values', () => {
+    expect(defaultDiscoverRequest('custom', '6')).toEqual({
+      scope: 'custom',
+      period: 6,
+      from: null,
+      to: null,
+      custom: '',
+    });
+    expect(defaultDiscoverRequest('recent', 'custom').period).toBe('custom');
+    const fallback = defaultDiscoverRequest('nope', '7');
+    expect(fallback.scope).toBe('library');
+    expect(fallback.period).toBe(1);
+  });
+
+  it('lists titled library papers for the AI, newest upload first, capped', () => {
+    const old = {
+      ...makePaper('2026-01-01', 'a'),
+      info: { ...EMPTY_INFO, title: 'Old', year: '2020' },
+    };
+    const fresh = { ...makePaper('2026-11-01', 'b'), info: { ...EMPTY_INFO, title: 'Fresh' } };
+    const untitled = makePaper('2026-11-02', '');
+    expect(aiPaperContext([old, untitled, fresh])).toBe('- Fresh\n- Old (2020)');
+    const many = Array.from({ length: MAX_AI_SEED_PAPERS + 5 }, (_, index) =>
+      makePaper('2026-01-01', `p${String(index)}`),
+    );
+    expect(aiPaperContext(many).split('\n')).toHaveLength(MAX_AI_SEED_PAPERS);
+  });
+
+  it('tags AI query hits, merges duplicates across queries and drops library papers', () => {
+    const shared = parseCandidate(makeWork('W1', 'Shared work', [], [])).hit;
+    const only = parseCandidate(makeWork('W2', 'Second only', [], [])).hit;
+    const owned = parseCandidate(makeWork('W3', 'Owned work', [], [])).hit;
+    const library = [
+      { ...makePaper('2026-01-01', 'x'), info: { ...EMPTY_INFO, title: 'Owned work' } },
+    ];
+    const hits = aiQueryHits(
+      [
+        [shared, owned],
+        [only, shared],
+      ],
+      library,
+    );
+    expect(hits.map((hit) => hit.info.title)).toEqual(['Shared work', 'Second only']);
+    expect(hits[0]?.reasons).toEqual(['AI query 1', 'AI query 2']);
+    expect(hits[1]?.reasons).toEqual(['AI query 2']);
   });
 });

@@ -4,11 +4,13 @@ import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
 import { PasswordModule } from 'primeng/password';
 import { TagModule } from 'primeng/tag';
+import { TooltipModule } from 'primeng/tooltip';
 import { ApiClient, backendUrl } from '../../../core/api/api-client';
 import { JobsStore } from '../../../core/jobs/jobs.store';
 import { DataSync } from '../../../core/state/data-sync.service';
 import { BytesPipe } from '../../../shared/pipes/bytes.pipe';
-import { API_KEYS } from '../ai-routing';
+import { API_KEYS, modelCount } from '../ai-routing';
+import { ModelCatalogStore } from '../model-catalog.store';
 import { checkApiKey, type KeyCheck } from '../key-check';
 import { SettingsSection } from './settings-section';
 
@@ -22,7 +24,15 @@ interface OllamaModel {
 /** Cloud API keys and the Ollama server. */
 @Component({
   selector: 'ac-providers-section',
-  imports: [FormsModule, ButtonModule, InputTextModule, PasswordModule, TagModule, BytesPipe],
+  imports: [
+    FormsModule,
+    ButtonModule,
+    InputTextModule,
+    PasswordModule,
+    TagModule,
+    TooltipModule,
+    BytesPipe,
+  ],
   templateUrl: './providers.section.html',
   styleUrl: './section.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -31,6 +41,8 @@ export class ProvidersSectionComponent extends SettingsSection {
   private readonly api = inject(ApiClient);
   private readonly jobs = inject(JobsStore);
   private readonly sync = inject(DataSync);
+  protected readonly models = inject(ModelCatalogStore);
+  protected readonly modelCount = modelCount;
 
   protected readonly keys = API_KEYS;
   protected readonly checks = signal<Readonly<Record<string, KeyCheck | 'checking'>>>({});

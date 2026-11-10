@@ -47,11 +47,16 @@ default_settings = {
     "gemini_api_key": "",
     "groq_api_key": "",
     "anthropic_api_key": "",
+    "deepseek_api_key": "",
     "telemetry_enabled": None,
     "telemetry_uuid": "",
     "telemetry_last_sent": "",
     "chat_user_description": "",
     "research_subject": "",
+    "research_type": "llama",
+    "research_model": "llama3.2:1b",
+    "research_default_scope": "library",  # library | recent | subject | custom
+    "research_default_period": "1",  # months back, or "custom"
     "chat_max_concurrent_generations": 3,
     "chat_llm_timeout_seconds": 300,
     "chat_rag_enabled_default": False,

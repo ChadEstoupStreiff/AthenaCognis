@@ -1,10 +1,16 @@
 import { shortOpenalexId } from './citations';
 import { type Paper, paperUploadDate } from './paper';
-import { findInLibrary, openalexToHit, type SearchHit } from './search';
+import { combineHits, findInLibrary, openalexToHit, type SearchHit } from './search';
 import { asArray, asJson, asText } from './sources';
 
-/** What the discovery is based on: library papers, or the subject written in the settings. */
-export type DiscoverScope = 'library' | 'recent' | 'subject';
+/** What the discovery is based on: library papers, the subject of the settings, or a typed text. */
+export type DiscoverScope = 'library' | 'recent' | 'subject' | 'custom';
+
+/** Scopes based on a text (subject or custom) rather than library papers. */
+export type TextScope = Extract<DiscoverScope, 'subject' | 'custom'>;
+
+/** Scopes based on library papers. */
+export type PaperScope = Exclude<DiscoverScope, TextScope>;
 
 /** Publication period: last N months, or a custom range. */
 export type DiscoverPeriod = number | 'custom';
@@ -17,6 +23,8 @@ export interface DiscoverRequest {
   readonly from: string | null;
   /** Custom range end (`YYYY-MM-DD`), null = today. */
   readonly to: string | null;
+  /** Text of the custom scope. */
+  readonly custom: string;
 }
 
 /** Publication days searched (inclusive). */
@@ -31,6 +39,7 @@ export const DISCOVER_SCOPES: readonly { readonly label: string; readonly value:
     { label: 'My whole library', value: 'library' },
     { label: 'Papers I added in the last month', value: 'recent' },
     { label: 'My subject', value: 'subject' },
+    { label: 'Custom', value: 'custom' },
   ];
 
 /** Period options in display order. */
@@ -70,6 +79,10 @@ const DAY_MS = 86_400_000;
 const CITE_WEIGHT = 3;
 const MAX_REASON_TOPICS = 2;
 const EARLIEST_DAY = '1900-01-01';
+const DEFAULT_SCOPE: DiscoverScope = 'library';
+const DEFAULT_PERIOD: DiscoverPeriod = 1;
+/** Library papers listed to the AI at most (most recently added first). */
+export const MAX_AI_SEED_PAPERS = 80;
 
 /**
  * Papers seeding the discovery.
@@ -79,11 +92,7 @@ const EARLIEST_DAY = '1900-01-01';
  * @param now - Today.
  * @returns Seed papers.
  */
-export function seedPapers(
-  papers: readonly Paper[],
-  scope: Exclude<DiscoverScope, 'subject'>,
-  now: Date,
-): Paper[] {
+export function seedPapers(papers: readonly Paper[], scope: PaperScope, now: Date): Paper[] {
   if (scope === 'library') {
     return [...papers];
   }
@@ -240,18 +249,84 @@ export function rankDiscoveries(
 }
 
 /**
- * Hits of a subject search, in relevance order, without library papers.
+ * Hits of a text search, in relevance order, without library papers.
  *
  * @param candidates - Works found.
  * @param papers - Library.
+ * @param reason - Reason shown on each hit.
  * @returns Hits.
  */
 export function subjectHits(
   candidates: readonly Candidate[],
   papers: readonly Paper[],
+  reason = 'Matches your subject',
 ): SearchHit[] {
   return candidates
     .map((candidate) => candidate.hit)
     .filter((hit) => findInLibrary(hit, papers) === null)
-    .map((hit) => ({ ...hit, reasons: ['Matches your subject'] }));
+    .map((hit) => ({ ...hit, reasons: [reason] }));
+}
+
+/**
+ * Whether a scope is based on a text.
+ *
+ * @param scope - Scope.
+ * @returns Text scope.
+ */
+export function isTextScope(scope: DiscoverScope): scope is TextScope {
+  return scope === 'subject' || scope === 'custom';
+}
+
+/**
+ * Discovery request of the default selections stored in the settings (invalid values ignored).
+ *
+ * @param scope - Stored scope.
+ * @param period - Stored period (`"1"`, `"3"`… months, or `"custom"`).
+ * @returns Request.
+ */
+export function defaultDiscoverRequest(scope: string, period: string): DiscoverRequest {
+  const knownScope = DISCOVER_SCOPES.find((option) => option.value === scope)?.value;
+  const knownPeriod = DISCOVER_PERIODS.find((option) => String(option.value) === period)?.value;
+  return {
+    scope: knownScope ?? DEFAULT_SCOPE,
+    period: knownPeriod ?? DEFAULT_PERIOD,
+    from: null,
+    to: null,
+    custom: '',
+  };
+}
+
+/**
+ * Library papers described to the AI: `- Title (year)` lines, most recently added first.
+ *
+ * @param papers - Seed papers.
+ * @returns Lines (empty when no paper has a title).
+ */
+export function aiPaperContext(papers: readonly Paper[]): string {
+  return [...papers]
+    .filter((paper) => paper.info.title.trim() !== '')
+    .sort((left, right) => paperUploadDate(right).localeCompare(paperUploadDate(left)))
+    .slice(0, MAX_AI_SEED_PAPERS)
+    .map((paper) => {
+      const year = paper.info.year.trim();
+      return `- ${paper.info.title.trim()}${year === '' ? '' : ` (${year})`}`;
+    })
+    .join('\n');
+}
+
+/**
+ * Tag each query's hits with the query number, then interleave and merge duplicates.
+ *
+ * @param lists - Hits of each AI query, in query order.
+ * @param papers - Library (excluded).
+ * @returns Hits, reasons `AI query N` (several when found by several queries).
+ */
+export function aiQueryHits(
+  lists: readonly (readonly SearchHit[])[],
+  papers: readonly Paper[],
+): SearchHit[] {
+  const tagged = lists.map((list, index) =>
+    list.map((hit) => ({ ...hit, reasons: [`AI query ${String(index + 1)}`] })),
+  );
+  return combineHits(tagged).filter((hit) => findInLibrary(hit, papers) === null);
 }

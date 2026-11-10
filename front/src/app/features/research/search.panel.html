@@ -85,12 +85,22 @@
 } @else {
   <form class="search ac-panel" (ngSubmit)="store.discover()">
     <p class="ac-muted hint">
-      @if (store.discoverRequest().scope === 'subject') {
-        Papers of the period matching the subject written in your settings (OpenAlex search).
-      } @else {
-        Papers of the period that cite your library or share its main topics (OpenAlex), most
-        related first.
+      @switch (store.discoverRequest().scope) {
+        @case ('subject') {
+          Papers of the period matching the subject written in your settings (OpenAlex search).
+        }
+        @case ('custom') {
+          Papers of the period matching the text below (OpenAlex search).
+        }
+        @default {
+          Papers of the period that cite your library or share its main topics (OpenAlex), most
+          related first.
+        }
       }
+      <span class="ai-hint">
+        <ac-brain-icon /> AI search: the AI configured in Settings → AI (Paper search) reads the
+        same selection and writes several OpenAlex queries, then runs them.
+      </span>
     </p>
     <div class="row filters">
       <label class="years">
@@ -149,10 +159,37 @@
       <p-button
         type="submit"
         label="Find related papers"
-        icon="pi pi-compass"
-        [loading]="store.loading() && store.origin()?.kind === 'discover'"
+        icon="pi pi-search"
+        [loading]="discoverLoading(false)"
+        [disabled]="store.loading()"
       />
+      <p-button
+        type="button"
+        label="AI search"
+        severity="help"
+        [loading]="discoverLoading(true)"
+        [disabled]="store.loading()"
+        pTooltip="Let the AI write OpenAlex queries from the “Based on” selection, then run them."
+        (onClick)="store.discoverWithAi()"
+      >
+        @if (!discoverLoading(true)) {
+          <ac-brain-icon class="p-button-icon p-button-icon-left" />
+        }
+      </p-button>
     </div>
+    @if (store.discoverRequest().scope === 'custom') {
+      <textarea
+        pTextarea
+        name="custom"
+        class="custom"
+        [rows]="2"
+        [autoResize]="true"
+        placeholder="Keywords or Boolean query (Find related papers), or a description of what to find (AI search)"
+        [ngModel]="store.discoverRequest().custom"
+        (ngModelChange)="setDiscover({ custom: $event })"
+        aria-label="Custom search text"
+      ></textarea>
+    }
     @if (store.discoverRequest().scope === 'subject') {
       <p class="subject">
         <i class="pi pi-bookmark"></i>
@@ -173,8 +210,14 @@
       <strong>{{ store.results().length }}</strong>
       @if (origin.kind === 'search') {
         result(s) for “{{ origin.query.text }}”
+      } @else if (origin.ai) {
+        paper(s) found by {{ origin.queries.length }} AI-written quer{{
+          origin.queries.length === 1 ? 'y' : 'ies'
+        }}
       } @else if (origin.request.scope === 'subject') {
         paper(s) matching your subject
+      } @else if (origin.request.scope === 'custom') {
+        paper(s) matching your text
       } @else {
         related paper(s) from {{ origin.resolved }} / {{ origin.seeds }} seed paper(s) found on
         OpenAlex
@@ -320,6 +363,15 @@
         {{ topic.name }} ({{ topic.count }}){{ last ? '' : ' · ' }}
       }
     </p>
+  }
+  @if (origin.kind === 'discover' && origin.queries.length > 0) {
+    <ol class="ac-muted ai-queries">
+      @for (query of origin.queries; track $index) {
+        <li>
+          <span class="reason">AI query {{ $index + 1 }}</span> <code>{{ query }}</code>
+        </li>
+      }
+    </ol>
   }
   @if (store.error(); as error) {
     <p class="failure"><i class="pi pi-exclamation-triangle"></i>{{ error }}</p>
