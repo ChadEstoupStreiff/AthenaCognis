@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
+import {
+  afterNextRender,
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
@@ -8,6 +16,7 @@ import { AssistantSectionComponent } from './sections/assistant.section';
 import { GeneralSectionComponent } from './sections/general.section';
 import { ProcessingSectionComponent } from './sections/processing.section';
 import { ProvidersSectionComponent } from './sections/providers.section';
+import { ResearchSectionComponent } from './sections/research.section';
 import { TagsSectionComponent } from './sections/tags.section';
 import { TelemetrySectionComponent } from './sections/telemetry.section';
 import { SettingsWriter } from './settings-writer';
@@ -53,6 +62,12 @@ const SECTIONS: readonly SectionEntry[] = [
     icon: 'pi pi-cog',
     keywords: 'auto upload preview thumbnail quality summary ocr transcription archive',
   },
+  {
+    id: 'research',
+    label: 'Research',
+    icon: 'pi pi-book',
+    keywords: 'my subject research papers discover topic keywords state of the art sota',
+  },
   { id: 'tags', label: 'Tags', icon: 'pi pi-tags', keywords: 'tag color rename delete projects' },
   {
     id: 'telemetry',
@@ -75,6 +90,7 @@ const SECTIONS: readonly SectionEntry[] = [
     GeneralSectionComponent,
     ProcessingSectionComponent,
     ProvidersSectionComponent,
+    ResearchSectionComponent,
     TagsSectionComponent,
     TelemetrySectionComponent,
   ],
@@ -95,6 +111,16 @@ export class SettingsPage {
   protected readonly sections = computed(() =>
     SECTIONS.filter((section) => this.visible().has(section.id)),
   );
+
+  /** Scroll to the section named by the URL fragment (`/settings#research`). */
+  constructor() {
+    const fragment = inject(ActivatedRoute).snapshot.fragment;
+    afterNextRender(() => {
+      if (fragment !== null) {
+        this.jump(fragment);
+      }
+    });
+  }
 
   /**
    * Scroll to a section.

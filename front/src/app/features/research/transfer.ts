@@ -113,7 +113,7 @@ export class LibraryTransfer {
   }
 
   /**
-   * Upload a new PDF tagged with the SOTA tag.
+   * Upload a new PDF of an import plan.
    *
    * @param item - Plan item.
    * @param pdfs - Provided PDFs.
@@ -126,16 +126,27 @@ export class LibraryTransfer {
     pdfs: ReadonlyMap<string, Uint8Array>,
     tag: string,
   ): Promise<Paper> {
-    const date = formatLocalDate(new Date());
-    const [planned] = await this.files.uploadPlan([
-      { name: item.pdfName, date, folder: UPLOAD_FOLDER },
-    ]);
-    if (planned === undefined || planned.exists) {
-      throw new Error('A file with this name already exists.');
-    }
     const blob = new Blob([(pdfs.get(item.pdfName) ?? new Uint8Array()) as BlobPart], {
       type: 'application/pdf',
     });
+    return { path: await this.uploadTaggedPdf(blob, item.pdfName, tag), info: item.entry.info };
+  }
+
+  /**
+   * Upload a PDF into today's uploads folder, tagged with the SOTA tag.
+   *
+   * @param blob - PDF.
+   * @param name - File name.
+   * @param tag - SOTA tag.
+   * @returns Stored path.
+   * @throws Error when the file already exists or the upload fails.
+   */
+  async uploadTaggedPdf(blob: Blob, name: string, tag: string): Promise<string> {
+    const date = formatLocalDate(new Date());
+    const [planned] = await this.files.uploadPlan([{ name, date, folder: UPLOAD_FOLDER }]);
+    if (planned === undefined || planned.exists) {
+      throw new Error('A file with this name already exists.');
+    }
     const done = await lastValueFrom(
       this.files
         .upload(
@@ -145,7 +156,7 @@ export class LibraryTransfer {
         )
         .pipe(filter((event) => event.kind === 'done')),
     );
-    return { path: done.result.path, info: item.entry.info };
+    return done.result.path;
   }
 
   /**

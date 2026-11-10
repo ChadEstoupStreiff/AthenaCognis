@@ -108,6 +108,14 @@ import views.pinned
 
 app.include_router(views.pinned.router)
 
+import views.research
+
+app.include_router(views.research.router)
+
+import views.usage
+
+app.include_router(views.usage.router)
+
 
 def du_size(path: str) -> int:
     """Approximate `du -sb path` (sum of file sizes, no symlink following)."""

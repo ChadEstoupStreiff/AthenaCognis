@@ -130,13 +130,13 @@
     }
   </section>
 
-  <div class="stage">
+  <div class="stage" acFillHeight [acFillHeightMin]="480">
     <div class="graph-box">
       <ac-graph
         [nodes]="nodes()"
         [edges]="edges()"
         [options]="options()"
-        [height]="height"
+        [height]="null"
         (nodeClick)="clicked.set($event)"
       />
       <p class="ac-muted caption">{{ caption() }}</p>

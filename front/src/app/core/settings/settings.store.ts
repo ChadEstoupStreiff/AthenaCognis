@@ -12,6 +12,7 @@ interface KnownSettings {
   readonly explorer_default_representation_mode: number;
   readonly projects_default_representation_mode: number;
   readonly enable_auto_preview: boolean;
+  readonly research_subject: string;
 }
 
 /** Defaults (mirror `back/src/views/settings.py`). */
@@ -23,6 +24,7 @@ export const SETTING_DEFAULTS: KnownSettings = {
   explorer_default_representation_mode: 1,
   projects_default_representation_mode: 1,
   enable_auto_preview: true,
+  research_subject: '',
 };
 
 /** Keys with typed defaults. */

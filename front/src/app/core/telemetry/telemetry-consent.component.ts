@@ -21,8 +21,9 @@ import { TelemetryService } from './telemetry.service';
         collected.
       </p>
       <p class="ac-muted">
-        Only counters are sent (number of files, projects, tags, hours, summaries, links, tasks and
-        storage used). You can change your choice in Settings.
+        Only counters are sent (number of files, projects, tags, hours, notes, summaries, links,
+        tasks, chats, research papers, how often features such as paper search are used, and storage
+        used). Never names, queries, text or keys. You can change your choice in Settings.
       </p>
       <p>
         🙏 The number of users decides whether AthenaCognis can count as a scientific contribution

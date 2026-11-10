@@ -5,6 +5,9 @@ import { AppConfig } from '../../../core/config/app-config';
 import { SettingsStore } from '../../../core/settings/settings.store';
 import { TelemetryService } from '../../../core/telemetry/telemetry.service';
 
+/** Public statistics dashboard, used when `TELEMETRY_DASHBOARD_URL` is not set. */
+const DEFAULT_DASHBOARD_URL = 'https://athenacognis.chades.fr/';
+
 const COLLECTED = [
   ['nbr_files', 'Number of files'],
   ['nbr_projects / nbr_tags', 'Number of projects and tags'],
@@ -13,7 +16,20 @@ const COLLECTED = [
   ['nbr_contacts', 'Number of contacts'],
   ['nbr_tasks / nbr_kanban_boards / nbr_validated_tasks', 'Tasks, boards and completed tasks'],
   ['files_without_tag / files_without_project', 'Unclassified files'],
-  ['disk_files_bytes', 'Storage used by files'],
+  ['disk_files_bytes', 'Storage used by files (rounded to the MB)'],
+  ['nbr_notes / nbr_pinned_files', 'Number of notes and pinned files'],
+  [
+    'nbr_ocr / nbr_transcriptions / nbr_embeddings',
+    'Files processed by OCR, transcription and search',
+  ],
+  ['nbr_chat_sessions / nbr_chat_messages', 'Chat sessions and messages you sent (not their text)'],
+  ['nbr_kanban_columns / nbr_task_dependencies', 'Kanban columns and task dependencies'],
+  ['nbr_sota_papers / nbr_sota_with_metadata / nbr_sota_with_references', 'Research library size'],
+  ['research_subject_set', 'Whether a research subject is set (yes/no, never the subject)'],
+  [
+    'research_searches / research_discoveries / research_imports',
+    'Paper searches, discoveries and imports since the previous report (never the queries)',
+  ],
 ] as const;
 
 /** Anonymous usage statistics. */
@@ -101,7 +117,7 @@ export class TelemetrySectionComponent {
   protected readonly collected = COLLECTED;
   protected readonly dashboard = computed(() => {
     const url = this.config.value().telemetryDashboardUrl;
-    return /^https?:\/\//.test(url) ? url : '';
+    return /^https?:\/\//.test(url) ? url : DEFAULT_DASHBOARD_URL;
   });
   protected readonly lastSent = computed(() => this.stringSetting('telemetry_last_sent'));
   protected readonly uuid = computed(() => this.stringSetting('telemetry_uuid'));

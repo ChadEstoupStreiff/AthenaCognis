@@ -2,6 +2,7 @@ import {
   afterNextRender,
   ChangeDetectionStrategy,
   Component,
+  computed,
   DestroyRef,
   effect,
   type ElementRef,
@@ -29,8 +30,11 @@ const DEFAULT_HEIGHT = 420;
 /** vis-network wrapper (data updates in place; emits node clicks). */
 @Component({
   selector: 'ac-graph',
-  template: `<div #host class="graph" [style.height.px]="height()"></div>`,
+  template: `<div #host class="graph" [style.height]="cssHeight()"></div>`,
   styles: `
+    :host {
+      display: block;
+    }
     .graph {
       width: 100%;
       border-radius: 10px;
@@ -51,8 +55,13 @@ export class GraphComponent {
   readonly edges = input<readonly GraphEdge[]>([]);
   /** vis-network options. */
   readonly options = input<Options>({});
-  /** Height in pixels. */
-  readonly height = input(DEFAULT_HEIGHT);
+  /** Height in pixels, or null to fill the host (give the host a height). */
+  readonly height = input<number | null>(DEFAULT_HEIGHT);
+  /** CSS height of the canvas box. */
+  protected readonly cssHeight = computed(() => {
+    const height = this.height();
+    return height === null ? '100%' : `${String(height)}px`;
+  });
   /** Emits the id of a clicked node. */
   readonly nodeClick = output<string>();
 

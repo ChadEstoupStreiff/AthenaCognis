@@ -51,6 +51,7 @@ default_settings = {
     "telemetry_uuid": "",
     "telemetry_last_sent": "",
     "chat_user_description": "",
+    "research_subject": "",
     "chat_max_concurrent_generations": 3,
     "chat_llm_timeout_seconds": 300,
     "chat_rag_enabled_default": False,

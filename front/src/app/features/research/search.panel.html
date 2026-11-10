@@ -1,0 +1,478 @@
+<p-selectbutton
+  class="mode"
+  [options]="modes"
+  optionLabel="label"
+  optionValue="value"
+  [allowEmpty]="false"
+  [ngModel]="store.mode()"
+  (ngModelChange)="store.mode.set($event)"
+  ariaLabel="Mode"
+/>
+
+@if (store.mode() === 'search') {
+  <form class="search ac-panel" (ngSubmit)="store.run()">
+    <div class="row">
+      <p-iconfield class="grow">
+        <p-inputicon styleClass="pi pi-search" />
+        <input
+          pInputText
+          type="search"
+          name="text"
+          placeholder="Keywords, title, author, DOI or arXiv id…"
+          [ngModel]="store.text()"
+          (ngModelChange)="store.text.set($event)"
+          aria-label="Search papers"
+          autocomplete="off"
+        />
+      </p-iconfield>
+      <p-button
+        type="submit"
+        label="Search"
+        icon="pi pi-search"
+        [loading]="store.loading() && store.query()?.page === 1"
+        [disabled]="store.text().trim() === '' || store.filters().sources.length === 0"
+      />
+    </div>
+    <div class="row filters">
+      <p-selectbutton
+        [options]="sourceOptions"
+        optionLabel="label"
+        optionValue="value"
+        name="sources"
+        [multiple]="true"
+        [ngModel]="store.filters().sources"
+        (ngModelChange)="setSources($event ?? [])"
+        size="small"
+        ariaLabel="Sources"
+      />
+      <label class="years">
+        <span class="ac-muted">Years</span>
+        <p-inputnumber
+          name="yearFrom"
+          [ngModel]="store.filters().yearFrom"
+          (ngModelChange)="store.setFilters({ yearFrom: $event })"
+          [useGrouping]="false"
+          [min]="minYear"
+          [max]="maxYear"
+          placeholder="From"
+          inputStyleClass="year"
+          ariaLabel="From year"
+        />
+        <span class="ac-muted">–</span>
+        <p-inputnumber
+          name="yearTo"
+          [ngModel]="store.filters().yearTo"
+          (ngModelChange)="store.setFilters({ yearTo: $event })"
+          [useGrouping]="false"
+          [min]="minYear"
+          [max]="maxYear"
+          placeholder="To"
+          inputStyleClass="year"
+          ariaLabel="To year"
+        />
+      </label>
+      <label class="toggle">
+        <p-toggleswitch
+          name="withPdfOnly"
+          [ngModel]="store.filters().withPdfOnly"
+          (ngModelChange)="store.setFilters({ withPdfOnly: $event })"
+          ariaLabel="Open access PDF only"
+        />
+        <span>Open access PDF only</span>
+      </label>
+    </div>
+  </form>
+} @else {
+  <form class="search ac-panel" (ngSubmit)="store.discover()">
+    <p class="ac-muted hint">
+      @if (store.discoverRequest().scope === 'subject') {
+        Papers of the period matching the subject written in your settings (OpenAlex search).
+      } @else {
+        Papers of the period that cite your library or share its main topics (OpenAlex), most
+        related first.
+      }
+    </p>
+    <div class="row filters">
+      <label class="years">
+        <span class="ac-muted">Based on</span>
+        <p-select
+          name="scope"
+          [options]="scopes"
+          optionLabel="label"
+          optionValue="value"
+          [ngModel]="store.discoverRequest().scope"
+          (ngModelChange)="setDiscover({ scope: $event })"
+          appendTo="body"
+          ariaLabel="Based on"
+        />
+      </label>
+      <label class="years">
+        <span class="ac-muted">Published</span>
+        <p-select
+          name="period"
+          [options]="periods"
+          optionLabel="label"
+          optionValue="value"
+          [ngModel]="store.discoverRequest().period"
+          (ngModelChange)="setDiscover({ period: $event })"
+          appendTo="body"
+          ariaLabel="Published"
+        />
+      </label>
+      @if (store.discoverRequest().period === 'custom') {
+        <label class="years">
+          <span class="ac-muted">From</span>
+          <input
+            pInputText
+            type="date"
+            name="from"
+            class="date"
+            [max]="today"
+            [ngModel]="store.discoverRequest().from"
+            (ngModelChange)="setDiscover({ from: $event || null })"
+            aria-label="Published from"
+          />
+          <span class="ac-muted">to</span>
+          <input
+            pInputText
+            type="date"
+            name="to"
+            class="date"
+            [max]="today"
+            [ngModel]="store.discoverRequest().to"
+            (ngModelChange)="setDiscover({ to: $event || null })"
+            aria-label="Published to"
+          />
+        </label>
+      }
+      <span class="grow-fill"></span>
+      <p-button
+        type="submit"
+        label="Find related papers"
+        icon="pi pi-compass"
+        [loading]="store.loading() && store.origin()?.kind === 'discover'"
+      />
+    </div>
+    @if (store.discoverRequest().scope === 'subject') {
+      <p class="subject">
+        <i class="pi pi-bookmark"></i>
+        @if (store.subject()) {
+          <span class="ac-muted">My subject:</span> <em>{{ store.subject() }}</em>
+        } @else {
+          <span class="ac-muted">No subject written yet.</span>
+        }
+        <a routerLink="/settings" fragment="research">Edit “My subject” in Settings</a>
+      </p>
+    }
+  </form>
+}
+
+@if (store.origin(); as origin) {
+  <div class="summary">
+    <span>
+      <strong>{{ store.results().length }}</strong>
+      @if (origin.kind === 'search') {
+        result(s) for “{{ origin.query.text }}”
+      } @else if (origin.request.scope === 'subject') {
+        paper(s) matching your subject
+      } @else {
+        related paper(s) from {{ origin.resolved }} / {{ origin.seeds }} seed paper(s) found on
+        OpenAlex
+      }
+      @if (hiddenCount() > 0) {
+        · {{ hiddenCount() }} hidden by filters
+      }
+      @if (store.inLibrary().size > 0) {
+        · {{ store.inLibrary().size }} already in the library
+      }
+    </span>
+    <span class="grow-fill"></span>
+    <p-button
+      [label]="'Import all with PDF (' + store.importable().length + ')'"
+      icon="pi pi-download"
+      size="small"
+      severity="secondary"
+      [outlined]="true"
+      [disabled]="store.importable().length === 0"
+      pTooltip="Download every open-access PDF shown and add it to the library, tagged with the SOTA tag."
+      (onClick)="store.importMany(store.importable())"
+    />
+    <p-button
+      [label]="filterCount() > 0 ? 'Filters (' + filterCount() + ')' : 'Filters'"
+      icon="pi pi-filter"
+      size="small"
+      severity="secondary"
+      [outlined]="!showFilters()"
+      [attr.aria-expanded]="showFilters()"
+      (onClick)="showFilters.set(!showFilters())"
+    />
+    <p-select
+      [options]="sorts"
+      optionLabel="label"
+      optionValue="value"
+      [ngModel]="store.sort()"
+      (ngModelChange)="store.sort.set($event)"
+      size="small"
+      appendTo="body"
+      ariaLabel="Sort results"
+    />
+  </div>
+  @if (showFilters()) {
+    <section class="result-filters ac-panel" aria-label="Result filters">
+      <label class="field">
+        <span class="ac-muted">Min. citations</span>
+        <p-inputnumber
+          [ngModel]="store.resultFilters().minCitations"
+          (ngModelChange)="store.setResultFilters({ minCitations: $event })"
+          [min]="0"
+          [useGrouping]="false"
+          placeholder="Any"
+          inputStyleClass="small-number"
+          ariaLabel="Minimum citations"
+        />
+      </label>
+      <label class="field">
+        <span class="ac-muted">Author</span>
+        <input
+          pInputText
+          type="search"
+          placeholder="e.g. Vaswani"
+          [ngModel]="store.resultFilters().author"
+          (ngModelChange)="store.setResultFilters({ author: $event })"
+          aria-label="Author"
+        />
+      </label>
+      <label class="field">
+        <span class="ac-muted">Journal / venue</span>
+        <input
+          pInputText
+          type="search"
+          placeholder="e.g. Nature"
+          [ngModel]="store.resultFilters().venue"
+          (ngModelChange)="store.setResultFilters({ venue: $event })"
+          aria-label="Journal or venue"
+        />
+      </label>
+      <label class="field">
+        <span class="ac-muted">Must contain</span>
+        <input
+          pInputText
+          type="search"
+          placeholder="Words in title or abstract"
+          [ngModel]="store.resultFilters().include"
+          (ngModelChange)="store.setResultFilters({ include: $event })"
+          aria-label="Must contain"
+        />
+      </label>
+      <label class="field">
+        <span class="ac-muted">Exclude</span>
+        <input
+          pInputText
+          type="search"
+          placeholder="Words to leave out"
+          [ngModel]="store.resultFilters().exclude"
+          (ngModelChange)="store.setResultFilters({ exclude: $event })"
+          aria-label="Exclude words"
+        />
+      </label>
+      <div class="toggles">
+        <label class="toggle">
+          <p-toggleswitch
+            [ngModel]="store.resultFilters().withPdfOnly"
+            (ngModelChange)="store.setResultFilters({ withPdfOnly: $event })"
+            ariaLabel="PDF available"
+          />
+          <span>PDF available</span>
+        </label>
+        <label class="toggle">
+          <p-toggleswitch
+            [ngModel]="store.resultFilters().withAbstractOnly"
+            (ngModelChange)="store.setResultFilters({ withAbstractOnly: $event })"
+            ariaLabel="Has abstract"
+          />
+          <span>Has abstract</span>
+        </label>
+        <label class="toggle">
+          <p-toggleswitch
+            [ngModel]="store.resultFilters().hideInLibrary"
+            (ngModelChange)="store.setResultFilters({ hideInLibrary: $event })"
+            ariaLabel="Hide papers in my library"
+          />
+          <span>Hide papers in my library</span>
+        </label>
+        <span class="grow-fill"></span>
+        <p-button
+          label="Reset"
+          icon="pi pi-filter-slash"
+          size="small"
+          severity="secondary"
+          [text]="true"
+          [disabled]="filterCount() === 0"
+          (onClick)="resetFilters()"
+        />
+      </div>
+    </section>
+  }
+  @if (origin.kind === 'discover' && origin.topics.length > 0) {
+    <p class="ac-muted topics">
+      Your main topics:
+      @for (topic of origin.topics; track topic.id; let last = $last) {
+        {{ topic.name }} ({{ topic.count }}){{ last ? '' : ' · ' }}
+      }
+    </p>
+  }
+  @if (store.error(); as error) {
+    <p class="failure"><i class="pi pi-exclamation-triangle"></i>{{ error }}</p>
+  }
+  @for (failure of store.failures(); track failure.source) {
+    <p class="failure"><i class="pi pi-exclamation-triangle"></i>{{ failure.message }}</p>
+  }
+}
+
+<div class="hits">
+  @for (hit of store.results(); track hit.key) {
+    @let paper = store.inLibrary().get(hit.key);
+    @let state = store.imports().get(hit.key);
+    <article class="hit" [class.owned]="paper !== undefined">
+      <div class="body">
+        @if (hit.info.url) {
+          <a class="title" [href]="hit.info.url" target="_blank" rel="noopener noreferrer">{{
+            hit.info.title
+          }}</a>
+        } @else {
+          <span class="title">{{ hit.info.title }}</span>
+        }
+        <p class="details ac-muted">{{ details(hit) || 'No author information' }}</p>
+        @if (hit.reasons.length > 0) {
+          <div class="reasons">
+            @for (reason of hit.reasons; track reason) {
+              <span class="reason">{{ reason }}</span>
+            }
+          </div>
+        }
+        @if (hit.abstract) {
+          <p class="abstract" [class.open]="expanded().has(hit.key)">{{ hit.abstract }}</p>
+          <button type="button" class="more" (click)="toggleAbstract(hit.key)">
+            {{ expanded().has(hit.key) ? 'Show less' : 'Show abstract' }}
+          </button>
+        }
+        <div class="meta">
+          @if (hit.citedBy !== null) {
+            <span class="ac-muted"
+              ><i class="pi pi-chart-line"></i>{{ hit.citedBy }} citations</span
+            >
+          }
+          @if (hit.pdfUrls.length > 0) {
+            <a [href]="hit.pdfUrls[0]" target="_blank" rel="noopener noreferrer" class="pdf"
+              ><i class="pi pi-file-pdf"></i>{{ hit.openAccess ? 'Open access PDF' : 'PDF' }}</a
+            >
+          } @else {
+            <span class="ac-muted"><i class="pi pi-lock"></i>No open PDF known</span>
+          }
+          @if (hit.info.doi) {
+            <a [href]="'https://doi.org/' + hit.info.doi" target="_blank" rel="noopener noreferrer"
+              ><i class="pi pi-link"></i>DOI</a
+            >
+          }
+          <span class="ac-muted">
+            <i class="pi pi-database"></i>
+            @for (source of hit.sources; track source; let last = $last) {
+              {{ sourceLabels[source] }}{{ last ? '' : ', ' }}
+            }
+          </span>
+        </div>
+        @if (state?.status === 'failed') {
+          <p class="failure">
+            <i class="pi pi-times-circle"></i>{{ state?.message }} — download the PDF from the
+            publisher page, then use “Attach PDF”.
+          </p>
+        }
+      </div>
+      <div class="actions">
+        @if (paper) {
+          <span class="owned-badge"><i class="pi pi-check"></i>In library</span>
+          <p-button
+            label="Open"
+            icon="pi pi-eye"
+            size="small"
+            severity="secondary"
+            [text]="true"
+            (onClick)="open.emit(paper)"
+          />
+        } @else if (state?.status === 'done') {
+          <span class="owned-badge"><i class="pi pi-check"></i>Imported</span>
+        } @else {
+          <p-button
+            [label]="state?.status === 'running' ? (state?.message ?? '') : 'Import'"
+            icon="pi pi-download"
+            size="small"
+            [loading]="state?.status === 'running'"
+            [outlined]="hit.pdfUrls.length === 0"
+            tooltipPosition="left"
+            [pTooltip]="
+              hit.pdfUrls.length > 0
+                ? 'Download the PDF and add it to the library'
+                : 'Try the publisher page (works when it offers the PDF freely)'
+            "
+            (onClick)="store.importHit(hit)"
+          />
+          <label
+            class="attach p-button p-button-sm p-button-text p-button-secondary"
+            [class.p-disabled]="state?.status === 'running'"
+            tooltipPosition="left"
+            pTooltip="Import a PDF you downloaded yourself, with this reference"
+          >
+            <i class="pi pi-paperclip"></i> Attach PDF
+            <input
+              type="file"
+              accept=".pdf,application/pdf"
+              [disabled]="state?.status === 'running'"
+              (change)="attach(hit, $event)"
+            />
+          </label>
+        }
+      </div>
+    </article>
+  } @empty {
+    @if (store.loading()) {
+      <p class="ac-muted loading"><i class="pi pi-spin pi-spinner"></i> Searching…</p>
+    } @else if (hiddenCount() > 0) {
+      <ac-empty-state icon="pi pi-filter-slash" title="Every result is hidden by the filters">
+        <p-button label="Reset filters" size="small" (onClick)="resetFilters()" />
+      </ac-empty-state>
+    } @else if (store.origin()?.kind === 'discover') {
+      @if (!store.error()) {
+        <ac-empty-state
+          icon="pi pi-compass"
+          title="No related paper in this period"
+          message="Try a longer period, or base it on your whole library."
+        />
+      }
+    } @else if (store.query()) {
+      <ac-empty-state
+        icon="pi pi-search"
+        title="No paper found"
+        message="Try other keywords, more sources, or a wider year range."
+      />
+    } @else {
+      <ac-empty-state
+        icon="pi pi-globe"
+        title="Search millions of papers"
+        message="OpenAlex, arXiv and CrossRef are searched together. Paste a DOI or an arXiv id to find one paper. Imported PDFs get the SOTA tag and land under “To review”."
+      />
+    }
+  }
+</div>
+
+@if (store.query() && store.results().length > 0 && !store.exhausted()) {
+  <div class="more-row">
+    <p-button
+      label="Load more"
+      icon="pi pi-angle-down"
+      severity="secondary"
+      [outlined]="true"
+      [loading]="store.loading()"
+      (onClick)="store.loadMore()"
+    />
+  </div>
+}

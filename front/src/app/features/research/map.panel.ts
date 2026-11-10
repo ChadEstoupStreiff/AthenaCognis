@@ -36,6 +36,7 @@ import {
 import { SotaOnline } from '../../core/sota/sota-online';
 import { SotaStorage } from '../../core/sota/sota-storage';
 import { ThemeService } from '../../core/theme/theme.service';
+import { FillHeightDirective } from '../../shared/ui/fill-height.directive';
 import { GraphComponent } from '../../shared/ui/graph.component';
 import { toGraphEdges, toGraphNodes } from './map-model';
 import { MapRelations } from './map-relations';
@@ -58,7 +59,6 @@ export type DetailsView =
     };
 
 const MAX_SHARED_REFERENCES = 40;
-const GRAPH_HEIGHT = 620;
 const LEVEL_SEPARATION = 220;
 const NODE_SPACING = 110;
 /** Force layout: stronger repulsion + longer springs = more space between papers. */
@@ -77,6 +77,7 @@ const AVOID_OVERLAP = 0.6;
     SelectButtonModule,
     SliderModule,
     ToggleSwitchModule,
+    FillHeightDirective,
     GraphComponent,
     MarkdownViewComponent,
   ],
@@ -111,7 +112,6 @@ export class MapPanelComponent {
   protected readonly minForce = signal(1);
   protected readonly clicked = signal<string | null>(null);
   protected readonly maxForce = MAX_AI_FORCE;
-  protected readonly height = GRAPH_HEIGHT;
 
   protected readonly paperOptions = computed(() =>
     this.store.papers().map((paper) => ({

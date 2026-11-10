@@ -1,0 +1,290 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.search {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.grow {
+  flex: 1;
+  min-width: 220px;
+
+  input {
+    width: 100%;
+  }
+}
+
+.grow-fill {
+  flex: 1;
+}
+
+.filters {
+  font-size: 13px;
+}
+
+.years,
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+:host ::ng-deep .year {
+  width: 5.5rem;
+}
+
+.mode {
+  align-self: flex-start;
+}
+
+.hint,
+.topics {
+  margin: 0;
+  font-size: 12px;
+}
+
+.reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 0 6px;
+}
+
+.reason {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--p-primary-color) 12%, transparent);
+  color: var(--p-primary-color);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.date {
+  width: 9.5rem;
+}
+
+.subject {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+
+  em {
+    overflow-wrap: anywhere;
+  }
+
+  a {
+    color: var(--p-primary-color);
+    text-decoration: none;
+  }
+}
+
+.result-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px 12px;
+  padding: 12px 14px;
+  font-size: 13px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+
+  input {
+    width: 100%;
+  }
+}
+
+:host ::ng-deep .small-number {
+  width: 100%;
+}
+
+.toggles {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  grid-column: 1 / -1;
+}
+
+.summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.failure {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+  color: var(--p-orange-500);
+  font-size: 12px;
+}
+
+.hits {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--ac-panel-border);
+  border-radius: 12px;
+  background: var(--ac-panel-background);
+
+  &.owned {
+    border-color: color-mix(in srgb, var(--p-green-500) 40%, transparent);
+  }
+}
+
+.body {
+  min-width: 0;
+}
+
+.title {
+  color: inherit;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+
+a.title:hover {
+  color: var(--p-primary-color);
+}
+
+.details {
+  margin: 2px 0 6px;
+  font-size: 13px;
+}
+
+.abstract {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+
+  &.open {
+    display: block;
+  }
+}
+
+.more {
+  margin: 2px 0 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--p-primary-color);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+
+  i {
+    margin-right: 4px;
+    font-size: 11px;
+  }
+
+  a {
+    color: var(--p-primary-color);
+    text-decoration: none;
+  }
+}
+
+.pdf {
+  font-weight: 600;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 130px;
+}
+
+.owned-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--p-green-500) 14%, transparent);
+  color: var(--p-green-600);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.attach {
+  position: relative;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+
+  input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+}
+
+.loading {
+  padding: 24px;
+  text-align: center;
+}
+
+.more-row {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 16px;
+}
+
+@media (max-width: 700px) {
+  .hit {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}

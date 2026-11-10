@@ -3,6 +3,7 @@ import hmac
 import os
 import uuid as uuid_lib
 from datetime import date, datetime
+from typing import Optional
 
 import uvicorn
 from db import get_db, init_db
@@ -53,6 +54,24 @@ class TelemetryData(BaseModel):
     files_without_project: int = Field(ge=0, le=1_000_000)
     disk_files_bytes: int = Field(ge=0, le=1_000_000_000_000)
 
+    # Added later: optional so older clients keep being accepted.
+    nbr_notes: Optional[int] = Field(default=None, ge=0, le=1_000_000)
+    nbr_pinned_files: Optional[int] = Field(default=None, ge=0, le=1_000_000)
+    nbr_ocr: Optional[int] = Field(default=None, ge=0, le=1_000_000)
+    nbr_transcriptions: Optional[int] = Field(default=None, ge=0, le=1_000_000)
+    nbr_embeddings: Optional[int] = Field(default=None, ge=0, le=1_000_000)
+    nbr_chat_sessions: Optional[int] = Field(default=None, ge=0, le=1_000_000)
+    nbr_chat_messages: Optional[int] = Field(default=None, ge=0, le=10_000_000)
+    nbr_kanban_columns: Optional[int] = Field(default=None, ge=0, le=100_000)
+    nbr_task_dependencies: Optional[int] = Field(default=None, ge=0, le=1_000_000)
+    nbr_sota_papers: Optional[int] = Field(default=None, ge=0, le=1_000_000)
+    nbr_sota_with_metadata: Optional[int] = Field(default=None, ge=0, le=1_000_000)
+    nbr_sota_with_references: Optional[int] = Field(default=None, ge=0, le=1_000_000)
+    research_subject_set: Optional[int] = Field(default=None, ge=0, le=1)
+    research_searches: Optional[int] = Field(default=None, ge=0, le=100_000)
+    research_discoveries: Optional[int] = Field(default=None, ge=0, le=100_000)
+    research_imports: Optional[int] = Field(default=None, ge=0, le=100_000)
+
 
 def _sign_uuid(raw: str) -> str:
     sig = hmac.new(_SECRET, raw.encode(), hashlib.sha256).hexdigest()[:16]
@@ -97,7 +116,7 @@ def receive_data(
     if not _verify_uuid(client_uuid):
         raise HTTPException(status_code=401, detail="Invalid UUID")
     today = date.today()
-    entry = TelemetryEntry(uuid=client_uuid, date=today, data=data.model_dump())
+    entry = TelemetryEntry(uuid=client_uuid, date=today, data=data.model_dump(exclude_none=True))
     db.add(entry)
     try:
         db.commit()

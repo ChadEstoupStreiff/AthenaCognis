@@ -18,91 +18,18 @@ import {
 } from '@domain/sota';
 import { FilesApi } from '../files/files.api';
 import { Logger } from '../logging/logger.service';
+import { ARXIV_URL, CROSSREF_URL, doiPath, getJson, OPENALEX_URL, request } from './http';
 
-const CROSSREF_URL = 'https://api.crossref.org/works';
 const PUBMED_SEARCH_URL = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi';
 const PUBMED_SUMMARY_URL = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi';
-const OPENALEX_URL = 'https://api.openalex.org/works';
-/** Same-origin proxies (nginx): GROBID container and arXiv (no CORS upstream). */
+/** Same-origin proxy (nginx) to the GROBID container. */
 const GROBID_URL = '/grobid/api';
-const ARXIV_URL = '/arxiv/api/query';
 const OPENALEX_FIELDS = 'id,doi,display_name,publication_year,cited_by_count,referenced_works';
 const OPENALEX_EXTERNAL_FIELDS = 'id,doi,display_name,publication_year,cited_by_count,authorships';
 const SEARCH_CANDIDATES = 3;
 const OPENALEX_CANDIDATES = 5;
 const OPENALEX_BATCH = 50;
-const REQUEST_TIMEOUT_MS = 15_000;
 const GROBID_TIMEOUT_MS = 120_000;
-const NOT_FOUND = 404;
-
-/** HTTP failure of an external source. */
-export class SourceError extends Error {
-  /**
-   * Build the error.
-   *
-   * @param status - HTTP status.
-   * @param url - Requested URL.
-   */
-  constructor(
-    readonly status: number,
-    url: string,
-  ) {
-    super(`${new URL(url, location.origin).host} answered ${String(status)}.`);
-    this.name = 'SourceError';
-  }
-}
-
-/**
- * Fetch with a timeout, failing on HTTP errors (404 → null).
- *
- * @param url - URL.
- * @param init - Request.
- * @param timeoutMs - Timeout.
- * @returns Response, or null on 404.
- * @throws SourceError on other HTTP errors.
- */
-async function request(
-  url: string,
-  init: RequestInit = {},
-  timeoutMs = REQUEST_TIMEOUT_MS,
-): Promise<Response | null> {
-  const response = await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
-  if (response.status === NOT_FOUND) {
-    return null;
-  }
-  if (!response.ok) {
-    throw new SourceError(response.status, url);
-  }
-  return response;
-}
-
-/**
- * GET JSON.
- *
- * @param url - URL.
- * @param params - Query.
- * @returns Body, or null on 404.
- */
-async function getJson(
-  url: string,
-  params: Record<string, string | number> = {},
-): Promise<unknown> {
-  const query = new URLSearchParams(
-    Object.entries(params).map(([key, value]) => [key, String(value)]),
-  );
-  const response = await request(query.size > 0 ? `${url}?${query.toString()}` : url);
-  return response === null ? null : ((await response.json()) as unknown);
-}
-
-/**
- * Encode a DOI for a URL path (slashes kept, like Python's `quote`).
- *
- * @param doi - DOI.
- * @returns Path segment.
- */
-function doiPath(doi: string): string {
-  return doi.split('/').map(encodeURIComponent).join('/');
-}
 
 /** GROBID, CrossRef, PubMed, arXiv and OpenAlex clients for the Research library. */
 @Injectable({ providedIn: 'root' })

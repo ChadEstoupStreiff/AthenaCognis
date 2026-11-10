@@ -17,11 +17,24 @@ import { MapPanelComponent } from './map.panel';
 import { PaperDialogComponent } from './paper-dialog.component';
 import { PaperViewComponent } from './paper-view.component';
 import { ResearchStore } from './research.store';
+import { SearchPanelComponent } from './search.panel';
 
 /** Tab of the page. */
-type ResearchTab = 'library' | 'map';
+type ResearchTab = 'library' | 'map' | 'search';
 
-/** Research: state-of-the-art library, citation map, Zotero import/export. */
+const TABS: readonly ResearchTab[] = ['library', 'map', 'search'];
+
+/**
+ * Tab named by a query parameter.
+ *
+ * @param value - Raw value.
+ * @returns Tab (library by default).
+ */
+function toTab(value: unknown): ResearchTab {
+  return TABS.find((tab) => tab === value) ?? 'library';
+}
+
+/** Research: state-of-the-art library, online paper search, citation map, Zotero import/export. */
 @Component({
   selector: 'ac-research-page',
   imports: [
@@ -39,6 +52,7 @@ type ResearchTab = 'library' | 'map';
     MapPanelComponent,
     PaperDialogComponent,
     PaperViewComponent,
+    SearchPanelComponent,
   ],
   templateUrl: './research.page.html',
   styleUrl: './research.page.scss',
@@ -54,9 +68,7 @@ export class ResearchPage {
   /** Query parameter: path of the paper shown in the paper view. */
   readonly paper = input<string | undefined>(undefined);
 
-  protected readonly activeTab = computed<ResearchTab>(() =>
-    this.tab() === 'map' ? 'map' : 'library',
-  );
+  protected readonly activeTab = computed<ResearchTab>(() => toTab(this.tab()));
   protected readonly tags = computed(() => this.catalog.tagList().map((tag) => tag.name));
   protected readonly viewed = computed(
     () => this.store.papers().find((paper) => paper.path === this.paper()) ?? null,
@@ -73,7 +85,7 @@ export class ResearchPage {
    */
   protected openTab(tab: string | number | undefined): void {
     void this.router.navigate([], {
-      queryParams: { tab: tab === 'map' ? 'map' : null },
+      queryParams: { tab: toTab(tab) === 'library' ? null : toTab(tab) },
       queryParamsHandling: 'merge',
       replaceUrl: true,
     });

@@ -83,25 +83,63 @@ with st.expander("Retention table (last 30 days)"):
 st.subheader("Usage Statistics")
 st.caption("Aggregated from all active instances — medians shown to reduce skew.")
 
-field_labels = {
-    "nbr_files": "Files",
-    "nbr_projects": "Projects",
-    "nbr_tags": "Tags",
-    "nbr_calendars": "Calendar records",
-    "nbr_hours": "Hours tracked",
-    "nbr_summaries": "Summaries",
-    "nbr_links": "File links",
-    "files_without_tag": "Files without tag",
-    "files_without_project": "Files without project",
+FIELD_GROUPS = {
+    "Library": {
+        "nbr_files": "Files",
+        "disk_files_bytes": "Storage used (bytes)",
+        "nbr_projects": "Projects",
+        "nbr_tags": "Tags",
+        "files_without_tag": "Files without tag",
+        "files_without_project": "Files without project",
+        "nbr_links": "File links",
+        "nbr_pinned_files": "Pinned files",
+        "nbr_notes": "Notes",
+    },
+    "AI processing": {
+        "nbr_summaries": "Summaries",
+        "nbr_ocr": "OCR results",
+        "nbr_transcriptions": "Transcriptions",
+        "nbr_embeddings": "Semantic search embeddings",
+        "nbr_chat_sessions": "Chat sessions",
+        "nbr_chat_messages": "Chat messages sent",
+    },
+    "Work": {
+        "nbr_calendars": "Calendar records",
+        "nbr_hours": "Hours tracked",
+        "nbr_tasks": "Tasks",
+        "nbr_validated_tasks": "Completed tasks",
+        "nbr_task_dependencies": "Task dependencies",
+        "nbr_kanban_boards": "Kanban boards",
+        "nbr_kanban_columns": "Kanban columns",
+        "nbr_contacts": "Contacts",
+    },
+    "Research": {
+        "nbr_sota_papers": "Papers in the research library",
+        "nbr_sota_with_metadata": "Papers with metadata",
+        "nbr_sota_with_references": "Papers with extracted references",
+        "research_searches": "Paper searches (since previous report)",
+        "research_discoveries": "Related-paper discoveries (since previous report)",
+        "research_imports": "Papers imported from search (since previous report)",
+    },
 }
+SHARE_FIELDS = {"research_subject_set": "Instances with a research subject set"}
 
-latest = df.iloc[-1]
-if latest["fields"]:
-    field_data = []
-    for key, label in field_labels.items():
-        stats = latest["fields"].get(key)
+
+def field_rows(fields: dict, labels: dict) -> list:
+    """
+    Build the table rows of one group of aggregated fields
+
+    Args:
+        fields (dict): aggregated field stats of a day
+        labels (dict): field key -> label
+    Returns:
+        list: rows (metrics without data are skipped)
+    """
+    rows = []
+    for key, label in labels.items():
+        stats = fields.get(key)
         if stats:
-            field_data.append(
+            rows.append(
                 {
                     "Metric": label,
                     "Median": stats.get("median"),
@@ -109,10 +147,21 @@ if latest["fields"]:
                     "Total (sum)": stats.get("sum"),
                 }
             )
-    if field_data:
-        st.dataframe(pd.DataFrame(field_data).set_index("Metric"), use_container_width=True)
-    else:
-        st.info("No field stats yet.")
+    return rows
+
+
+latest_fields = df.iloc[-1]["fields"] or {}
+if not latest_fields:
+    st.info("No field stats yet.")
+for group, labels in FIELD_GROUPS.items():
+    rows = field_rows(latest_fields, labels)
+    if rows:
+        st.markdown(f"**{group}**")
+        st.dataframe(pd.DataFrame(rows).set_index("Metric"), use_container_width=True)
+for key, label in SHARE_FIELDS.items():
+    stats = latest_fields.get(key)
+    if stats:
+        st.metric(label, f"{stats.get('avg', 0) * 100:.0f}%")
 
 st.divider()
 st.caption(

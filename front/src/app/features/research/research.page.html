@@ -50,6 +50,7 @@
         <span class="count">{{ store.papers().length }}</span></p-tab
       >
       <p-tab value="map"><i class="pi pi-share-alt"></i> Citation &amp; relation map</p-tab>
+      <p-tab value="search"><i class="pi pi-globe"></i> Search papers</p-tab>
     </p-tablist>
     <p-tabpanels>
       <p-tabpanel value="library">
@@ -63,6 +64,9 @@
         @if (activeTab() === 'map') {
           <ac-research-map />
         }
+      </p-tabpanel>
+      <p-tabpanel value="search">
+        <ac-research-search (open)="openPaper($event)" />
       </p-tabpanel>
     </p-tabpanels>
   </p-tabs>

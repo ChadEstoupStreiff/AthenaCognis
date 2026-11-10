@@ -27,6 +27,18 @@ test.describe('research (read-only)', () => {
     }
   });
 
+  test('search tab shows the paper search form', async ({ page }) => {
+    await page.goto('/research?tab=search');
+    const tab = page.getByRole('tab', { name: /Search papers/ });
+    await expect(
+      tab.or(page.getByText('Pick the tag marking your state-of-the-art papers')),
+    ).toBeVisible();
+    if (await tab.isVisible()) {
+      await expect(page.getByRole('searchbox', { name: 'Search papers' })).toBeVisible();
+      await expect(page.getByText('Search millions of papers')).toBeVisible();
+    }
+  });
+
   test('map renders the graph', async ({ page }) => {
     await page.goto('/research?tab=map');
     const graph = page.locator('ac-graph canvas');
