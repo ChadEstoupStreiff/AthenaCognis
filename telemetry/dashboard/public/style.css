@@ -162,6 +162,23 @@ main, .topbar, .foot {
 }
 .icon-btn:hover { color: var(--ink); }
 
+.gh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid var(--ring);
+  background: var(--surface);
+  color: var(--ink);
+  font: 600 13px var(--font);
+  text-decoration: none;
+}
+.gh-btn:hover { background: var(--surface-2); }
+
+.pledge a, .foot a { color: var(--ink); text-underline-offset: 3px; }
+
 /* ── Hero ───────────────────────────────────────────────── */
 .hero { position: relative; padding: 56px 0 24px; }
 .hero-mark {
@@ -419,7 +436,8 @@ table.data td.empty { text-align: center; color: var(--muted); padding: 28px; }
 @media (max-width: 600px) {
   main, .topbar, .foot { padding: 0 16px; }
   .topbar { padding-top: 14px; padding-bottom: 14px; }
-  .brand-tag, #live-text { display: none; }
+  .brand-tag, #live-text, .gh-btn span { display: none; }
+  .gh-btn { width: 36px; padding: 0; justify-content: center; }
   .hero { padding-top: 28px; }
   .hero-mark { display: none; }
   .kpis { grid-template-columns: 1fr; }
