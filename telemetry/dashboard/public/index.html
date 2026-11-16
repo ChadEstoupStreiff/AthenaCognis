@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AthenaCognis Telemetry</title>
+  <meta name="description" content="Open, anonymised usage telemetry for AthenaCognis, the self-hosted AI knowledge assistant.">
+  <link rel="icon" type="image/png" href="logo.png">
+  <link rel="stylesheet" href="style.css">
+  <script>
+    try {
+      const saved = localStorage.getItem("ac-theme");
+      if (saved) document.documentElement.dataset.theme = saved;
+    } catch (_) { /* storage unavailable: follow OS theme */ }
+  </script>
+</head>
+<body>
+  <div class="glow" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <img src="logo.png" alt="" class="brand-logo">
+      <span class="brand-name">AthenaCognis</span>
+      <span class="brand-tag">Open telemetry</span>
+    </div>
+    <div class="topbar-right">
+      <span class="live" id="live"><span class="live-dot"></span><span id="live-text">Connecting…</span></span>
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="Toggle light / dark theme">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.39 5.39 0 0 1-4.4 2.26 5.4 5.4 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1Z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <img src="logo.png" alt="" class="hero-mark">
+      <p class="eyebrow">Built in the open · measured in the open</p>
+      <h1>Every instance, <span class="accent">counted.</span><br>Nothing personal, <span class="accent">ever.</span></h1>
+      <p class="lede">Live, anonymised statistics from self-hosted AthenaCognis installations around the world. One daily heartbeat per opted-in instance — no file names, no content, no identity. Just a random UUID and a handful of counters.</p>
+
+      <div class="kpis" id="kpis">
+        <article class="kpi kpi-main">
+          <span class="kpi-label">Instances, all time</span>
+          <span class="kpi-value" data-kpi="all_time">—</span>
+          <span class="kpi-sub" data-kpi-sub="all_time"></span>
+          <div class="kpi-spark" id="spark-total"></div>
+        </article>
+        <article class="kpi">
+          <span class="kpi-label">Active on latest day</span>
+          <span class="kpi-value" data-kpi="active">—</span>
+          <span class="kpi-sub" data-kpi-sub="active"></span>
+          <div class="kpi-spark" id="spark-active"></div>
+        </article>
+        <article class="kpi">
+          <span class="kpi-label">Average daily active</span>
+          <span class="kpi-value" data-kpi="avg_dau">—</span>
+          <span class="kpi-sub" data-kpi-sub="avg_dau"></span>
+        </article>
+        <article class="kpi">
+          <span class="kpi-label">Days of history</span>
+          <span class="kpi-value" data-kpi="days">—</span>
+          <span class="kpi-sub" data-kpi-sub="days"></span>
+        </article>
+      </div>
+    </section>
+
+    <div id="error" class="banner banner-error" hidden>
+      <strong>Telemetry server unreachable.</strong> Retrying automatically — the numbers below may be stale.
+    </div>
+    <div id="sparse" class="banner" hidden>
+      <strong>History is still building.</strong> Trends and retention fill in as more days are recorded.
+    </div>
+
+    <section class="block">
+      <header class="block-head">
+        <h2>The collective footprint</h2>
+        <p>Everything the community has built with AthenaCognis, summed across every instance active on the latest day.</p>
+      </header>
+      <div class="footprint" id="footprint"></div>
+    </section>
+
+    <section class="block">
+      <header class="block-head">
+        <h2>Growth</h2>
+        <p>Instances reporting each day, against the cumulative number ever seen.</p>
+      </header>
+      <div class="card">
+        <div class="card-head">
+          <div class="legend">
+            <span class="legend-item"><i class="swatch s1"></i>Active that day</span>
+            <span class="legend-item"><i class="swatch s2"></i>Cumulative instances</span>
+          </div>
+          <div class="seg" id="range" role="tablist" aria-label="Time range">
+            <button type="button" data-days="30">30d</button>
+            <button type="button" data-days="90">90d</button>
+            <button type="button" data-days="365">1y</button>
+            <button type="button" data-days="0" class="on">All</button>
+          </div>
+        </div>
+        <div class="chart chart-lg" id="chart-growth" role="img" aria-label="Daily active and cumulative instances over time"></div>
+      </div>
+    </section>
+
+    <section class="block">
+      <header class="block-head">
+        <h2>Do people come back?</h2>
+        <p>Share of instances active N days ago that are active again today — averaged over the last 30 days.</p>
+      </header>
+      <div class="grid-2">
+        <div class="card">
+          <h3 class="card-title">Retention by horizon</h3>
+          <div class="chart" id="chart-retention" role="img" aria-label="Retention rate per horizon"></div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <h3 class="card-title">Retention over time <span class="muted">· 7-day avg</span></h3>
+            <div class="legend">
+              <span class="legend-item"><i class="swatch s1"></i>D1</span>
+              <span class="legend-item"><i class="swatch s2"></i>D7</span>
+              <span class="legend-item"><i class="swatch s3"></i>D30</span>
+            </div>
+          </div>
+          <div class="chart" id="chart-retention-trend" role="img" aria-label="D1, D7 and D30 retention over time"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="block">
+      <header class="block-head">
+        <h2>How it's used</h2>
+        <p>Healthy-library signals and AI workload of a typical instance (medians, so one power user doesn't skew the picture).</p>
+      </header>
+      <div class="ratios" id="ratios"></div>
+      <div class="grid-2">
+        <div class="card">
+          <h3 class="card-title">AI work per instance <span class="muted">· median</span></h3>
+          <div class="chart" id="chart-ai" role="img" aria-label="Median AI operations per instance"></div>
+        </div>
+        <div class="card">
+          <h3 class="card-title">Library per instance <span class="muted">· median</span></h3>
+          <div class="chart" id="chart-library" role="img" aria-label="Median library objects per instance"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="block">
+      <header class="block-head">
+        <h2>All the numbers</h2>
+        <p>Full breakdown for the latest day. Median and average are per instance; total is the sum across instances.</p>
+      </header>
+      <div class="card">
+        <div class="tabs" id="tabs" role="tablist"></div>
+        <div class="table-wrap"><table class="data" id="table"></table></div>
+      </div>
+    </section>
+
+    <section class="pledge">
+      <img src="logo.png" alt="" class="pledge-logo">
+      <div>
+        <h2>The privacy pledge</h2>
+        <ul>
+          <li><strong>Opt-in only.</strong> Nothing is sent until the instance owner says yes.</li>
+          <li><strong>Counters, not content.</strong> We receive numbers — never file names, text, prompts or contacts.</li>
+          <li><strong>No identity.</strong> Each instance is a random, signed UUID. No IP is stored with the data.</li>
+          <li><strong>Open source.</strong> The collector and this dashboard live in the GodAssistant repository.</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span id="foot-updated">—</span>
+    <span>Refreshes every 5 minutes</span>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
