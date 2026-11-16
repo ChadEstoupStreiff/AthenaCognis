@@ -12,6 +12,7 @@ SETTINGS = {
     "chat_model": "deepseek-chat",
     "deepseek_api_key": "secret",
     "chat_llm_timeout_seconds": 5,
+    "ai_style_instruction": "",
 }
 
 

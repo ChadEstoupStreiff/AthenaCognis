@@ -53,6 +53,7 @@
         <th>State</th>
         <th>Added</th>
         <th>Completed</th>
+        <th>Error</th>
       </tr>
     </ng-template>
     <ng-template #body let-task>
@@ -70,11 +71,16 @@
         </td>
         <td class="ac-muted">{{ task.added | relativeDate }}</td>
         <td class="ac-muted">{{ task.completed ? (task.completed | relativeDate) : '—' }}</td>
+        <td class="error-cell">
+          @if (failure(task); as reason) {
+            <span class="error" [title]="task.result ?? reason">{{ reason }}</span>
+          }
+        </td>
       </tr>
     </ng-template>
     <ng-template #emptymessage>
       <tr>
-        <td colspan="4" class="ac-muted">No task.</td>
+        <td colspan="5" class="ac-muted">No task.</td>
       </tr>
     </ng-template>
   </p-table>

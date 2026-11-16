@@ -9,6 +9,7 @@ from controllers.FileManager import FileManager
 from controllers.OCRManager import OCRManager
 from controllers.PreviewManager import PreviewManager
 from controllers.SummarizeManager import SummarizeManager
+from controllers.DocumentTreeManager import DocumentTreeManager
 from controllers.TranscriptionManager import TranscriptionManager
 from db import DB, ProjectFile, TagFile, Link, create_default_values, get_db
 from db.models import Base, CalendarRecord, Summary, Contact, Task, KanbanBoard
@@ -55,6 +56,10 @@ app.include_router(views.transcription.router)
 import views.summarize
 
 app.include_router(views.summarize.router)
+
+import views.tree
+
+app.include_router(views.tree.router)
 
 import views.notes
 
@@ -262,6 +267,7 @@ if __name__ == "__main__":
     for job_manager in (
         TranscriptionManager,
         SummarizeManager,
+        DocumentTreeManager,
         OCRManager,
         PreviewManager,
     ):

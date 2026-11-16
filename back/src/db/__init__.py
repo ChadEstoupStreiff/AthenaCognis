@@ -8,6 +8,8 @@ from db.models import (
     OCRTask,
     Summary,
     SummaryTask,
+    DocumentTree,
+    DocumentTreeTask,
     Transcription,
     TranscriptionTask,
     TaskStateEnum,

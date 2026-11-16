@@ -10,6 +10,8 @@ export interface AiTask {
   /** Provider value meaning "run locally" (vision tasks). */
   readonly localKey?: string;
   readonly localLabel?: string;
+  /** Task whose routing applies while this one is not set. */
+  readonly fallbackKey?: string;
 }
 
 /** Provider option. */
@@ -34,6 +36,13 @@ export const AI_TASKS: readonly AiTask[] = [
     label: 'Summaries',
     hint: 'Summary and keywords of every file',
     kind: 'text',
+  },
+  {
+    key: 'tree',
+    label: 'Section trees',
+    hint: 'Section tree of documents (AI tab → Tree); uses Summaries until set',
+    kind: 'text',
+    fallbackKey: 'summarization',
   },
   {
     key: 'blip',

@@ -6,9 +6,11 @@ import {
   input,
   model,
   resource,
+  signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
+import { TabsModule } from 'primeng/tabs';
 import { TagModule } from 'primeng/tag';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import {
@@ -22,6 +24,7 @@ import { type FileKind, supportsOcr, supportsTranscription } from '@domain/files
 import { FileDetailsApi } from '../../core/files/file-details.api';
 import { NotifyService } from '../../core/notify/notify.service';
 import { DataSync } from '../../core/state/data-sync.service';
+import { DocumentTreeComponent } from './document-tree.component';
 import { SummaryBlockComponent } from './summary-block.component';
 
 /** Severity of each job state tag. */
@@ -32,10 +35,21 @@ const STATE_SEVERITY: Readonly<Record<JobState, 'info' | 'warn' | 'success' | 'd
   FAILED: 'danger',
 };
 
-/** Summary, OCR, transcription and job history of a file. */
+/** AI subtabs of a file: summary (with OCR, transcription, jobs) and section tree. */
+type AiSubtab = 'summary' | 'tree';
+
+/** Summary, OCR, transcription, job history and section tree of a file. */
 @Component({
   selector: 'ac-ai-tab',
-  imports: [FormsModule, ButtonModule, TagModule, ToggleSwitchModule, SummaryBlockComponent],
+  imports: [
+    FormsModule,
+    ButtonModule,
+    TabsModule,
+    TagModule,
+    ToggleSwitchModule,
+    SummaryBlockComponent,
+    DocumentTreeComponent,
+  ],
   templateUrl: './ai-tab.component.html',
   styleUrl: './inspector.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -58,6 +72,9 @@ export class AiTabComponent {
   /** Show OCR confidences (two-way). */
   readonly showScores = model(false);
 
+  /** Active subtab. */
+  protected readonly subtab = signal<AiSubtab>('summary');
+
   protected readonly canOcr = computed(() => supportsOcr(this.kind()));
   protected readonly canTranscribe = computed(() => supportsTranscription(this.kind()));
   protected readonly severity = STATE_SEVERITY;
@@ -78,6 +95,15 @@ export class AiTabComponent {
   });
 
   /**
+   * Switch subtab.
+   *
+   * @param value - Tab value.
+   */
+  protected selectSubtab(value: string | number | undefined): void {
+    this.subtab.set(value === 'tree' ? 'tree' : 'summary');
+  }
+
+  /**
    * Queue a job.
    *
    * @param service - Job service.
@@ -96,7 +122,7 @@ export class AiTabComponent {
   private async loadHistory(
     path: string,
   ): Promise<{ service: JobService; state: JobState; result: string | null; added: string }[]> {
-    const services: JobService[] = ['summarize', 'preview'];
+    const services: JobService[] = ['summarize', 'tree', 'preview'];
     if (this.canOcr()) {
       services.unshift('ocr');
     }

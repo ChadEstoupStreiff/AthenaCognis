@@ -8,4 +8,5 @@ export * from './jobs';
 export * from './ops';
 export * from './settings';
 export * from './time';
+export * from './tree';
 export * from './work';

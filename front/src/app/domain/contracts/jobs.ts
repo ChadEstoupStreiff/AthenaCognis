@@ -1,5 +1,5 @@
 /** Background job services of the backend. */
-export const JOB_SERVICES = ['ocr', 'transcription', 'summarize', 'preview'] as const;
+export const JOB_SERVICES = ['ocr', 'transcription', 'summarize', 'tree', 'preview'] as const;
 
 /** One background job service. */
 export type JobService = (typeof JOB_SERVICES)[number];
@@ -9,6 +9,7 @@ export const JOB_SERVICE_LABELS: Readonly<Record<JobService, string>> = {
   ocr: 'OCR & caption',
   transcription: 'Transcription',
   summarize: 'Summary',
+  tree: 'Section tree',
   preview: 'Preview',
 };
 

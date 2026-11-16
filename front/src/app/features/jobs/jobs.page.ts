@@ -16,6 +16,7 @@ import { TagModule } from 'primeng/tag';
 import { JOB_SERVICES, type JobService, type JobState, type JobTask } from '@domain/contracts';
 import { fileNameOf } from '@domain/files';
 import { ApiClient, backendUrl } from '../../core/api/api-client';
+import { jobFailure } from '../../core/jobs/job-error';
 import { latestRuns } from '../../core/jobs/jobs-overview';
 import { JobsStore } from '../../core/jobs/jobs.store';
 import { PeekService } from '../../core/files/peek.service';
@@ -25,6 +26,7 @@ const SERVICE_LABELS: Readonly<Record<JobService, string>> = {
   ocr: 'OCR & captions',
   transcription: 'Transcription',
   summarize: 'Summaries',
+  tree: 'Section trees',
   preview: 'Previews',
 };
 const STATE_SEVERITY: Readonly<Record<JobState, 'info' | 'warn' | 'success' | 'danger'>> = {
@@ -110,6 +112,16 @@ export class JobsPage {
    */
   protected severity(state: JobState): 'info' | 'warn' | 'success' | 'danger' {
     return STATE_SEVERITY[state];
+  }
+
+  /**
+   * Readable reason of a failed task.
+   *
+   * @param task - Task.
+   * @returns Reason, or null when the task did not fail.
+   */
+  protected failure(task: JobTask): string | null {
+    return jobFailure(task);
   }
 
   /**

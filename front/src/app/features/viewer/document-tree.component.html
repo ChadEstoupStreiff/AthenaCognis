@@ -1,0 +1,222 @@
+<section class="block">
+  <div class="tree-head">
+    <h3>Section tree</h3>
+    @if (record.value(); as stored) {
+      <small class="muted"
+        >{{ stats().sections }} sections · depth {{ stats().depth }} · {{ stored.date }}</small
+      >
+    }
+  </div>
+
+  @if (running()) {
+    <p class="status"><i class="pi pi-spin pi-spinner" aria-hidden="true"></i> Building tree…</p>
+  } @else if (failure(); as reason) {
+    <p class="status error">
+      <i class="pi pi-exclamation-triangle" aria-hidden="true"></i> {{ reason }}
+    </p>
+  }
+
+  @if (formOpen()) {
+    <form class="tree-form" (ngSubmit)="generate()">
+      <div class="field-row">
+        <div class="field">
+          <div class="field-head">
+            <span>Max depth</span>
+            <label class="auto"
+              ><p-toggleswitch
+                name="maxDepthAuto"
+                [ngModel]="form().auto_depth"
+                (ngModelChange)="patchForm({ auto_depth: $event })"
+              />
+              Auto</label
+            >
+          </div>
+          @if (form().auto_depth) {
+            <span class="auto-hint" [title]="'Splits until each section is one idea (max 5 levels)'"
+              >AI decides by ideas</span
+            >
+          } @else {
+            <p-inputnumber
+              name="maxDepth"
+              [ngModel]="form().max_depth"
+              (ngModelChange)="patchForm({ max_depth: $event ?? limits.max_depth.min })"
+              [min]="limits.max_depth.min"
+              [max]="limits.max_depth.max"
+              [showButtons]="true"
+              size="small"
+            />
+          }
+        </div>
+        <div class="field">
+          <div class="field-head">
+            <span>Sections per level</span>
+            <label class="auto"
+              ><p-toggleswitch
+                name="maxSectionsAuto"
+                [ngModel]="form().auto_sections"
+                (ngModelChange)="patchForm({ auto_sections: $event })"
+              />
+              Auto</label
+            >
+          </div>
+          @if (form().auto_sections) {
+            <span class="auto-hint" [title]="'One section per distinct idea (max 10)'"
+              >AI decides by ideas</span
+            >
+          } @else {
+            <p-inputnumber
+              name="maxSections"
+              [ngModel]="form().max_sections"
+              (ngModelChange)="patchForm({ max_sections: $event ?? limits.max_sections.min })"
+              [min]="limits.max_sections.min"
+              [max]="limits.max_sections.max"
+              [showButtons]="true"
+              size="small"
+            />
+          }
+        </div>
+      </div>
+      <label class="field"
+        >Stop splitting below (words)
+        <p-inputnumber
+          name="minWords"
+          [ngModel]="form().min_words"
+          (ngModelChange)="patchForm({ min_words: $event ?? limits.min_words.min })"
+          [min]="limits.min_words.min"
+          [max]="limits.min_words.max"
+          [step]="50"
+          [showButtons]="true"
+          size="small"
+        />
+      </label>
+      <label class="field"
+        >Focus (optional)
+        <input
+          pInputText
+          name="focus"
+          pSize="small"
+          [maxlength]="limits.focusChars"
+          placeholder="e.g. methodology and evaluation"
+          [ngModel]="form().focus"
+          (ngModelChange)="patchForm({ focus: $event })"
+        />
+      </label>
+      <div class="row-actions">
+        <p-button
+          type="submit"
+          [label]="record.value() ? 'Regenerate tree' : 'Generate tree'"
+          icon="pi pi-sitemap"
+          size="small"
+          [disabled]="running()"
+        />
+        @if (record.value()) {
+          <p-button label="Cancel" size="small" [text]="true" (onClick)="formOpen.set(false)" />
+        }
+      </div>
+    </form>
+  } @else if (record.value()) {
+    <div class="row-actions">
+      <p-button
+        label="Regenerate…"
+        icon="pi pi-sitemap"
+        size="small"
+        [outlined]="true"
+        [disabled]="running()"
+        (onClick)="formOpen.set(true)"
+      />
+      <p-button
+        label="Export JSON"
+        icon="pi pi-download"
+        size="small"
+        [text]="true"
+        (onClick)="exportJson()"
+      />
+    </div>
+  }
+</section>
+
+@if (record.value(); as stored) {
+  <section class="block">
+    <div class="tree-head">
+      <h3>Outline</h3>
+      <p-button
+        [label]="allExpanded() ? 'Collapse all' : 'Expand all'"
+        [icon]="allExpanded() ? 'pi pi-angle-double-up' : 'pi pi-angle-double-down'"
+        size="small"
+        [text]="true"
+        (onClick)="allExpanded() ? collapseAll() : expandAll()"
+      />
+    </div>
+    @if (stale()) {
+      <p class="status error">
+        <i class="pi pi-exclamation-triangle" aria-hidden="true"></i> Document text changed since
+        the tree was built ({{ stored.block_count }} → {{ blocks.value()?.block_count }} blocks):
+        regenerate the tree.
+      </p>
+    }
+    <ol class="nodes">
+      @for (section of stored.tree; track section.section_id) {
+        <ng-container *ngTemplateOutlet="node; context: { $implicit: section, depth: 0 }" />
+      } @empty {
+        <p class="empty">The AI found no sections.</p>
+      }
+    </ol>
+  </section>
+} @else if (!record.isLoading() && !running() && !formOpen()) {
+  <p class="empty">No section tree yet.</p>
+}
+
+<ng-template #node let-section let-depth="depth">
+  <li class="node" [class]="depthClass(depth)" [class.open]="isOpen(section)">
+    <button
+      type="button"
+      class="node-head"
+      [attr.aria-expanded]="isOpen(section)"
+      (click)="toggle(section)"
+    >
+      <i
+        class="pi chevron"
+        [class.pi-chevron-down]="isOpen(section)"
+        [class.pi-chevron-right]="!isOpen(section)"
+        aria-hidden="true"
+      ></i>
+      <span class="node-text">
+        <span class="node-title">
+          <span class="node-id">{{ section.section_id }}</span> {{ section.Title }}
+        </span>
+        <span class="node-desc" [class.clamped]="!isOpen(section)">{{ section.Description }}</span>
+        <span class="node-meta">
+          {{ rangeLabel(section.paper_section_range) }}
+          @if (section.sections.length > 0) {
+            · {{ section.sections.length }} subsections
+          } @else {
+            · <i class="pi pi-file" aria-hidden="true"></i> text
+          }
+        </span>
+      </span>
+    </button>
+    @if (isOpen(section)) {
+      <div class="node-body">
+        @if (section.sections.length > 0) {
+          <ol class="nodes">
+            @for (child of section.sections; track child.section_id) {
+              <ng-container
+                *ngTemplateOutlet="node; context: { $implicit: child, depth: depth + 1 }"
+              />
+            }
+          </ol>
+        } @else if (blocks.value()) {
+          <div class="leaf-text">
+            @for (paragraph of leafBlocks(section); track $index) {
+              <p>{{ paragraph }}</p>
+            }
+          </div>
+        } @else if (blocks.error()) {
+          <p class="status error">Could not load the document text.</p>
+        } @else {
+          <p class="status"><i class="pi pi-spin pi-spinner" aria-hidden="true"></i> Loading…</p>
+        }
+      </div>
+    }
+  </li>
+</ng-template>

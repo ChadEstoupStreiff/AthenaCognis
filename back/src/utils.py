@@ -2,6 +2,7 @@ import json
 import logging
 import mimetypes
 import os
+from typing import Optional
 
 import docx
 from db import (
@@ -16,6 +17,7 @@ from db import (
     get_db,
 )
 from PyPDF2 import PdfReader
+from sqlalchemy.orm import Session
 
 
 def guess_mime(file_name: str) -> str:
@@ -45,6 +47,80 @@ def guess_mime(file_name: str) -> str:
     return mime.strip() if mime is not None else "application/octet-stream"
 
 
+def extract_text(file: str, mime: str, db: Session, force_read: bool = False) -> Optional[str]:
+    """
+    Extract the raw text of a file (OCR, transcription, text, PDF or Word)
+
+    Args:
+        file (str): file path
+        mime (str): file MIME type
+        db (Session): session reading OCR and transcription rows
+        force_read (bool): read unknown types as text
+    Returns:
+        Optional[str]: text, None when unreadable
+    """
+    content: Optional[str] = None
+    # MARK: Image
+    if mime.startswith("image/"):
+        result = db.query(OCR).filter(OCR.file == file).first()
+        if result is not None:
+            ocr = "\n".join([item[1][0] for item in json.loads(result.ocr)])
+            blip = result.blip
+            if ocr and blip:
+                content = f"CAPTION: {blip}\nOCR: {ocr}"
+
+    # MARK: Audio and Video
+    elif mime.startswith("audio/") or mime.startswith("video/"):
+        logging.info("SUMMARY >> Attempting to get transcription.")
+        transcription = (
+            db.query(Transcription).filter(Transcription.file == file).first()
+        )
+        if transcription is not None:
+            transcription = transcription.transcription
+            if transcription:
+                content = f"Transcription: {transcription}"
+
+    # MARK: Text and JSON
+    elif mime.startswith("text") or mime.endswith("json"):
+        logging.info("SUMMARY >> Attempting to read text content.")
+        with open(file, "r", encoding="utf-8", errors="ignore") as f:
+            content = f.read()
+
+    # MARK: PDF
+    elif mime == "application/pdf":
+        logging.info("SUMMARY >> Attempting to read PDF content.")
+        content = "\n".join(
+            page.extract_text() or "" for page in PdfReader(file).pages
+        )
+
+    # MARK: Word
+    elif mime in (
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ):
+        logging.info("SUMMARY >> Attempting to read DOCX content.")
+        doc = docx.Document(file)
+        content = "\n".join(p.text for p in doc.paragraphs)
+
+    elif force_read:
+        with open(file, "r") as f:
+            content = f.read()
+    return content
+
+
+def read_text(file: str) -> Optional[str]:
+    """
+    Read the raw text of a file, without metadata header
+
+    Args:
+        file (str): file path
+    Returns:
+        Optional[str]: text, None when unreadable
+    """
+    with get_db() as db:
+        return extract_text(file, guess_mime(file), db)
+
+
 def read_content(
     file: str,
     force_read: bool = False,
@@ -66,51 +142,7 @@ def read_content(
     db = get_db()
     try:
         mime = guess_mime(file)
-        # MARK: Image
-        if mime.startswith("image/"):
-            result = db.query(OCR).filter(OCR.file == file).first()
-            if result is not None:
-                ocr = "\n".join([item[1][0] for item in json.loads(result.ocr)])
-                blip = result.blip
-                if ocr and blip:
-                    content = f"CAPTION: {blip}\nOCR: {ocr}"
-
-        # MARK: Audio and Video
-        elif mime.startswith("audio/") or mime.startswith("video/"):
-            logging.info("SUMMARY >> Attempting to get transcription.")
-            transcription = (
-                db.query(Transcription).filter(Transcription.file == file).first()
-            )
-            if transcription is not None:
-                transcription = transcription.transcription
-                if transcription:
-                    content = f"Transcription: {transcription}"
-
-        # MARK: Text and JSON
-        elif mime.startswith("text") or mime.endswith("json"):
-            logging.info("SUMMARY >> Attempting to read text content.")
-            with open(file, "r", encoding="utf-8", errors="ignore") as f:
-                content = f.read()
-
-        # MARK: PDF
-        elif mime == "application/pdf":
-            logging.info("SUMMARY >> Attempting to read PDF content.")
-            content = "\n".join(
-                page.extract_text() or "" for page in PdfReader(file).pages
-            )
-
-        # MARK: Word
-        elif mime in (
-            "application/msword",
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        ):
-            logging.info("SUMMARY >> Attempting to read DOCX content.")
-            doc = docx.Document(file)
-            content = "\n".join(p.text for p in doc.paragraphs)
-
-        elif force_read:
-            with open(file, "r") as f:
-                content = f.read()
+        content = extract_text(file, mime, db, force_read)
 
         if include_projects:
             projects = (

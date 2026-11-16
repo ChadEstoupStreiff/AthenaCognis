@@ -52,6 +52,7 @@ default_settings = {
     "telemetry_uuid": "",
     "telemetry_last_sent": "",
     "chat_user_description": "",
+    "ai_style_instruction": "Don't be too verbose: no preamble, no filler, no repetition. Answer only what is asked.",
     "research_subject": "",
     "research_type": "llama",
     "research_model": "llama3.2:1b",

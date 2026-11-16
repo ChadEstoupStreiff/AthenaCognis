@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, resource } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { SelectModule } from 'primeng/select';
+import { TextareaModule } from 'primeng/textarea';
 import { ApiClient, backendUrl } from '../../../core/api/api-client';
 import { SettingsStore } from '../../../core/settings/settings.store';
 import { AI_TASKS, type AiTask, modelsFor, type ProviderOption, providersFor } from '../ai-routing';
@@ -24,7 +25,7 @@ interface RoutingRow {
 /** Which provider and model each AI task uses. */
 @Component({
   selector: 'ac-ai-section',
-  imports: [FormsModule, SelectModule],
+  imports: [FormsModule, SelectModule, TextareaModule],
   template: `
     <section class="group" id="ai">
       <h2>AI routing</h2>
@@ -53,7 +54,7 @@ interface RoutingRow {
               <p-select
                 [options]="row.models"
                 [ngModel]="row.model"
-                (ngModelChange)="save(row.task.key + '_model', $event, true)"
+                (ngModelChange)="setModel(row, $event)"
                 [filter]="row.models.length > 8"
                 [editable]="row.provider === 'llama'"
                 appendTo="body"
@@ -66,6 +67,23 @@ interface RoutingRow {
             }
           </div>
         }
+      </div>
+      <div class="row stacked">
+        <div class="label">
+          <strong>Answer style</strong
+          ><small class="ac-muted"
+            >Instruction added to every text and assistant request (not OCR, captions or
+            transcription, which must stay verbatim). Empty = no instruction.</small
+          >
+        </div>
+        <textarea
+          pTextarea
+          [rows]="2"
+          [autoResize]="true"
+          [ngModel]="text('ai_style_instruction')"
+          (ngModelChange)="save('ai_style_instruction', $event)"
+          aria-label="Answer style instruction"
+        ></textarea>
       </div>
     </section>
   `,
@@ -106,6 +124,19 @@ export class AiSectionComponent extends SettingsSection {
   }
 
   /**
+   * Change model; an inherited routing becomes the task's own.
+   *
+   * @param row - Routing row.
+   * @param model - Model.
+   */
+  protected setModel(row: RoutingRow, model: string): void {
+    if (this.text(`${row.task.key}_type`) === '') {
+      this.save(`${row.task.key}_type`, row.provider, true);
+    }
+    this.save(`${row.task.key}_model`, model, true);
+  }
+
+  /**
    * Build a row (the current model stays listed even if unknown).
    *
    * @param task - Task.
@@ -113,8 +144,10 @@ export class AiSectionComponent extends SettingsSection {
    * @returns Row.
    */
   private rowOf(task: AiTask, installed: readonly string[]): RoutingRow {
-    const provider = this.text(`${task.key}_type`);
-    const model = this.text(`${task.key}_model`);
+    const own = this.text(`${task.key}_type`);
+    const source = own === '' && task.fallbackKey !== undefined ? task.fallbackKey : task.key;
+    const provider = this.text(`${source}_type`);
+    const model = this.text(`${source}_model`);
     const list = modelsFor(task, provider, installed, this.models.catalog());
     const models =
       list.length === 0 || list.includes(model) || model === '' ? [...list] : [model, ...list];

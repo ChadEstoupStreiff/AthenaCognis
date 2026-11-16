@@ -7,6 +7,13 @@ from typing import Dict, List, Set
 
 import requests
 from bs4 import BeautifulSoup
+from tools.provider_errors import provider_error
+from tools.style_instruction import (
+    DEFAULT_INSTRUCTION,
+    SETTING_KEY,
+    apply_to_messages,
+    apply_to_prompt,
+)
 from views.settings import get_setting
 
 
@@ -113,6 +120,16 @@ def provider_supports_vision(ai_type: str, model: str) -> bool:
     return any(pattern in model_lower for pattern in _VISION_MODEL_PATTERNS.get(ai_type, ()))
 
 
+def style_instruction() -> str:
+    """
+    Answer-style instruction of the settings (empty = disabled)
+
+    Returns:
+        str: instruction
+    """
+    return str(get_setting(SETTING_KEY, DEFAULT_INSTRUCTION) or "")
+
+
 def request_llm(
     setting_prefix: str,
     prompt: str,
@@ -128,6 +145,7 @@ def request_llm(
 
     if input_text is not None:
         prompt = prompt.replace("{input}", input_text)
+    prompt = apply_to_prompt(style_instruction(), prompt)
 
     # LLAMA
     if ai_type == "llama":
@@ -147,7 +165,7 @@ def request_llm(
             timeout=3600,
         ) as response:
             if response.status_code != 200:
-                raise Exception(f"LLM error {response.status_code}: {response.text}")
+                raise provider_error("Ollama", response.status_code, response.text)
 
             output = ""
             for line in response.iter_lines():
@@ -180,9 +198,7 @@ def request_llm(
         url = "https://api.mistral.ai/v1/chat/completions"
         with requests.post(url, headers=headers, json=payload, stream=True, timeout=3600) as response:
             if response.status_code != 200:
-                raise Exception(
-                    f"Mistral error {response.status_code}: {response.text}"
-                )
+                raise provider_error("Mistral", response.status_code, response.text)
 
             output = ""
             for line in response.iter_lines():
@@ -218,7 +234,7 @@ def request_llm(
 
         with requests.post(url, headers=headers, json=payload, stream=True, timeout=3600) as response:
             if response.status_code != 200:
-                raise Exception(f"{ai_type} error {response.status_code}: {response.text}")
+                raise provider_error(ai_type, response.status_code, response.text)
 
             output = ""
             for line in response.iter_lines():
@@ -245,7 +261,7 @@ def request_llm(
         output = ""
         with requests.post(url, json=payload, stream=True, timeout=3600) as response:
             if response.status_code != 200:
-                raise Exception(f"Gemini error {response.status_code}: {response.text}")
+                raise provider_error("Gemini", response.status_code, response.text)
 
             for line in response.iter_lines():
                 if line:
@@ -279,7 +295,7 @@ def request_llm(
         url = "https://api.anthropic.com/v1/messages"
         with requests.post(url, headers=headers, json=payload, stream=True, timeout=3600) as response:
             if response.status_code != 200:
-                raise Exception(f"Claude error {response.status_code}: {response.text}")
+                raise provider_error("Claude", response.status_code, response.text)
 
             output = ""
             for line in response.iter_lines():
@@ -320,6 +336,7 @@ def request_chat_llm(
     ai_type = get_setting(f"{setting_prefix}_type")
     model = get_setting(f"{setting_prefix}_model")
     timeout = get_setting("chat_llm_timeout_seconds", 300)
+    messages = apply_to_messages(style_instruction(), messages)
 
     def cancelled():
         return cancel_event is not None and cancel_event.is_set()
@@ -356,7 +373,7 @@ def request_chat_llm(
             timeout=timeout,
         ) as response:
             if response.status_code != 200:
-                raise Exception(f"LLM error {response.status_code}: {response.text}")
+                raise provider_error("Ollama", response.status_code, response.text)
 
             output = ""
             for line in response.iter_lines():
@@ -409,7 +426,7 @@ def request_chat_llm(
         payload = {"model": model, "messages": api_messages, "stream": True}
         with requests.post(url, headers=headers, json=payload, stream=True, timeout=timeout) as response:
             if response.status_code != 200:
-                raise Exception(f"{ai_type} error {response.status_code}: {response.text}")
+                raise provider_error(ai_type, response.status_code, response.text)
 
             output = ""
             for line in response.iter_lines():
@@ -460,7 +477,7 @@ def request_chat_llm(
         output = ""
         with requests.post(url, json=payload, stream=True, timeout=timeout) as response:
             if response.status_code != 200:
-                raise Exception(f"Gemini error {response.status_code}: {response.text}")
+                raise provider_error("Gemini", response.status_code, response.text)
 
             for line in response.iter_lines():
                 if cancelled():
@@ -520,7 +537,7 @@ def request_chat_llm(
         url = "https://api.anthropic.com/v1/messages"
         with requests.post(url, headers=headers, json=payload, stream=True, timeout=timeout) as response:
             if response.status_code != 200:
-                raise Exception(f"Claude error {response.status_code}: {response.text}")
+                raise provider_error("Claude", response.status_code, response.text)
 
             output = ""
             for line in response.iter_lines():
@@ -576,7 +593,7 @@ def request_vision_llm(
             timeout=3600,
         )
         if response.status_code != 200:
-            raise Exception(f"Ollama vision error {response.status_code}: {response.text}")
+            raise provider_error("Ollama vision", response.status_code, response.text)
         return ai_type, model, response.json()["response"]
 
     elif ai_type == "Mistral":
@@ -602,7 +619,7 @@ def request_vision_llm(
             timeout=3600,
         )
         if response.status_code != 200:
-            raise Exception(f"Mistral vision error {response.status_code}: {response.text}")
+            raise provider_error("Mistral vision", response.status_code, response.text)
         return ai_type, model, response.json()["choices"][0]["message"]["content"]
 
     elif ai_type == "ChatGPT":
@@ -628,7 +645,7 @@ def request_vision_llm(
             timeout=3600,
         )
         if response.status_code != 200:
-            raise Exception(f"OpenAI vision error {response.status_code}: {response.text}")
+            raise provider_error("OpenAI vision", response.status_code, response.text)
         return ai_type, model, response.json()["choices"][0]["message"]["content"]
 
     elif ai_type == "Gemini":
@@ -644,7 +661,7 @@ def request_vision_llm(
         }
         response = requests.post(url, json=payload, timeout=3600)
         if response.status_code != 200:
-            raise Exception(f"Gemini vision error {response.status_code}: {response.text}")
+            raise provider_error("Gemini vision", response.status_code, response.text)
         return ai_type, model, response.json()["candidates"][0]["content"]["parts"][0]["text"]
 
     # Claude (Anthropic)
@@ -673,7 +690,7 @@ def request_vision_llm(
             timeout=3600,
         )
         if response.status_code != 200:
-            raise Exception(f"Claude vision error {response.status_code}: {response.text}")
+            raise provider_error("Claude vision", response.status_code, response.text)
         return ai_type, model, response.json()["content"][0]["text"]
 
     else:
@@ -702,7 +719,7 @@ def request_transcription(
                 timeout=3600,
             )
         if response.status_code != 200:
-            raise Exception(f"OpenAI transcription error {response.status_code}: {response.text}")
+            raise provider_error("OpenAI transcription", response.status_code, response.text)
         return transcription_type, model, response.json()["text"]
 
     elif transcription_type == "groq":
@@ -716,7 +733,7 @@ def request_transcription(
                 timeout=3600,
             )
         if response.status_code != 200:
-            raise Exception(f"Groq transcription error {response.status_code}: {response.text}")
+            raise provider_error("Groq transcription", response.status_code, response.text)
         return transcription_type, model, response.json()["text"]
 
     else:

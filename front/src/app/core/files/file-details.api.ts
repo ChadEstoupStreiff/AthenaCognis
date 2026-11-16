@@ -3,6 +3,9 @@ import type {
   BackendLinkTuple,
   BackendProject,
   ContactSummary,
+  DocumentTreeParams,
+  DocumentTreeRecord,
+  DocumentTreeBlocks,
   FileLink,
   FileNote,
   JobService,
@@ -19,7 +22,7 @@ import { ApiClient, backendUrl } from '../api/api-client';
 import { DataSync } from '../state/data-sync.service';
 
 /** Services whose results can be fetched per file. */
-type ResultService = 'ocr' | 'transcription' | 'summarize';
+type ResultService = 'ocr' | 'transcription' | 'summarize' | 'tree';
 
 /** Per-file details: relations, pins, notes, links, AI results and job history. */
 @Injectable({ providedIn: 'root' })
@@ -211,6 +214,37 @@ export class FileDetailsApi {
    */
   transcription(path: string): Promise<TranscriptionRecord | null> {
     return this.result<TranscriptionRecord>('transcription', path);
+  }
+
+  /**
+   * Section tree of a document.
+   *
+   * @param path - Shared path.
+   * @returns The record, or `null`.
+   */
+  tree(path: string): Promise<DocumentTreeRecord | null> {
+    return this.result<DocumentTreeRecord>('tree', path);
+  }
+
+  /**
+   * Queue a section tree generation.
+   *
+   * @param path - Shared path.
+   * @param params - Tree parameters.
+   */
+  async askTree(path: string, params: DocumentTreeParams): Promise<void> {
+    await this.api.post(backendUrl(`/tree/ask/${encodeFileSegment(path)}`), params);
+    this.sync.invalidate('jobs');
+  }
+
+  /**
+   * Every block of a document (the targets of the tree ranges).
+   *
+   * @param path - Shared path.
+   * @returns The blocks.
+   */
+  treeBlocks(path: string): Promise<DocumentTreeBlocks> {
+    return this.api.get<DocumentTreeBlocks>(backendUrl(`/tree/blocks/${encodeFileSegment(path)}`));
   }
 
   /**

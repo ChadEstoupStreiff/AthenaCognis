@@ -18,6 +18,7 @@ from controllers.NoteManager import NoteManager
 from controllers.OCRManager import OCRManager
 from controllers.PreviewManager import PreviewManager
 from controllers.SummarizeManager import SummarizeManager
+from controllers.DocumentTreeManager import DocumentTreeManager
 from controllers.TranscriptionManager import TranscriptionManager
 from db import get_db
 from db.models import Note, ProjectFile, TagFile, Link, StockPile, Contact, ContactFile
@@ -233,6 +234,7 @@ async def delete_file(file: str):
             raise FileNotFoundError(f"File {file} does not exist.")
 
         SummarizeManager.delete(file_path)
+        DocumentTreeManager.delete(file_path)
         OCRManager.delete(file_path)
         TranscriptionManager.delete(file_path)
         PreviewManager.delete(file_path)
@@ -301,6 +303,7 @@ async def move_file(
             )
 
         SummarizeManager.move(file, new_file_path)
+        DocumentTreeManager.move(file, new_file_path)
         OCRManager.move(file, new_file_path)
         TranscriptionManager.move(file, new_file_path)
         PreviewManager.move(file, new_file_path)

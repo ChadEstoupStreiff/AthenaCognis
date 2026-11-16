@@ -125,3 +125,15 @@ p-table {
   flex-direction: column;
   min-height: 0;
 }
+
+.error-cell {
+  min-width: 220px;
+  max-width: 520px;
+}
+
+.error {
+  color: var(--p-red-500);
+  font-size: 12px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

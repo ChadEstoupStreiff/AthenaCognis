@@ -42,7 +42,7 @@ const SECTIONS: readonly SectionEntry[] = [
     label: 'AI routing',
     icon: 'pi pi-sitemap',
     keywords:
-      'model provider assistant rewrite link summary caption ocr transcription whisper paper search research',
+      'model provider assistant rewrite link summary caption ocr transcription whisper paper search research answer style verbose concise instruction',
   },
   {
     id: 'providers',

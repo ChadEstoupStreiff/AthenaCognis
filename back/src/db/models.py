@@ -3,7 +3,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
-from sqlalchemy import TEXT, Column, DateTime, Float, ForeignKey, String
+from sqlalchemy import TEXT, Column, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -87,6 +87,28 @@ class Summary(Base):
 
 class SummaryTask(JobTask):
     __tablename__ = "SummaryTask"
+
+
+class DocumentTree(Base):
+    """Hierarchical section tree of a document (JSON, block ranges only)."""
+
+    # Lowercase: mixed-case names + lower_case_table_names=2 on a macOS bind mount
+    # make MariaDB read a stale lowercase .frm at creation (error 1033).
+    __tablename__ = "document_tree"
+
+    file: Mapped[str] = mapped_column(String(512), primary_key=True, index=True)
+    date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    params: Mapped[str] = mapped_column(TEXT, nullable=False)
+    block_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    tree: Mapped[str] = mapped_column(TEXT, nullable=False)
+
+
+class DocumentTreeTask(JobTask):
+    """Tree generation run; keeps the requested parameters."""
+
+    __tablename__ = "document_tree_task"
+
+    params: Mapped[Optional[str]] = mapped_column(TEXT, nullable=True)
 
 
 class Transcription(Base):

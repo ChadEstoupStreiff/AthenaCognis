@@ -32,6 +32,7 @@ def session_factory(monkeypatch: pytest.MonkeyPatch) -> Iterator[SessionFactory]
         "controllers.OCRManager",
         "controllers.TranscriptionManager",
         "controllers.SummarizeManager",
+        "controllers.DocumentTreeManager",
     ):
         monkeypatch.setattr(f"{module}.get_db", factory)
     yield factory

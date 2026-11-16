@@ -10,6 +10,11 @@ import {
 const task = (key: string): AiTask => AI_TASKS.find((item) => item.key === key)!;
 
 describe('AI routing', () => {
+  it('routes section trees through summaries until set', () => {
+    expect(task('tree').fallbackKey).toBe('summarization');
+    expect(task('tree').kind).toBe('text');
+  });
+
   it('offers local engines for vision tasks', () => {
     expect(providersFor(task('ocr'))[0]).toEqual({ value: 'paddle', label: 'Local PaddleOCR' });
     expect(providersFor(task('chat')).map((provider) => provider.value)).toContain('Claude');

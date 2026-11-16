@@ -337,12 +337,26 @@ class JobManager:
     # MARK: Queue
 
     @classmethod
-    def add_file_to_queue(cls, file: str) -> None:
+    def new_task(cls, file: str, payload: Optional[str]) -> JobTask:
+        """
+        Create the pending task row of a file
+
+        Args:
+            file (str): file path
+            payload (Optional[str]): job-specific data, ignored by default
+        Returns:
+            JobTask: pending task
+        """
+        return cls.task_model(file=file, added=datetime.now(), state=TaskStateEnum.PENDING)
+
+    @classmethod
+    def add_file_to_queue(cls, file: str, payload: Optional[str] = None) -> None:
         """
         Create a pending task for a file and queue it
 
         Args:
             file (str): file path
+            payload (Optional[str]): job-specific data stored on the task
         Returns:
             None
         Raises:
@@ -351,11 +365,7 @@ class JobManager:
         with get_db() as db:
             if cls.open_task_exists(db, file):
                 raise JobAlreadyQueuedError(f"{file} is already in the {cls.name} queue.")
-            db.add(
-                cls.task_model(
-                    file=file, added=datetime.now(), state=TaskStateEnum.PENDING
-                )
-            )
+            db.add(cls.new_task(file, payload))
             db.commit()
         cls.queue.put(file)
 

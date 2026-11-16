@@ -1,0 +1,187 @@
+.tree-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.muted {
+  color: var(--ac-muted);
+  font-size: 12px;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--ac-muted);
+
+  &.error {
+    color: var(--p-red-500);
+  }
+}
+
+.tree-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  p-inputnumber {
+    width: 100%;
+  }
+}
+
+.field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.auto {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  cursor: pointer;
+
+  p-toggleswitch {
+    transform: scale(0.8);
+  }
+}
+
+.auto-hint {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px dashed var(--ac-panel-border);
+  border-radius: 6px;
+  color: var(--ac-muted);
+  font-size: 12px;
+}
+
+.nodes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.node {
+  --bar: #8b5cf6;
+
+  border-left: 3px solid color-mix(in srgb, var(--bar) 35%, transparent);
+  border-radius: 4px;
+  transition: border-color 120ms ease;
+
+  &.open {
+    border-left-color: var(--bar);
+  }
+
+  &.depth-1 {
+    --bar: #3b82f6;
+  }
+
+  &.depth-2 {
+    --bar: #14b8a6;
+  }
+
+  &.depth-3 {
+    --bar: #f59e0b;
+  }
+
+  &.depth-4 {
+    --bar: #f43f5e;
+  }
+}
+
+.node-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 0 6px 6px 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: color-mix(in srgb, var(--bar) 8%, transparent);
+  }
+
+  .chevron {
+    margin-top: 3px;
+    font-size: 11px;
+    color: var(--bar);
+  }
+}
+
+.open > .node-head {
+  background: color-mix(in srgb, var(--bar) 10%, transparent);
+}
+
+.node-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.node-title {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.node-id {
+  margin-right: 2px;
+  color: var(--bar);
+  font-variant-numeric: tabular-nums;
+}
+
+.node-desc {
+  font-size: 13px;
+  line-height: 1.45;
+
+  &.clamped {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+  }
+}
+
+.node-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ac-muted);
+  font-size: 11.5px;
+
+  .pi {
+    font-size: 11px;
+  }
+}
+
+.node-body {
+  padding: 6px 0 4px 12px;
+}
+
+.leaf-text {
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+
+  p {
+    margin: 0 0 10px;
+  }
+}
