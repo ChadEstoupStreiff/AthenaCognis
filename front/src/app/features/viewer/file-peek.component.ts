@@ -34,7 +34,7 @@ type PeekTab = 'overview' | 'ai' | 'links' | 'notes';
 
 const TABS: readonly PeekTab[] = ['overview', 'ai', 'links', 'notes'];
 
-/** File side panel (click / Space on any file): preview, summary, projects, tags, people, AI, links, note. */
+/** Read-only file side panel (click / Space on any file): preview, summary, projects, tags, people, AI, links, note; editing happens in the viewer. */
 @Component({
   selector: 'ac-file-peek',
   imports: [
@@ -90,13 +90,6 @@ export class FilePeekComponent {
   protected readonly kind = computed(() =>
     fileKindOf(this.peek.path() ?? '', this.metadata.value()?.mime_type),
   );
-  protected readonly pinned = resource({
-    params: () => {
-      const path = this.peek.path();
-      return path === null ? undefined : { path, version: this.sync.version('pinned')() };
-    },
-    loader: ({ params }) => this.details.isPinned(params.path),
-  });
   protected readonly ocrRecord = resource({
     params: () => {
       const path = this.peek.path();
@@ -140,14 +133,6 @@ export class FilePeekComponent {
     const path = this.peek.path();
     if (path !== null) {
       triggerDownload(this.files.contentUrl(path, 'attachment'));
-    }
-  }
-
-  /** Pin or unpin. */
-  protected async togglePin(): Promise<void> {
-    const path = this.peek.path();
-    if (path !== null) {
-      await this.details.setPinned(path, this.pinned.value() !== true);
     }
   }
 }

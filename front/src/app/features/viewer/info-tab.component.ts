@@ -56,6 +56,8 @@ export class InfoTabComponent {
 
   /** Shared path. */
   readonly path = input.required<string>();
+  /** Show data only: no inputs or actions (side panel). */
+  readonly readonly = input(false);
   /** Metadata. */
   readonly metadata = input<FileMetadata | null>(null);
   /** Open the viewer on the new location after a move (off in the side panel). */
@@ -63,7 +65,7 @@ export class InfoTabComponent {
   /** New path after a move. */
   readonly moved = output<string>();
 
-  private readonly parts = computed(() => parseSharedPath(this.path()));
+  protected readonly parts = computed(() => parseSharedPath(this.path()));
   protected readonly name = linkedSignal(() => this.parts()?.name ?? '');
   protected readonly date = linkedSignal(() => parseLocalDate(this.parts()?.date ?? ''));
   protected readonly folder = linkedSignal(() => this.parts()?.folder ?? 'uploads');

@@ -75,6 +75,8 @@ export class LinksTabComponent {
 
   /** Shared path. */
   readonly path = input.required<string>();
+  /** Show data only: no inputs or actions (side panel). */
+  readonly readonly = input(false);
 
   protected readonly fullTree = signal(false);
   protected readonly pickerMode = signal<'link' | 'suggest' | null>(null);

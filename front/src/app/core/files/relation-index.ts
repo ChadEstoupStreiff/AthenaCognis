@@ -1,18 +1,35 @@
 import { inject, Injectable } from '@angular/core';
-import type { BackendProject, FileRelations, RelationsByPath, Tag } from '@domain/contracts';
+import type {
+  BackendProject,
+  ContactDetail,
+  ContactSummary,
+  FileContact,
+  FileRelations,
+  RelationsByPath,
+  Tag,
+} from '@domain/contracts';
 import { ApiClient, backendUrl } from '../api/api-client';
 import { hasStatus } from '../api/api-error';
+import { DataSync } from '../state/data-sync.service';
 import { mapWithConcurrency } from '../util/concurrency';
 
 const INDEX_TTL_MS = 20_000;
 const CONCURRENCY = 6;
 const NOT_FOUND = 404;
 
-/** Inverted index file → projects/tags/pinned. */
+/** Inverted index file → projects/tags/contacts/pinned. */
 interface Index {
   readonly projects: ReadonlyMap<string, readonly string[]>;
   readonly tags: ReadonlyMap<string, readonly string[]>;
+  readonly contacts: ReadonlyMap<string, readonly FileContact[]>;
   readonly pinned: ReadonlySet<string>;
+}
+
+/** Cached index with what it was built from. */
+interface CachedIndex {
+  readonly at: number;
+  readonly contactsVersion: number;
+  readonly index: Promise<Index>;
 }
 
 /**
@@ -34,13 +51,30 @@ export function invertRelations(
 }
 
 /**
- * Projects, tags and pins of many files without one request per file: the lists of every
- * project and tag are inverted once (short cache, since the Streamlit front writes too).
+ * Invert contacts and their files into `file → contacts`.
+ *
+ * @param contacts - Contacts with their linked files.
+ * @returns Map from file to contacts.
+ */
+export function invertContacts(contacts: readonly ContactDetail[]): Map<string, FileContact[]> {
+  const byFile = new Map<string, FileContact[]>();
+  for (const { id, name, files } of contacts) {
+    for (const file of files) {
+      byFile.set(file, [...(byFile.get(file) ?? []), { id, name }]);
+    }
+  }
+  return byFile;
+}
+
+/**
+ * Projects, tags, people and pins of many files without one request per file: the lists of every
+ * project, tag and contact are inverted once (short cache, since the Streamlit front writes too).
  */
 @Injectable({ providedIn: 'root' })
 export class RelationIndex {
   private readonly api = inject(ApiClient);
-  private cached: { readonly at: number; readonly index: Promise<Index> } | null = null;
+  private readonly sync = inject(DataSync);
+  private cached: CachedIndex | null = null;
 
   /**
    * Relations of files.
@@ -55,6 +89,7 @@ export class RelationIndex {
       result[path] = {
         projects: index.projects.get(path) ?? [],
         tags: index.tags.get(path) ?? [],
+        contacts: index.contacts.get(path) ?? [],
         pinned: index.pinned.has(path),
       };
     }
@@ -67,15 +102,20 @@ export class RelationIndex {
   }
 
   /**
-   * Cached index, rebuilt when stale.
+   * Cached index, rebuilt when stale or after a contact write.
    *
    * @returns The index.
    */
   private index(): Promise<Index> {
     const now = Date.now();
-    if (this.cached === null || now - this.cached.at > INDEX_TTL_MS) {
+    const contactsVersion = this.sync.version('contacts')();
+    if (
+      this.cached === null ||
+      now - this.cached.at > INDEX_TTL_MS ||
+      this.cached.contactsVersion !== contactsVersion
+    ) {
       const index = this.build();
-      this.cached = { at: now, index };
+      this.cached = { at: now, contactsVersion, index };
       index.catch(() => {
         this.cached = null;
       });
@@ -84,14 +124,15 @@ export class RelationIndex {
   }
 
   /**
-   * Fetch every project/tag file list and the pins.
+   * Fetch every project/tag/contact file list and the pins.
    *
    * @returns The index.
    */
   private async build(): Promise<Index> {
-    const [projects, tags, pinned] = await Promise.all([
+    const [projects, tags, contacts, pinned] = await Promise.all([
       this.api.get<BackendProject[]>(backendUrl('/projects'), { silent: true }),
       this.api.get<Tag[]>(backendUrl('/tags'), { silent: true }),
+      this.api.get<ContactSummary[]>(backendUrl('/contacts'), { silent: true }),
       this.api.get<string[]>(backendUrl('/pinned'), { silent: true }),
     ]);
     const projectFiles = await mapWithConcurrency(projects, CONCURRENCY, async ({ name }) => {
@@ -100,9 +141,15 @@ export class RelationIndex {
     const tagFiles = await mapWithConcurrency(tags, CONCURRENCY, async ({ name }) => {
       return [name, await this.filesOf(`/tag/${encodeURIComponent(name)}/files`)] as const;
     });
+    const contactDetails = await mapWithConcurrency(contacts, CONCURRENCY, ({ id }) =>
+      this.api.get<ContactDetail>(backendUrl(`/contacts/${encodeURIComponent(id)}`), {
+        silent: true,
+      }),
+    );
     return {
       projects: invertRelations(projectFiles),
       tags: invertRelations(tagFiles),
+      contacts: invertContacts(contactDetails),
       pinned: new Set(pinned),
     };
   }

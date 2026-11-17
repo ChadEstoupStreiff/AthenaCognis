@@ -7,7 +7,7 @@
     <p-tabpanel value="summary">
       @if (subtab() === 'summary') {
         <div class="stack">
-          <ac-summary-block [path]="path()" />
+          <ac-summary-block [path]="path()" [readonly]="readonly()" />
 
           @if (canOcr()) {
             <section class="block">
@@ -38,15 +38,17 @@
               } @else {
                 <p class="empty">No text extracted yet.</p>
               }
-              <div class="row-actions">
-                <p-button
-                  label="Run OCR & caption"
-                  icon="pi pi-eye"
-                  size="small"
-                  [outlined]="true"
-                  (onClick)="ask('ocr')"
-                />
-              </div>
+              @if (!readonly()) {
+                <div class="row-actions">
+                  <p-button
+                    label="Run OCR & caption"
+                    icon="pi pi-eye"
+                    size="small"
+                    [outlined]="true"
+                    (onClick)="ask('ocr')"
+                  />
+                </div>
+              }
             </section>
           }
 
@@ -58,15 +60,17 @@
               } @else if (!transcription.isLoading()) {
                 <p class="empty">No transcription yet.</p>
               }
-              <div class="row-actions">
-                <p-button
-                  label="Transcribe"
-                  icon="pi pi-microphone"
-                  size="small"
-                  [outlined]="true"
-                  (onClick)="ask('transcription')"
-                />
-              </div>
+              @if (!readonly()) {
+                <div class="row-actions">
+                  <p-button
+                    label="Transcribe"
+                    icon="pi pi-microphone"
+                    size="small"
+                    [outlined]="true"
+                    (onClick)="ask('transcription')"
+                  />
+                </div>
+              }
             </section>
           }
 
@@ -86,22 +90,24 @@
             } @empty {
               <p class="empty">No job has run on this file.</p>
             }
-            <div class="row-actions">
-              <p-button
-                label="Regenerate preview"
-                icon="pi pi-image"
-                size="small"
-                [text]="true"
-                (onClick)="ask('preview')"
-              />
-            </div>
+            @if (!readonly()) {
+              <div class="row-actions">
+                <p-button
+                  label="Regenerate preview"
+                  icon="pi pi-image"
+                  size="small"
+                  [text]="true"
+                  (onClick)="ask('preview')"
+                />
+              </div>
+            }
           </section>
         </div>
       }
     </p-tabpanel>
     <p-tabpanel value="tree">
       @if (subtab() === 'tree') {
-        <ac-document-tree [path]="path()" />
+        <ac-document-tree [path]="path()" [readonly]="readonly()" />
       }
     </p-tabpanel>
   </p-tabpanels>

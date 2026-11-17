@@ -4,7 +4,7 @@
 
 .settings {
   display: grid;
-  grid-template-columns: 220px minmax(0, 860px);
+  grid-template-columns: 220px minmax(0, 1fr);
   gap: 24px;
 }
 
@@ -60,10 +60,14 @@
 }
 
 .sections {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+  columns: 2 420px;
+  column-gap: 20px;
   min-width: 0;
+
+  // Section components only wrap their groups; let groups flow into columns.
+  > * {
+    display: contents;
+  }
 }
 
 @media (max-width: 900px) {

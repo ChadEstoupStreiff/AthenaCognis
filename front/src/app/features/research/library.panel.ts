@@ -23,8 +23,10 @@ import {
   paperStatus,
   STATUS_FILTERS,
 } from '@domain/sota';
+import type { FileContact } from '@domain/contracts';
 import { FilesApi } from '../../core/files/files.api';
 import { EmptyStateComponent } from '../../shared/ui/empty-state.component';
+import { PeopleStackComponent } from '../../shared/ui/people-stack.component';
 import { RelationChipsComponent } from '../../shared/ui/relation-chips.component';
 import { PeekService } from '../../core/files/peek.service';
 import { paperDetails, STATUS_ICONS } from './paper-labels';
@@ -44,6 +46,7 @@ import { ResearchStore } from './research.store';
     SelectButtonModule,
     TooltipModule,
     EmptyStateComponent,
+    PeopleStackComponent,
     RelationChipsComponent,
   ],
   templateUrl: './library.panel.html',
@@ -83,7 +86,7 @@ export class LibraryPanelComponent {
   protected readonly statusIcons = STATUS_ICONS;
 
   /**
-   * Projects and tags of a paper.
+   * Projects, tags and people of a paper.
    *
    * @param paper - Paper.
    * @returns Labels.
@@ -91,9 +94,14 @@ export class LibraryPanelComponent {
   protected labels(paper: Paper): {
     readonly projects: readonly string[];
     readonly tags: readonly string[];
+    readonly contacts: readonly FileContact[];
   } {
     const relations = this.relations.value()?.[paper.path];
-    return { projects: relations?.projects ?? [], tags: relations?.tags ?? [] };
+    return {
+      projects: relations?.projects ?? [],
+      tags: relations?.tags ?? [],
+      contacts: relations?.contacts ?? [],
+    };
   }
 
   /** Select every shown paper, or clear the selection. */

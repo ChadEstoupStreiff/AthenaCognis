@@ -30,30 +30,34 @@ import { ContactAvatarComponent } from '../../shared/ui/contact-avatar.component
             <a [routerLink]="['/people', contact.id]">{{ contact.name }}</a>
             <small>{{ subtitle(contact) }}</small>
           </div>
-          <p-button
-            icon="pi pi-times"
-            [text]="true"
-            size="small"
-            severity="secondary"
-            ariaLabel="Unlink"
-            (onClick)="unlink(contact.id)"
-          />
+          @if (!readonly()) {
+            <p-button
+              icon="pi pi-times"
+              [text]="true"
+              size="small"
+              severity="secondary"
+              ariaLabel="Unlink"
+              (onClick)="unlink(contact.id)"
+            />
+          }
         </div>
       } @empty {
         <p class="empty">Nobody linked yet.</p>
       }
-      <p-select
-        [options]="candidates()"
-        optionLabel="name"
-        optionValue="id"
-        [filter]="true"
-        placeholder="Link someone…"
-        [fluid]="true"
-        appendTo="body"
-        [ngModel]="null"
-        (ngModelChange)="link($event)"
-        ariaLabel="Link a contact"
-      />
+      @if (!readonly()) {
+        <p-select
+          [options]="candidates()"
+          optionLabel="name"
+          optionValue="id"
+          [filter]="true"
+          placeholder="Link someone…"
+          [fluid]="true"
+          appendTo="body"
+          [ngModel]="null"
+          (ngModelChange)="link($event)"
+          ariaLabel="Link a contact"
+        />
+      }
     </section>
   `,
   styleUrl: './inspector.scss',
@@ -66,6 +70,8 @@ export class PeopleTabComponent {
 
   /** Shared path. */
   readonly path = input.required<string>();
+  /** Show data only: no inputs or actions (side panel). */
+  readonly readonly = input(false);
 
   protected readonly linked = resource({
     params: () => ({ path: this.path(), version: this.sync.version('contacts')() }),

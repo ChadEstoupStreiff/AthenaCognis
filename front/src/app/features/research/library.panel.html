@@ -137,6 +137,7 @@
             [tags]="paperLabels.tags"
           />
         }
+        <ac-people-stack [people]="paperLabels.contacts" />
       </div>
       <div class="actions">
         @if (store.busy().has(paper.path)) {

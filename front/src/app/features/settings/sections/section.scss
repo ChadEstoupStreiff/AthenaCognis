@@ -1,4 +1,7 @@
 .group {
+  container-type: inline-size;
+  break-inside: avoid;
+  margin-bottom: 20px;
   scroll-margin-top: 16px;
   padding: 18px 20px;
   border: 1px solid var(--ac-panel-border);
@@ -162,7 +165,7 @@
   }
 }
 
-@media (max-width: 900px) {
+@container (max-width: 560px) {
   .row {
     flex-direction: column;
     align-items: stretch;

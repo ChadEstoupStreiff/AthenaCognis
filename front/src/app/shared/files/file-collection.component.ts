@@ -21,6 +21,7 @@ import { DataSync } from '../../core/state/data-sync.service';
 import { InViewDirective } from '../directives/in-view.directive';
 import { RelativeDatePipe } from '../pipes/relative-date.pipe';
 import { EmptyStateComponent } from '../ui/empty-state.component';
+import { PeopleStackComponent } from '../ui/people-stack.component';
 import { RelationChipsComponent } from '../ui/relation-chips.component';
 import { type FileRow, toFileRow, viewerCommands } from './file-row';
 import { FileSummarySnippetComponent } from './file-summary-snippet.component';
@@ -29,7 +30,7 @@ import { FileThumbnailComponent } from './file-thumbnail.component';
 const PAGE_SIZE = 60;
 const TABLE_PAGE_SIZE = 50;
 const LIST_SUMMARY_LINES = 7;
-const NO_RELATIONS: FileRelations = { projects: [], tags: [], pinned: false };
+const NO_RELATIONS: FileRelations = { projects: [], tags: [], contacts: [], pinned: false };
 /** Delay before a single click opens Quick Look (a double click opens the viewer instead). */
 const SINGLE_CLICK_DELAY_MS = 220;
 
@@ -46,6 +47,7 @@ export type FileClickAction = 'peek' | 'select';
     CheckboxModule,
     TableModule,
     EmptyStateComponent,
+    PeopleStackComponent,
     RelationChipsComponent,
     RelativeDatePipe,
     InViewDirective,

@@ -25,6 +25,7 @@
             <th pSortableColumn="date" style="width: 9rem">Date <p-sortIcon field="date" /></th>
             <th style="width: 7rem">Folder</th>
             <th>Projects & tags</th>
+            <th style="width: 8rem">People</th>
           </tr>
         </ng-template>
         <ng-template #body let-row>
@@ -40,6 +41,7 @@
             <td class="ac-muted">{{ row.date | relativeDate }}</td>
             <td class="ac-muted">{{ row.folder }}</td>
             <td><ng-container *ngTemplateOutlet="chips; context: { $implicit: row.path }" /></td>
+            <td><ac-people-stack [people]="relationsOf(row.path).contacts" /></td>
           </tr>
         </ng-template>
       </p-table>
@@ -62,6 +64,7 @@
               <div class="name"><i [class]="row.icon" aria-hidden="true"></i>{{ row.name }}</div>
               <div class="meta ac-muted">{{ row.date | relativeDate }} · {{ row.folder }}</div>
               <ng-container *ngTemplateOutlet="chips; context: { $implicit: row.path }" />
+              <ac-people-stack [people]="relationsOf(row.path).contacts" />
             </div>
             <ac-file-summary-snippet
               class="list-summary"
@@ -114,6 +117,7 @@
               </div>
               <div class="meta ac-muted">{{ row.date | relativeDate }} · {{ row.folder }}</div>
               <ng-container *ngTemplateOutlet="chips; context: { $implicit: row.path }" />
+              <ac-people-stack [people]="relationsOf(row.path).contacts" />
             </div>
           </article>
         }

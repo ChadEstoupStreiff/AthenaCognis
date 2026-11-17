@@ -67,6 +67,8 @@ export class DocumentTreeComponent {
 
   /** Shared path. */
   readonly path = input.required<string>();
+  /** Show data only: no inputs or actions (side panel). */
+  readonly readonly = input(false);
 
   protected readonly limits = DOCUMENT_TREE_LIMITS;
   protected readonly rangeLabel = rangeLabel;

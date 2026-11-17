@@ -75,6 +75,7 @@ describe('file services', () => {
     await settle();
     http.expectOne('/api/projects').flush([{ name: 'P 1' }]);
     http.expectOne('/api/tags').flush([{ name: 'Empty' }]);
+    http.expectOne('/api/contacts').flush([{ id: 'c1', name: 'Ada' }]);
     http.expectOne('/api/pinned').flush([FILE]);
     await settle();
     http.expectOne('/api/project/P%201/files').flush([FILE]);
@@ -82,7 +83,11 @@ describe('file services', () => {
     http
       .expectOne('/api/tag/Empty/files')
       .flush({ detail: 'none' }, { status: 404, statusText: 'Not Found' });
-    expect(await result).toEqual({ [FILE]: { projects: ['P 1'], tags: [], pinned: true } });
+    await settle();
+    http.expectOne('/api/contacts/c1').flush({ id: 'c1', name: 'Ada', files: [FILE] });
+    expect(await result).toEqual({
+      [FILE]: { projects: ['P 1'], tags: [], contacts: [{ id: 'c1', name: 'Ada' }], pinned: true },
+    });
   });
 });
 

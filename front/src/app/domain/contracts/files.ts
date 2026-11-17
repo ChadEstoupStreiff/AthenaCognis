@@ -37,10 +37,17 @@ export interface UploadResult {
   readonly path: string;
 }
 
-/** Projects, tags and pin state of a file. */
+/** Contact linked to a file (enough to draw its avatar). */
+export interface FileContact {
+  readonly id: string;
+  readonly name: string;
+}
+
+/** Projects, tags, linked people and pin state of a file. */
 export interface FileRelations {
   readonly projects: readonly string[];
   readonly tags: readonly string[];
+  readonly contacts: readonly FileContact[];
   readonly pinned: boolean;
 }
 

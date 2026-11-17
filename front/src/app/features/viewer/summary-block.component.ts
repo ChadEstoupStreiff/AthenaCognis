@@ -47,22 +47,24 @@ const CHARS_PER_LINE = 70;
       } @else if (!summary.isLoading()) {
         <p class="empty">No summary yet.</p>
       }
-      <div class="row-actions">
-        <p-button
-          [label]="summary.value() ? 'Regenerate summary' : 'Summarize'"
-          icon="pi pi-sparkles"
-          size="small"
-          [outlined]="true"
-          (onClick)="summarize()"
-        />
-        <p-button
-          icon="pi pi-refresh"
-          size="small"
-          [text]="true"
-          ariaLabel="Refresh"
-          (onClick)="refresh()"
-        />
-      </div>
+      @if (!readonly()) {
+        <div class="row-actions">
+          <p-button
+            [label]="summary.value() ? 'Regenerate summary' : 'Summarize'"
+            icon="pi pi-sparkles"
+            size="small"
+            [outlined]="true"
+            (onClick)="summarize()"
+          />
+          <p-button
+            icon="pi pi-refresh"
+            size="small"
+            [text]="true"
+            ariaLabel="Refresh"
+            (onClick)="refresh()"
+          />
+        </div>
+      }
     </section>
   `,
   styleUrl: './inspector.scss',
@@ -95,6 +97,8 @@ export class SummaryBlockComponent {
 
   /** Shared path. */
   readonly path = input.required<string>();
+  /** Show data only: no inputs or actions (side panel). */
+  readonly readonly = input(false);
   /** Lines shown before "Show more" (0 = always full). */
   readonly collapsedLines = input(0);
 

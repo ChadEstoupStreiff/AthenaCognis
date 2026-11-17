@@ -11,6 +11,7 @@ import {
 import { FileDetailsApi } from '../../core/files/file-details.api';
 import { AutosaveController } from '../../core/state/autosave';
 import { AiTextareaComponent } from '../../shared/ui/ai-textarea.component';
+import { MarkdownViewComponent } from '../../shared/ui/markdown-view.component';
 import { SaveStatusComponent } from '../../shared/ui/save-status.component';
 
 const NOTE_ROWS = 12;
@@ -18,21 +19,30 @@ const NOTE_ROWS = 12;
 /** Free-text note attached to a file (indexed by search). */
 @Component({
   selector: 'ac-notes-tab',
-  imports: [AiTextareaComponent, SaveStatusComponent],
+  imports: [AiTextareaComponent, MarkdownViewComponent, SaveStatusComponent],
   template: `
     <section class="block">
-      <div class="row-actions">
+      @if (readonly()) {
         <h3>Note</h3>
-        <ac-save-status [status]="autosave.status()" />
-      </div>
-      <p class="empty">Notes are searchable (normal and deep search).</p>
-      <ac-ai-textarea
-        [value]="note()"
-        (valueChange)="onChange($event)"
-        [rows]="rows"
-        placeholder="Write about this file…"
-        context="This is a note about a document."
-      />
+        @if (note().trim() !== '') {
+          <ac-markdown-view [source]="note()" />
+        } @else {
+          <p class="empty">No note.</p>
+        }
+      } @else {
+        <div class="row-actions">
+          <h3>Note</h3>
+          <ac-save-status [status]="autosave.status()" />
+        </div>
+        <p class="empty">Notes are searchable (normal and deep search).</p>
+        <ac-ai-textarea
+          [value]="note()"
+          (valueChange)="onChange($event)"
+          [rows]="rows"
+          placeholder="Write about this file…"
+          context="This is a note about a document."
+        />
+      }
     </section>
   `,
   styleUrl: './inspector.scss',
@@ -43,6 +53,8 @@ export class NotesTabComponent {
 
   /** Shared path. */
   readonly path = input.required<string>();
+  /** Show data only: no inputs or actions (side panel). */
+  readonly readonly = input(false);
 
   protected readonly note = signal('');
   protected readonly rows = NOTE_ROWS;

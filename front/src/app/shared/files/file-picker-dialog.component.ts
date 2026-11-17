@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   effect,
   inject,
   input,
@@ -11,6 +12,8 @@ import {
 } from '@angular/core';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
+import { FormsModule } from '@angular/forms';
+import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import { FileSearch } from '../../core/search/file-search';
 import { SettingsStore } from '../../core/settings/settings.store';
 import { EMPTY_SEARCH_FORM, type SearchFormState, toSearchQuery } from '../search/search-form';
@@ -24,6 +27,8 @@ import { FileCollectionComponent } from './file-collection.component';
   imports: [
     ButtonModule,
     DialogModule,
+    FormsModule,
+    ToggleSwitchModule,
     SearchPanelComponent,
     SearchStatusComponent,
     FileCollectionComponent,
@@ -42,7 +47,18 @@ import { FileCollectionComponent } from './file-collection.component';
           <ac-search-panel [value]="form()" (valueChange)="form.set($event)" (submitted)="run()" />
         </aside>
         <section>
-          <ac-search-status [search]="search" />
+          <div class="toolbar">
+            <ac-search-status [search]="search" />
+            <label class="select-all">
+              <span>Select all</span>
+              <p-toggleswitch
+                [ngModel]="allSelected()"
+                (ngModelChange)="toggleAll($event)"
+                [disabled]="selectable().length === 0"
+                ariaLabel="Select all"
+              />
+            </label>
+          </div>
           <ac-file-collection
             [paths]="search.results()"
             mode="list"
@@ -87,6 +103,23 @@ import { FileCollectionComponent } from './file-collection.component';
       max-height: 65vh;
       overflow: auto;
     }
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .toolbar > ac-search-status {
+      flex: 1;
+      min-width: 0;
+    }
+    .select-all {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+      white-space: nowrap;
+      cursor: pointer;
+    }
     .count {
       margin-right: auto;
     }
@@ -119,6 +152,17 @@ export class FilePickerDialogComponent {
     mode: 0,
   });
   protected readonly selection = signal<readonly string[]>([]);
+  /** Result paths that can be picked (results minus excluded). */
+  protected readonly selectable = computed(() => {
+    const excluded = new Set(this.exclude());
+    return this.search.results().filter((path) => !excluded.has(path));
+  });
+  /** True when every selectable result is selected. */
+  protected readonly allSelected = computed(() => {
+    const paths = this.selectable();
+    const selected = new Set(this.selection());
+    return paths.length > 0 && paths.every((path) => selected.has(path));
+  });
 
   /** Search when opened and when filters change. */
   constructor() {
@@ -138,6 +182,20 @@ export class FilePickerDialogComponent {
       threshold: this.settings.get('semantic_similarity_threshold'),
     });
     await this.search.run(query);
+  }
+
+  /**
+   * Select or deselect every selectable result, keeping other selections.
+   * @param checked True to select all, false to clear them.
+   */
+  protected toggleAll(checked: boolean): void {
+    const paths = this.selectable();
+    if (checked) {
+      this.selection.update((current) => [...new Set([...current, ...paths])]);
+      return;
+    }
+    const removed = new Set(paths);
+    this.selection.update((current) => current.filter((path) => !removed.has(path)));
   }
 
   /** Emit the selection and close. */

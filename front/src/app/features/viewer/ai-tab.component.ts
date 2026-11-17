@@ -61,6 +61,8 @@ export class AiTabComponent {
 
   /** Shared path. */
   readonly path = input.required<string>();
+  /** Show data only: no inputs or actions (side panel). */
+  readonly readonly = input(false);
   /** File kind. */
   readonly kind = input.required<FileKind>();
   /** OCR record (loaded by the page, shared with the overlay). */
