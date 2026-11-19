@@ -13,9 +13,18 @@ from controllers.MailManager import MailManager
 from controllers.mail.outbox import OutboxSender
 from controllers.mail import service as mail_service
 from controllers.DocumentTreeManager import DocumentTreeManager
+from controllers.ActivityGenerationManager import (
+    ActivityGenerationManager,
+    setup_activity_project,
+    start_scheduler,
+)
 from controllers.TranscriptionManager import TranscriptionManager
 from db import DB, ProjectFile, TagFile, Link, create_default_values, get_db
-from db.migrate import add_missing_columns, migrate_activity_flags
+from db.migrate import (
+    add_missing_columns,
+    migrate_activity_flags,
+    migrate_calendar_projects,
+)
 from db.models import Base, CalendarRecord, Summary, Contact, Task, KanbanBoard
 from fastapi import FastAPI
 from pillow_heif import register_heif_opener
@@ -140,6 +149,10 @@ app.include_router(views.mail_preview.router)
 import views.activity
 
 app.include_router(views.activity.router)
+
+import views.activity_generation
+
+app.include_router(views.activity_generation.router)
 
 
 def du_size(path: str) -> int:
@@ -277,7 +290,9 @@ if __name__ == "__main__":
     Base.metadata.create_all(bind=DB().engine)
     add_missing_columns(DB().engine)
     migrate_activity_flags(DB().engine)
+    migrate_calendar_projects(DB().engine)
     create_default_values()
+    setup_activity_project()
 
     FileManager.setup()
 
@@ -289,8 +304,10 @@ if __name__ == "__main__":
         DocumentTreeManager,
         OCRManager,
         PreviewManager,
+        ActivityGenerationManager,
     ):
         job_manager.start()
+    start_scheduler()
     mail_service.NEW_MAIL_HOOK = MailManager.queue_new_mail
     OutboxSender.start()
 

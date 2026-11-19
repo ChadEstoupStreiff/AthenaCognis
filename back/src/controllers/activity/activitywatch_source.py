@@ -26,7 +26,9 @@ from controllers.activity.activitywatch_client import (
     validate_url,
 )
 from controllers.activity.base import (
+    SUMMARY_CONTENT,
     Activity,
+    ContentField,
     DataSource,
     SourceDescriptor,
     SourceUnavailableError,
@@ -58,6 +60,12 @@ WEB_KIND = "web"
 IGNORED_APPS = frozenset(
     {"loginwindow", "ScreenSaverEngine", "LockApp.exe", "unknown", ""}
 )
+
+ACTIVITYWATCH_CONTENT = [
+    ContentField(SUMMARY_CONTENT, "Window titles"),
+    ContentField("duration", "Duration"),
+    ContentField("device", "Device", default=False),
+]
 
 
 @dataclass(frozen=True)
@@ -307,6 +315,15 @@ class ActivityWatchDataSource(DataSource):
             return f"Not reachable at {self.server_url()}"
         count = len(device_names(buckets))
         return f"{count} device{'s' if count != 1 else ''}"
+
+    def content_fields(self) -> list[ContentField]:
+        """
+        Content an app usage activity can carry
+
+        Returns:
+            list[ContentField]: content fields
+        """
+        return ACTIVITYWATCH_CONTENT
 
     def config_fields(self) -> list[ConfigField]:
         """

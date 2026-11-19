@@ -1,0 +1,139 @@
+<section class="group" aria-label="Activity generation">
+  <div class="heading">
+    <h2><i class="pi pi-bolt" aria-hidden="true"></i> Activity generation</h2>
+  </div>
+
+  <p-selectbutton
+    [options]="spanOptions"
+    optionValue="value"
+    [allowEmpty]="false"
+    [ngModel]="span()"
+    (ngModelChange)="span.set($event)"
+    size="small"
+    ariaLabel="Timeline"
+  />
+
+  <div class="calendar">
+    <p-datepicker
+      [inline]="true"
+      [view]="span() === 'monthly' ? 'month' : 'date'"
+      [showWeek]="span() === 'weekly'"
+      [firstDayOfWeek]="firstDayOfWeek()"
+      [maxDate]="today"
+      [ngModel]="picked()"
+      (ngModelChange)="pick($event)"
+      ariaLabel="Period"
+    />
+  </div>
+
+  <h3><i class="pi pi-clock" aria-hidden="true"></i> Schedule · {{ spanLabel() }}</h3>
+
+  <div class="row">
+    <div class="label">
+      <strong>{{ flag(key('enabled')) ? 'Enabled' : 'Disabled' }}</strong>
+      <small class="ac-muted">
+        @if (!isAvailable()) {
+          {{ spanLabel() }} generation is not available yet; the schedule is kept for later.
+        } @else if (span() === 'daily') {
+          Generates the day that just ended, when the next one starts.
+        }
+      </small>
+    </div>
+    <p-toggleswitch
+      [ngModel]="flag(key('enabled'))"
+      (ngModelChange)="saveSchedule(key('enabled'), $event, true)"
+      [disabled]="!isAvailable()"
+      [ariaLabel]="'Enable ' + spanLabel() + ' schedule'"
+    />
+  </div>
+
+  @if (span() === 'daily') {
+    <div class="row">
+      <div class="label">
+        <strong>Day starts at</strong>
+        <small class="ac-muted">Also bounds the days you generate by hand.</small>
+      </div>
+      <input
+        pInputText
+        type="time"
+        [ngModel]="dayStart()"
+        (ngModelChange)="saveSchedule(dayStartKey, $event || '00:00')"
+        aria-label="Day starts at"
+      />
+    </div>
+    @if (lastRun()) {
+      <small class="ac-muted">Last scheduled day: {{ lastRun() }}</small>
+    }
+  } @else if (span() === 'weekly') {
+    <div class="row">
+      <div class="label"><strong>Week starts on</strong></div>
+      <p-select
+        [options]="weekdays"
+        optionLabel="label"
+        optionValue="value"
+        [ngModel]="weekStart()"
+        (ngModelChange)="saveSchedule(weekStartKey, $event, true)"
+        appendTo="body"
+        ariaLabel="Week starts on"
+      />
+    </div>
+  } @else {
+    <small class="ac-muted">Months start on the 1st, at the day start.</small>
+  }
+
+  @if (builtFrom(); as builtLabel) {
+    <div class="row stacked">
+      <div class="label"><strong>Context</strong></div>
+      <p-selectbutton
+        [options]="[
+          { value: 'generated', label: builtLabel },
+          { value: 'sources', label: 'Select data sources' },
+        ]"
+        optionValue="value"
+        [allowEmpty]="false"
+        [ngModel]="basis()"
+        (ngModelChange)="saveSchedule(key('basis'), $event, true)"
+        size="small"
+        ariaLabel="Context"
+      />
+    </div>
+  }
+
+  @if (usesSources()) {
+    <div class="row stacked">
+      <div class="label">
+        <strong>Data sources</strong>
+        <small class="ac-muted">None picked: every enabled data source.</small>
+      </div>
+      <p-multiselect
+        [options]="sourceOptions()"
+        optionLabel="label"
+        optionValue="key"
+        [ngModel]="pickedSources()"
+        (ngModelChange)="saveSchedule(key('sources'), $event ?? [])"
+        display="chip"
+        placeholder="All enabled sources"
+        appendTo="body"
+        ariaLabel="Data sources"
+      />
+    </div>
+  }
+
+  <div class="row stacked">
+    <div class="label"><strong>Generate</strong></div>
+    <div class="outputs">
+      @for (option of outputOptions; track option.value) {
+        <label class="output">
+          <p-checkbox
+            [binary]="true"
+            [ngModel]="outputs().includes(option.value)"
+            (ngModelChange)="toggleOutput(option.value, $event)"
+            [ariaLabel]="option.label"
+          />
+          <i class="pi pi-bolt" aria-hidden="true"></i>
+          {{ option.label }}
+        </label>
+      }
+    </div>
+  </div>
+</section>

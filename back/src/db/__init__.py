@@ -47,6 +47,9 @@ from db.models import (
     MailOutgoing,
     MailDraft,
     MailPreviewTask,
+    ActivityGenerationTask,
+    CalendarProject,
+    CalendarTag,
 )
 
 

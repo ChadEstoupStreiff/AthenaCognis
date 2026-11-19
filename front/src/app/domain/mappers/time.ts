@@ -13,6 +13,8 @@ export function toCalendarRecord(record: BackendCalendarRecord): CalendarRecord 
   return {
     id: record.id,
     project: record.project,
+    projects: record.projects ?? (record.project ? [record.project] : []),
+    tags: record.tags ?? [],
     date: record.date.slice(0, ISO_DATE_LENGTH),
     startTime: TIME_PATTERN.exec(record.start_time ?? '')?.[1] ?? null,
     hours: record.time_spent,

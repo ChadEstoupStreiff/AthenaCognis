@@ -38,14 +38,22 @@ export interface FolderEntry {
   readonly has_children: boolean;
 }
 
-/** Progress of a long feed scan (`GET /activity/sources/{key}/progress`). */
+/** Progress of the latest feed collect phase (`GET /activity/sources/{key}/progress`). */
 export interface ScanProgress {
   readonly running: boolean;
-  /** Steps (folders) done. */
+  /** Phase name, e.g. "Reading calendars". */
+  readonly desc: string;
+  /** Steps done. */
   readonly done: number;
   readonly total: number;
-  /** Files read so far. */
-  readonly files: number;
+  /** Step name, e.g. "folders". */
+  readonly unit: string;
+  /** Items found along the way, e.g. files read. */
+  readonly items: number;
+  /** Item name, "" when items are not counted. */
+  readonly item_unit: string;
+  /** Seconds spent in the phase. */
+  readonly elapsed: number;
 }
 
 /** One data source (`GET /activity/sources`). */

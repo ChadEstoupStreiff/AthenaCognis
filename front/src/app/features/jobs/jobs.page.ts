@@ -18,6 +18,7 @@ import {
   type JobService,
   type JobState,
   type JobTask,
+  LABELLED_JOB_SERVICES,
   MAIL_JOB_SERVICES,
 } from '@domain/contracts';
 import { fileNameOf } from '@domain/files';
@@ -36,6 +37,7 @@ const SERVICE_LABELS: Readonly<Record<JobService, string>> = {
   tree: 'Section trees',
   preview: 'Previews',
   'mail-preview': 'Mail Previews',
+  'activity-generation': 'Activity generations',
 };
 const STATE_SEVERITY: Readonly<Record<JobState, 'info' | 'warn' | 'success' | 'danger'>> = {
   PENDING: 'warn',
@@ -134,12 +136,15 @@ export class JobsPage {
   }
 
   /**
-   * Whether the selected service works on mails.
+   * Header of the task item column.
    *
-   * @returns True for Mail Preview.
+   * @returns "Mail" for mail jobs, "Period" for activity generation, "File" otherwise.
    */
-  protected isMailService(): boolean {
-    return MAIL_JOB_SERVICES.has(this.service());
+  protected itemColumn(): string {
+    if (MAIL_JOB_SERVICES.has(this.service())) {
+      return 'Mail';
+    }
+    return LABELLED_JOB_SERVICES.has(this.service()) ? 'Period' : 'File';
   }
 
   /**
@@ -159,7 +164,7 @@ export class JobsPage {
    * @returns Name.
    */
   protected runningName(running: string): string {
-    return MAIL_JOB_SERVICES.has(this.service()) ? running : this.nameOf(running);
+    return LABELLED_JOB_SERVICES.has(this.service()) ? running : this.nameOf(running);
   }
 
   /**
@@ -170,6 +175,10 @@ export class JobsPage {
   protected openTask(task: JobTask): void {
     if (MAIL_JOB_SERVICES.has(this.service())) {
       void this.router.navigate(['/mail'], { queryParams: { open: task.file } });
+      return;
+    }
+    if (LABELLED_JOB_SERVICES.has(this.service())) {
+      void this.router.navigate(['/activity']);
       return;
     }
     this.peek.open(task.file);

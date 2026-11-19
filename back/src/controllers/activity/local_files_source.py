@@ -9,7 +9,9 @@ from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
 from controllers.activity.base import (
+    SUMMARY_CONTENT,
     Activity,
+    ContentField,
     DataSource,
     FolderEntry,
     InvalidFolderError,
@@ -52,6 +54,21 @@ SKIPPED_DIRS = frozenset(
 SKIPPED_FILE_PREFIXES = ("~$",)
 SKIPPED_FILE_SUFFIXES = ("~", ".swp", ".tmp", ".crdownload", ".part")
 EXTENSION_SEPARATORS = re.compile(r"[\s,;]+")
+# Text excerpt: only small plain-text files, first characters only.
+TEXT_EXTENSIONS = frozenset(
+    {"txt", "md", "markdown", "rst", "csv", "tsv", "json", "yaml", "yml", "toml",
+     "ini", "py", "ts", "js", "html", "css", "scss", "tex", "sql", "sh", "log"}
+)
+MAX_TEXT_BYTES = 1_048_576
+TEXT_EXCERPT_CHARS = 300
+
+LOCAL_FILES_CONTENT = [
+    ContentField(SUMMARY_CONTENT, "Folder"),
+    ContentField("path", "Relative path", default=False),
+    ContentField("size", "Size", default=False),
+    ContentField("type", "Type"),
+    ContentField("content", "Text excerpt", default=False),
+]
 
 
 def parse_extensions(text: str) -> frozenset[str]:
@@ -395,20 +412,44 @@ def size_text(size: int) -> str:
     return f"{value:.1f} {SIZE_UNITS[-1]}"
 
 
-def change_activity(change: FileChange) -> Activity:
+def text_excerpt(root: Path, change: FileChange) -> str:
+    """
+    First characters of a small plain-text file, on one line
+
+    Args:
+        root (Path): browsable root
+        change (FileChange): change
+    Returns:
+        str: excerpt, "" for other files or when unreadable
+    """
+    if extension_of(change.relative) not in TEXT_EXTENSIONS or change.size > MAX_TEXT_BYTES:
+        return ""
+    try:
+        with (root / change.relative).open(encoding="utf-8", errors="replace") as file:
+            text = file.read(TEXT_EXCERPT_CHARS * 2)
+    except OSError as error:
+        LOGGER.info("Text excerpt of %s unavailable: %s", change.relative, error)
+        return ""
+    return " ".join(text.split())[:TEXT_EXCERPT_CHARS]
+
+
+def change_activity(change: FileChange, excerpt_text: str = "") -> Activity:
     """
     Build the activity of one modified file
 
     Args:
         change (FileChange): change
+        excerpt_text (str): text excerpt, "" when not read
     Returns:
         Activity: normalized activity (summary = folder path)
     """
     path = PurePosixPath(change.relative)
-    details = {"size": size_text(change.size)}
+    details = {"size": size_text(change.size), "path": change.relative}
     extension = extension_of(path.name)
     if extension:
         details["type"] = extension
+    if excerpt_text:
+        details["content"] = excerpt_text
     return Activity(
         id=f"local_files:{change.relative}:{change.modified_at:%Y%m%dT%H%M%S}",
         source=LOCAL_FILES_DESCRIPTOR.key,
@@ -463,6 +504,15 @@ class LocalFilesDataSource(DataSource):
         if count == 0:
             return "No folder picked"
         return f"{count} folder{'s' if count != 1 else ''}"
+
+    def content_fields(self) -> list[ContentField]:
+        """
+        Content a file change activity can carry
+
+        Returns:
+            list[ContentField]: content fields
+        """
+        return LOCAL_FILES_CONTENT
 
     def config_fields(self) -> list[ConfigField]:
         """
@@ -532,9 +582,15 @@ class LocalFilesDataSource(DataSource):
         Returns:
             list[Activity]: one activity per modified file
         """
-        job = ScanJob(self.root, window, ScanRules.from_config(self.config()))
+        config = self.config()
+        job = ScanJob(self.root, window, ScanRules.from_config(config))
         # Latest scan owns the progress shown in the UI.
         progress = ScanProgress(desc="Scanning", unit="folders", item_unit="files")
         self._progress = progress
         changes = changed_files(job, self.picked_folders(), progress)
-        return [change_activity(change) for change in changes]
+        if not self.includes(config, "content"):
+            return [change_activity(change) for change in changes]
+        return [
+            change_activity(change, text_excerpt(self.root, change))
+            for change in self.track(changes, "Reading text", "files")
+        ]

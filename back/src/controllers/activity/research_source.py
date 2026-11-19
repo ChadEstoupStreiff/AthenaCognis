@@ -7,7 +7,15 @@ from pathlib import Path
 
 from sqlalchemy import select
 
-from controllers.activity.base import Activity, DataSource, SourceDescriptor, TimeRange
+from controllers.activity.base import (
+    PEOPLE_CONTENT,
+    SUMMARY_CONTENT,
+    Activity,
+    ContentField,
+    DataSource,
+    SourceDescriptor,
+    TimeRange,
+)
 from controllers.activity.common import (
     LIBRARY_ROOT,
     SharedFile,
@@ -37,6 +45,15 @@ MAX_AUTHORS = 3
 EVENT_OPTIONS = options_of([("added", "Paper added"), ("summary", "Paper summarized")])
 DEFAULT_EVENTS = ("added", "summary")
 JsonDict = dict[str, object]
+
+RESEARCH_CONTENT = [
+    ContentField(SUMMARY_CONTENT, "Paper summary"),
+    ContentField(PEOPLE_CONTENT, "Authors"),
+    ContentField("year", "Year"),
+    ContentField("journal", "Journal"),
+    ContentField("doi", "DOI", default=False),
+    ContentField("validated", "Validated", default=False),
+]
 
 
 def paper_info(raw: str | None) -> JsonDict:
@@ -158,6 +175,15 @@ class ResearchDataSource(DataSource):
         with session_scope() as session:
             count = len(research_files(session))
         return f"{count} paper{'s' if count != 1 else ''}"
+
+    def content_fields(self) -> list[ContentField]:
+        """
+        Content a paper activity can carry
+
+        Returns:
+            list[ContentField]: content fields
+        """
+        return RESEARCH_CONTENT
 
     def config_fields(self) -> list[ConfigField]:
         """

@@ -17,7 +17,6 @@ import { DialogModule } from 'primeng/dialog';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { InputTextModule } from 'primeng/inputtext';
 import { MultiSelectModule } from 'primeng/multiselect';
-import { SelectModule } from 'primeng/select';
 import type { CalendarRecord, CalendarRecordInput } from '@domain/contracts';
 import { formatLocalDate, parseLocalDate } from '@domain/time';
 import { CatalogStore } from '../../core/catalog/catalog.store';
@@ -29,7 +28,8 @@ import { TagChipComponent } from '../../shared/ui/tag-chip.component';
 /** Editable form state. */
 interface RecordForm {
   title: string;
-  project: string | null;
+  projects: string[];
+  tags: string[];
   date: Date;
   start: Date | null;
   hours: number;
@@ -80,7 +80,6 @@ function atTime(day: Date, time: string | null): Date | null {
     InputNumberModule,
     InputTextModule,
     MultiSelectModule,
-    SelectModule,
     AiTextareaComponent,
     TagChipComponent,
   ],
@@ -108,6 +107,7 @@ export class RecordDialogComponent {
   protected readonly projectOptions = computed(() =>
     this.catalog.projectList().map((project) => project.name),
   );
+  protected readonly tagOptions = computed(() => this.catalog.tagList().map((tag) => tag.name));
   protected readonly contactOptions = computed(() =>
     this.catalog.contactList().map((contact) => ({ label: contact.name, value: contact.id })),
   );
@@ -140,7 +140,7 @@ export class RecordDialogComponent {
   protected async save(): Promise<void> {
     const input = this.toInput();
     if (input === null) {
-      this.notify.warn('Title and project are required.');
+      this.notify.warn('Title and at least one project are required.');
       return;
     }
     this.saving.set(true);
@@ -197,12 +197,13 @@ export class RecordDialogComponent {
    */
   private toInput(): CalendarRecordInput | null {
     const form = this.form();
-    if (form.title.trim() === '' || form.project === null) {
+    if (form.title.trim() === '' || form.projects.length === 0) {
       return null;
     }
     return {
       title: form.title.trim(),
-      project: form.project,
+      projects: form.projects,
+      tags: form.tags,
       date: formatLocalDate(form.date),
       startTime: form.start === null ? null : hhmm(form.start),
       hours: form.hours,
@@ -226,7 +227,8 @@ export class RecordDialogComponent {
     const day = parseLocalDate(record.date) ?? new Date();
     return {
       title: record.title,
-      project: record.project,
+      projects: [...record.projects],
+      tags: [...record.tags],
       date: day,
       start: atTime(day, record.startTime),
       hours: record.hours,
@@ -244,9 +246,11 @@ export class RecordDialogComponent {
    */
   private emptyForm(): RecordForm {
     const day = parseLocalDate(this.defaultDate() ?? '') ?? new Date();
+    const project = this.defaultProject();
     return {
       title: '',
-      project: this.defaultProject(),
+      projects: project === null ? [] : [project],
+      tags: [],
       date: day,
       start: null,
       hours: DEFAULT_HOURS,

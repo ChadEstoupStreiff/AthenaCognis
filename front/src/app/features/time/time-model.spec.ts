@@ -1,4 +1,4 @@
-import type { CalendarRecord } from '@domain/contracts';
+import { ACTIVITY_PROJECT, type CalendarRecord } from '@domain/contracts';
 import {
   dayStatus,
   goalProgress,
@@ -7,11 +7,21 @@ import {
   monthWeeks,
   parseMonthKey,
   periods,
+  projectShares,
+  NO_PROJECT,
+  withoutActivityProject,
 } from './time-model';
 
-const record = (date: string, project: string, hours: number): CalendarRecord => ({
+const record = (
+  date: string,
+  project: string,
+  hours: number,
+  projects: readonly string[] = [project],
+): CalendarRecord => ({
   id: `${date}${project}`,
   project,
+  projects,
+  tags: [],
   date,
   startTime: null,
   hours,
@@ -65,5 +75,31 @@ describe('time model', () => {
     expect(goalProgress('bad', '2026-01-11', new Date())).toBeNull();
     expect(parseMonthKey('2026-10')).toEqual({ year: 2026, month: 9 });
     expect(parseMonthKey('2026-13')).toBeNull();
+  });
+
+  it('splits multi-project hours evenly in project totals and series', () => {
+    const shared = record('2026-10-01', 'A', 2, ['A', 'B']);
+    expect(projectShares(shared)).toEqual([
+      ['A', 1],
+      ['B', 1],
+    ]);
+    expect(hoursByProject([shared, record('2026-10-02', 'A', 1)])).toEqual([
+      { name: 'A', count: 2 },
+      { name: 'B', count: 1 },
+    ]);
+    const series = hoursSeries([shared], '2026-10-01', '2026-10-01', 'day');
+    expect(series.values['B']).toEqual([1]);
+  });
+
+  it('keeps Activity entries in stats without the Activity project', () => {
+    const generated = record('2026-10-01', ACTIVITY_PROJECT, 3, [ACTIVITY_PROJECT, 'A']);
+    const alone = record('2026-10-02', ACTIVITY_PROJECT, 2, [ACTIVITY_PROJECT]);
+    const real = record('2026-10-01', 'A', 1);
+    const kept = withoutActivityProject([generated, alone, real]);
+    expect(kept.map((entry) => entry.projects)).toEqual([['A'], [NO_PROJECT], ['A']]);
+    expect(hoursByProject(kept)).toEqual([
+      { name: 'A', count: 4 },
+      { name: NO_PROJECT, count: 2 },
+    ]);
   });
 });

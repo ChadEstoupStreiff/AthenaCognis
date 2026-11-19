@@ -18,7 +18,7 @@ import { ButtonModule } from 'primeng/button';
 import { SelectModule } from 'primeng/select';
 import { TabsModule } from 'primeng/tabs';
 import type { RepresentationMode, TaskDetail, TodoItem } from '@domain/contracts';
-import { representationModeOf } from '@domain/contracts';
+import { ACTIVITY_PROJECT, representationModeOf } from '@domain/contracts';
 import { CaptureService, NO_DEFAULTS } from '../../core/capture/capture.service';
 import { CatalogStore } from '../../core/catalog/catalog.store';
 import { FilesApi } from '../../core/files/files.api';
@@ -94,6 +94,8 @@ export class ProjectPage {
   readonly name = input.required<string>();
   /** Query parameter: tab. */
   readonly tab = input<string | undefined>(undefined);
+  /** Activity project: generated, not editable. */
+  protected readonly isGenerated = computed(() => this.name() === ACTIVITY_PROJECT);
 
   protected readonly activeTab = computed(
     () => TABS.find((tab) => tab === this.tab()) ?? 'overview',

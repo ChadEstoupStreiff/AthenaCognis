@@ -51,6 +51,13 @@ export const AI_TASKS: readonly AiTask[] = [
     kind: 'text',
   },
   {
+    key: 'activity',
+    label: 'Activity generation',
+    hint: 'Daily summaries and time entries of the Activity page; uses Summaries until set',
+    kind: 'text',
+    fallbackKey: 'summarization',
+  },
+  {
     key: 'tree',
     label: 'Section trees',
     hint: 'Section tree of documents (AI tab → Tree); uses Summaries until set',

@@ -3,7 +3,11 @@ import type { ContactSummary } from './entities';
 /** Calendar record as returned by `GET /calendar/search`. */
 export interface BackendCalendarRecord {
   readonly id: string;
+  /** Primary project (first of `projects`). */
   readonly project: string;
+  /** Every project, primary first. */
+  readonly projects?: readonly string[];
+  readonly tags?: readonly string[];
   readonly date: string;
   /** `1900-01-01THH:MM:SS`, or `null`. */
   readonly start_time: string | null;
@@ -18,7 +22,11 @@ export interface BackendCalendarRecord {
 /** Calendar record as used by the SPA. */
 export interface CalendarRecord {
   readonly id: string;
+  /** Primary project (first of `projects`). */
   readonly project: string;
+  /** Every project, primary first. */
+  readonly projects: readonly string[];
+  readonly tags: readonly string[];
   /** `YYYY-MM-DD`. */
   readonly date: string;
   /** `HH:MM`, or `null`. */
@@ -33,7 +41,9 @@ export interface CalendarRecord {
 
 /** Create/edit body of a calendar record (date and start time are fixed after creation). */
 export interface CalendarRecordInput {
-  readonly project: string;
+  /** Projects, primary first (at least one). */
+  readonly projects: readonly string[];
+  readonly tags: readonly string[];
   readonly date: string;
   /** `HH:MM`, or `null`. */
   readonly startTime: string | null;

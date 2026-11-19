@@ -16,7 +16,16 @@
           (keydown.enter)="open(note)"
           tabindex="0"
         >
-          <i class="pi pi-file-edit" aria-hidden="true"></i>{{ nameOf(note) }}
+          @if (generated().has(note)) {
+            <i
+              class="pi pi-bolt generated"
+              aria-label="Activity generation"
+              title="Activity generation"
+            ></i>
+          } @else {
+            <i class="pi pi-file-edit" aria-hidden="true"></i>
+          }
+          {{ nameOf(note) }}
         </a>
       } @empty {
         <p class="ac-muted empty">No notes on {{ day() }}.</p>

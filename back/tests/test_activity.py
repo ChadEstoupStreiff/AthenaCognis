@@ -15,12 +15,14 @@ import views.activity
 from controllers.activity import common, settings_io
 from controllers.activity.activitywatch_client import ActivityWatchError
 from controllers.activity.activitywatch_source import ActivityWatchDataSource
+from controllers.activity.generation import ACTIVITY_PROJECT
 from controllers.activity.base import (
     MAX_INSTRUCTION_CHARS,
     Activity,
     DataSource,
     InvalidRangeError,
     TimeRange,
+    trim,
 )
 from controllers.activity.library_source import LibraryDataSource
 from controllers.activity.local_files_source import LocalFilesDataSource
@@ -31,7 +33,9 @@ from controllers.activity.time_source import TimeDataSource
 from controllers.activity.work_source import WorkDataSource
 from controllers.mail import store
 from db import (
+    CalendarProject,
     CalendarRecord,
+    CalendarTag,
     KanbanBoard,
     KanbanColumn,
     KanbanColumnTask,
@@ -70,6 +74,13 @@ def settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
         "activity_mail_boxes": ["inbox"],
         "activity_mail_sent": True,
         "activity_mail_flagged": True,
+        # Every content field: feed tests check them all (defaults checked on their own).
+        **{
+            f"activity_{source.key}_include": [
+                item.key for item in source.content_fields()
+            ]
+            for source in IMPLEMENTED
+        },
     }
 
     def clear(prefix: str) -> None:
@@ -633,6 +644,16 @@ def test_time_feed_filters_and_privacy(
         session.add_all(
             [
                 Project(name="Alpha", color="#000"),
+                Project(name="Beta", color="#111"),
+                Project(name=ACTIVITY_PROJECT, color="#222"),
+                Tag(name="Deep", color="#333"),
+                CalendarRecord(
+                    id="r0",
+                    project=ACTIVITY_PROJECT,
+                    date=DAY.replace(hour=10),
+                    time_spent=1,
+                    title="Generated",
+                ),
                 CalendarRecord(
                     id="r1",
                     project="Alpha",
@@ -659,6 +680,16 @@ def test_time_feed_filters_and_privacy(
                 ),
             ]
         )
+        session.flush()
+        session.add_all(
+            [
+                CalendarProject(calendar_id="r0", project=ACTIVITY_PROJECT),
+                CalendarProject(calendar_id="r1", project="Alpha"),
+                CalendarProject(calendar_id="r1", project="Beta"),
+                CalendarTag(calendar_id="r1", tag="Deep"),
+                CalendarProject(calendar_id="r3", project="Alpha"),
+            ]
+        )
         session.commit()
     settings["activity_time_added"] = True
     feed = TimeDataSource().activities(WINDOW)
@@ -666,7 +697,8 @@ def test_time_feed_filters_and_privacy(
     assert feed[1].actors == ("Ann", "Bob")
     assert feed[1].details == {
         "duration": "1.5 h",
-        "project": "Alpha",
+        "project": "Alpha, Beta",
+        "tags": "Deep",
         "location": "Room 2",
     }
     settings["activity_time_share_people"] = False
@@ -678,6 +710,8 @@ def test_time_feed_filters_and_privacy(
     settings["activity_time_skip_short"] = False
     settings["activity_time_projects"] = ["__none__"]
     assert [item.title for item in TimeDataSource().activities(WINDOW)] == ["Call"]
+    settings["activity_time_projects"] = ["Beta"]
+    assert [item.title for item in TimeDataSource().activities(WINDOW)] == ["Review"]
 
 
 def test_research_feed_uses_paper_metadata(
@@ -782,3 +816,31 @@ def test_track_stops_the_bar_on_failure() -> None:
         for _ in source.track([1, 2], "Querying", "buckets"):
             raise RuntimeError("down")
     assert source.progress().view()["running"] is False
+
+
+def test_included_content_trims_activities(
+    factory: SessionFactory, settings: Settings
+) -> None:
+    item = Activity(
+        "id",
+        "mail",
+        "received",
+        DAY,
+        "Hello",
+        "Body",
+        ("Ann",),
+        None,
+        {"category": "person", "priority": "high", "unknown": "x"},
+    )
+    trimmed = trim(item, frozenset({"category"}))
+    assert (trimmed.summary, trimmed.actors, trimmed.details) == (
+        "",
+        (),
+        {"category": "person"},
+    )
+    assert trimmed.title == "Hello"
+    defaults = MailDataSource().include_field().default
+    assert "body" not in defaults and "priority" not in defaults
+    assert {"summary", "actors", "category"} <= set(defaults)
+    for source in IMPLEMENTED:
+        assert source.include_field().name == "include"

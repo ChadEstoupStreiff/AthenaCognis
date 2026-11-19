@@ -8,7 +8,14 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
-from controllers.activity.base import Activity, DataSource, SourceDescriptor, TimeRange
+from controllers.activity.base import (
+    SUMMARY_CONTENT,
+    Activity,
+    ContentField,
+    DataSource,
+    SourceDescriptor,
+    TimeRange,
+)
 from controllers.activity.common import (
     column_values,
     excerpt,
@@ -45,6 +52,16 @@ EVENT_OPTIONS = options_of(
 )
 DEFAULT_EVENTS = ("completed", "due")
 EVENT_TITLES = {"completed": "Completed", "due": "Due", "started": "Started"}
+
+WORK_CONTENT = [
+    ContentField(SUMMARY_CONTENT, "Task description"),
+    ContentField("event", "Event"),
+    ContentField("priority", "Priority"),
+    ContentField("column", "Board column", default=False),
+    ContentField("projects", "Projects"),
+    ContentField("tags", "Tags"),
+    ContentField("done", "Done (due tasks)"),
+]
 
 
 @dataclass(frozen=True)
@@ -222,6 +239,15 @@ class WorkDataSource(DataSource):
                 session.execute(select(Task.id).where(Task.completed.is_(None))).all()
             )
         return f"{count} open task{'s' if count != 1 else ''}"
+
+    def content_fields(self) -> list[ContentField]:
+        """
+        Content a task activity can carry
+
+        Returns:
+            list[ContentField]: content fields
+        """
+        return WORK_CONTENT
 
     def config_fields(self) -> list[ConfigField]:
         """

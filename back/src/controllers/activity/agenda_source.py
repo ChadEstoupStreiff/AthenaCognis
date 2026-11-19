@@ -13,7 +13,10 @@ from controllers.activity.agenda_ics import (
     parse_link,
 )
 from controllers.activity.base import (
+    PEOPLE_CONTENT,
+    SUMMARY_CONTENT,
     Activity,
+    ContentField,
     DataSource,
     SourceDescriptor,
     SourceUnavailableError,
@@ -35,6 +38,16 @@ MINUTES_PER_HOUR = 60
 EVENT_KIND = "event"
 ALL_DAY_KIND = "all_day"
 TENTATIVE = "TENTATIVE"
+
+AGENDA_CONTENT = [
+    ContentField(SUMMARY_CONTENT, "Event description"),
+    ContentField(PEOPLE_CONTENT, "Attendees"),
+    ContentField("duration", "Duration"),
+    ContentField("provider", "Provider", default=False),
+    ContentField("calendar", "Calendar"),
+    ContentField("status", "Status"),
+    ContentField("location", "Location"),
+]
 
 
 @dataclass(frozen=True)
@@ -190,6 +203,15 @@ class AgendaDataSource(DataSource):
         if count == 0:
             return "No calendar linked"
         return f"{count} calendar{'s' if count != 1 else ''}"
+
+    def content_fields(self) -> list[ContentField]:
+        """
+        Content a calendar event activity can carry
+
+        Returns:
+            list[ContentField]: content fields
+        """
+        return AGENDA_CONTENT
 
     def config_fields(self) -> list[ConfigField]:
         """

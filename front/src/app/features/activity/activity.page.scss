@@ -26,6 +26,8 @@
 }
 
 .source {
+  --ac-placeholder: color-mix(in srgb, currentColor 12%, transparent);
+
   padding: 14px;
   cursor: pointer;
 
@@ -36,6 +38,30 @@
 
   &.disabled > i {
     color: var(--ac-muted);
+  }
+
+  &.placeholder {
+    cursor: default;
+
+    > i,
+    .bar {
+      color: var(--ac-placeholder);
+      animation: placeholder-pulse 1.2s ease-in-out infinite alternate;
+    }
+
+    .bar {
+      display: inline-block;
+      border-radius: 4px;
+      background: var(--ac-placeholder);
+    }
+
+    .label {
+      width: 60%;
+    }
+
+    .detail {
+      width: 85%;
+    }
   }
 }
 
@@ -195,4 +221,15 @@ button.entry {
   display: grid;
   gap: 4px;
   margin-bottom: 8px;
+}
+
+/* Steady digits: the tqdm-like caption updates twice a second. */
+.scan-line {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes placeholder-pulse {
+  to {
+    opacity: 0.5;
+  }
 }

@@ -26,7 +26,9 @@ import {
   parseSharedPath,
 } from '@domain/files';
 import { formatFileTime, formatLocalDate, parseLocalDate } from '@domain/time';
+import { ACTIVITY_PROJECT } from '@domain/contracts';
 import { FilesApi } from '../../core/files/files.api';
+import { ProjectsApi } from '../../core/projects/projects.api';
 import { NotifyService } from '../../core/notify/notify.service';
 import { AutosaveController } from '../../core/state/autosave';
 import { DataSync } from '../../core/state/data-sync.service';
@@ -77,6 +79,7 @@ const LAYOUTS = [
 })
 export class NotesPage {
   private readonly files = inject(FilesApi);
+  private readonly projects = inject(ProjectsApi);
   private readonly notify = inject(NotifyService);
   private readonly sync = inject(DataSync);
   private readonly router = inject(Router);
@@ -113,6 +116,18 @@ export class NotesPage {
     params: () => ({ day: this.day(), version: this.sync.version('notes')() }),
     loader: ({ params }) => this.files.listFolder(NOTES_FOLDER, params.day, params.day),
   });
+
+  /** Notes written by Activity generation (marked with a bolt). */
+  private readonly generatedResource = resource({
+    params: () => ({
+      notes: this.sync.version('notes')(),
+      projects: this.sync.version('projects')(),
+    }),
+    loader: () => this.projects.files(ACTIVITY_PROJECT),
+  });
+  protected readonly generated = computed<ReadonlySet<string>>(
+    () => new Set(this.generatedResource.hasValue() ? this.generatedResource.value() : []),
+  );
 
   protected readonly previewWidth = persistedWidth(PREVIEW_WIDTH_KEY, EVEN_SPLIT);
   protected readonly autosave = new AutosaveController<{ path: string; content: string }>(

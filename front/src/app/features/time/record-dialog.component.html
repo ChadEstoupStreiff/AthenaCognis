@@ -19,19 +19,36 @@
       />
     </label>
     <label class="field">
-      <span>Project</span>
-      <p-select
-        name="project"
+      <span>Projects</span>
+      <p-multiselect
+        name="projects"
         [options]="projectOptions()"
-        [ngModel]="state.project"
-        (ngModelChange)="patch({ project: $event })"
+        [ngModel]="state.projects"
+        (ngModelChange)="patch({ projects: $event ?? [] })"
         [filter]="true"
+        display="chip"
         placeholder="Choose…"
         [fluid]="true"
         appendTo="body"
       >
         <ng-template #item let-name><ac-tag-chip [name]="name" kind="project" /></ng-template>
-      </p-select>
+      </p-multiselect>
+    </label>
+    <label class="field">
+      <span>Tags</span>
+      <p-multiselect
+        name="tags"
+        [options]="tagOptions()"
+        [ngModel]="state.tags"
+        (ngModelChange)="patch({ tags: $event ?? [] })"
+        [filter]="true"
+        display="chip"
+        placeholder="None"
+        [fluid]="true"
+        appendTo="body"
+      >
+        <ng-template #item let-name><ac-tag-chip [name]="name" kind="tag" /></ng-template>
+      </p-multiselect>
     </label>
     <label class="field">
       <span>Hours</span>

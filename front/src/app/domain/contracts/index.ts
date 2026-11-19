@@ -1,4 +1,5 @@
 export * from './activity';
+export * from './activity-generation';
 export * from './ai';
 export * from './chat';
 export * from './api-problem';

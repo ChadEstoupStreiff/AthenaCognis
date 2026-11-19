@@ -3,11 +3,16 @@
 import time
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterator, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from typing import Literal, TypeVar
 
-from controllers.activity.config import ConfigField, SettingReader, SourceConfig
+from controllers.activity.config import (
+    ConfigField,
+    SettingReader,
+    SourceConfig,
+    options_of,
+)
 from controllers.activity.filters import FILTER_FIELDS, ActivityFilter
 from controllers.activity.settings_io import clear_settings, write_setting
 from views.settings import get_setting
@@ -237,6 +242,43 @@ class Activity:
         }
 
 
+SUMMARY_CONTENT = "summary"
+PEOPLE_CONTENT = "actors"
+INCLUDE_FIELD = "include"
+
+
+@dataclass(frozen=True)
+class ContentField:
+    """One piece of content an activity can carry: summary, people or a detail key."""
+
+    key: str
+    label: str
+    # Included until the user changes the selection.
+    default: bool = True
+
+
+SUMMARY = ContentField(SUMMARY_CONTENT, "Summary")
+PEOPLE = ContentField(PEOPLE_CONTENT, "People")
+
+
+def trim(activity: Activity, included: frozenset[str]) -> Activity:
+    """
+    Keep only the included content of an activity (title and time always kept)
+
+    Args:
+        activity (Activity): activity
+        included (frozenset[str]): content keys to keep
+    Returns:
+        Activity: activity without the content left out
+    """
+    return replace(
+        activity,
+        summary=activity.summary if SUMMARY_CONTENT in included else "",
+        actors=activity.actors if PEOPLE_CONTENT in included else (),
+        details={key: value for key, value in activity.details.items() if key in included},
+    )
+
+
 @dataclass(frozen=True)
 class SourceDescriptor:
     """Catalog entry of a source: identity and how it shows in the UI."""
@@ -408,7 +450,47 @@ class DataSource(ABC):
         Returns:
             list[ConfigField]: fields
         """
-        return [*self.config_fields(), *FILTER_FIELDS]
+        return [*self.config_fields(), self.include_field(), *FILTER_FIELDS]
+
+    def content_fields(self) -> list[ContentField]:
+        """
+        Content the activities of this source can carry (summary, people, detail keys)
+
+        Returns:
+            list[ContentField]: fields, summary and people by default
+        """
+        return [SUMMARY, PEOPLE]
+
+    def include_field(self) -> ConfigField:
+        """
+        Multiselect of the content kept on each activity
+
+        Returns:
+            ConfigField: "include" field, defaults from content_fields
+        """
+        fields = self.content_fields()
+        return ConfigField(
+            INCLUDE_FIELD,
+            "Included content",
+            "What each activity carries besides its title and time; "
+            "also what Activity generation gives the AI.",
+            "multiselect",
+            tuple(item.key for item in fields if item.default),
+            options_of([(item.key, item.label) for item in fields]),
+            "Title and time only",
+        )
+
+    def includes(self, config: SourceConfig, key: str) -> bool:
+        """
+        Tell whether a piece of content is included (skip costly reads otherwise)
+
+        Args:
+            config (SourceConfig): source settings
+            key (str): content key
+        Returns:
+            bool: True when picked
+        """
+        return key in config.choices(INCLUDE_FIELD)
 
     def view_fields(self) -> list[ConfigField]:
         """
@@ -536,9 +618,11 @@ class DataSource(ABC):
             raise ValueError(f"Limit must be between 1 and {MAX_LIMIT}.")
         if self.state() != "active":
             return []
-        keep = ActivityFilter.from_config(self.config())
+        config = self.config()
+        keep = ActivityFilter.from_config(config)
+        included = frozenset(config.choices(INCLUDE_FIELD))
         inside = [
-            item
+            trim(item, included)
             for item in self.collect(window)
             if window.contains(item.occurred_at) and keep.keeps(item)
         ]

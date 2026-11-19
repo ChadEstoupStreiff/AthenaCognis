@@ -23,7 +23,8 @@ const SECONDS_SUFFIX = ':00';
 function recordParams(input: CalendarRecordInput): QueryParams {
   return {
     title: input.title.trim(),
-    project: input.project,
+    projects: JSON.stringify(input.projects),
+    tags: JSON.stringify(input.tags),
     time_spent: input.hours,
     description: input.description,
     location: input.location,
@@ -65,7 +66,7 @@ export class CalendarApi {
    * @returns The created record, or `null` if it cannot be read back.
    */
   async create(input: CalendarRecordInput): Promise<CalendarRecord | null> {
-    const day = { start: input.date, end: input.date, project: input.project };
+    const day = { start: input.date, end: input.date, project: input.projects[0] ?? null };
     const before = new Set((await this.search(day)).map((record) => record.id));
     await this.api.post(backendUrl('/calendar/record'), undefined, {
       params: {

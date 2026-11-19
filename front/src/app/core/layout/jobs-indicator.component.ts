@@ -4,7 +4,7 @@ import { ButtonModule } from 'primeng/button';
 import { PopoverModule } from 'primeng/popover';
 import { ProgressBarModule } from 'primeng/progressbar';
 import { TooltipModule } from 'primeng/tooltip';
-import { JOB_SERVICE_LABELS, MAIL_JOB_SERVICES } from '@domain/contracts';
+import { JOB_SERVICE_LABELS, LABELLED_JOB_SERVICES } from '@domain/contracts';
 import { fileNameOf } from '@domain/files';
 import { JobsStore } from '../jobs/jobs.store';
 import { TriathleteComponent } from './triathlete.component';
@@ -51,7 +51,7 @@ export class JobsIndicatorComponent {
    * @returns Name.
    */
   protected runningName(service: string, running: string): string {
-    return MAIL_JOB_SERVICES.has(service) ? running : fileNameOf(running);
+    return LABELLED_JOB_SERVICES.has(service) ? running : fileNameOf(running);
   }
 
   /**

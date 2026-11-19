@@ -4,7 +4,10 @@ import logging
 from dataclasses import dataclass
 
 from controllers.activity.base import (
+    PEOPLE_CONTENT,
+    SUMMARY_CONTENT,
     Activity,
+    ContentField,
     DataSource,
     InvalidSettingError,
     SourceDescriptor,
@@ -21,6 +24,7 @@ from controllers.activity.github_client import (
     parse_org,
     parse_repo,
 )
+from controllers.activity.github_code import add_code_all
 from controllers.activity.github_commits import read_commits, unpublished
 from controllers.activity.github_enrich import enrich_all
 from controllers.activity.github_events import (
@@ -41,6 +45,16 @@ GITHUB_DESCRIPTOR = SourceDescriptor(
     "pi pi-github",
     "Commits, pull requests, reviews and issues.",
 )
+
+GITHUB_CONTENT = [
+    ContentField(SUMMARY_CONTENT, "Commit messages / PR text"),
+    ContentField(PEOPLE_CONTENT, "Author"),
+    ContentField("repo", "Repository"),
+    ContentField("branch", "Branch"),
+    ContentField("files", "Changed files", default=False),
+    ContentField("changes", "Pull request size"),
+    ContentField("code", "Code changes (diffs)", default=False),
+]
 
 
 @dataclass(frozen=True)
@@ -281,6 +295,15 @@ class GitHubDataSource(DataSource):
         suggested = {item.name: item for item in self.link_fields(self.suggestions())}
         return [suggested.get(item.name, item) for item in self.all_config_fields()]
 
+    def content_fields(self) -> list[ContentField]:
+        """
+        Content a GitHub activity can carry
+
+        Returns:
+            list[ContentField]: content fields
+        """
+        return GITHUB_CONTENT
+
     def config_fields(self) -> list[ConfigField]:
         """
         Declare token, links, login and filters (no network: suggestions are in view_fields)
@@ -433,4 +456,10 @@ class GitHubDataSource(DataSource):
             commit for commit in unpublished(commits, completed) if keep.keeps(commit)
         ]
         merged = newest_first(completed + fresh)
+        if self.includes(config, "code"):
+            merged = add_code_all(
+                merged,
+                self.client(),
+                lambda batch: self.track(batch, "Reading code", "changes"),
+            )
         return [item for item in map(event_activity, merged) if item is not None]

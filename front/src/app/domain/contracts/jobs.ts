@@ -6,10 +6,17 @@ export const JOB_SERVICES = [
   'tree',
   'preview',
   'mail-preview',
+  'activity-generation',
 ] as const;
 
 /** Services whose tasks are mail messages (`file` = message id), not files. */
 export const MAIL_JOB_SERVICES: ReadonlySet<string> = new Set(['mail-preview']);
+
+/** Services whose tasks carry a display label instead of a file path. */
+export const LABELLED_JOB_SERVICES: ReadonlySet<string> = new Set([
+  'mail-preview',
+  'activity-generation',
+]);
 
 /** One background job service. */
 export type JobService = (typeof JOB_SERVICES)[number];
@@ -22,6 +29,7 @@ export const JOB_SERVICE_LABELS: Readonly<Record<JobService, string>> = {
   tree: 'Section tree',
   preview: 'Preview',
   'mail-preview': 'Mail Preview',
+  'activity-generation': 'Activity generation',
 };
 
 /** State of one job run. */

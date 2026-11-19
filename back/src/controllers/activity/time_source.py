@@ -6,7 +6,15 @@ from datetime import datetime
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
-from controllers.activity.base import Activity, DataSource, SourceDescriptor, TimeRange
+from controllers.activity.base import (
+    PEOPLE_CONTENT,
+    SUMMARY_CONTENT,
+    Activity,
+    ContentField,
+    DataSource,
+    SourceDescriptor,
+    TimeRange,
+)
 from controllers.activity.common import (
     column_values,
     excerpt,
@@ -14,6 +22,8 @@ from controllers.activity.common import (
     typed_column,
 )
 from controllers.activity.config import ConfigField, SourceConfig, options_of
+from controllers.activity.generation import ACTIVITY_PROJECT
+from controllers.calendar_links import links_by_id
 from db import CalendarRecord, Project
 
 TIME_DESCRIPTOR = SourceDescriptor(
@@ -27,6 +37,15 @@ NO_PROJECT = "__none__"
 SHORT_RECORD_HOURS = 0.25
 MAX_RECORDS = 1000
 
+TIME_CONTENT = [
+    ContentField(SUMMARY_CONTENT, "Description"),
+    ContentField(PEOPLE_CONTENT, "Attendees"),
+    ContentField("duration", "Duration"),
+    ContentField("project", "Projects"),
+    ContentField("tags", "Tags"),
+    ContentField("location", "Location"),
+]
+
 
 @dataclass(frozen=True)
 class RecordRow:
@@ -37,9 +56,10 @@ class RecordRow:
     description: str
     occurred_at: datetime
     hours: float
-    project: str
     location: str
     attendees: str
+    projects: tuple[str, ...] = ()
+    tags: tuple[str, ...] = ()
 
 
 def record_rows(
@@ -78,6 +98,8 @@ def record_rows(
         .order_by(moment.desc())
         .limit(MAX_RECORDS)
     )
+    rows = session.execute(statement).all()
+    links = links_by_id(session, {str(row[0]): row[5] for row in rows})
     return [
         RecordRow(
             str(row[0]),
@@ -85,11 +107,12 @@ def record_rows(
             str(row[2] or ""),
             row[3],
             float(row[4] or 0),
-            str(row[5] or ""),
             str(row[6] or ""),
             str(row[7] or ""),
+            links[str(row[0])].projects,
+            links[str(row[0])].tags,
         )
-        for row in session.execute(statement)
+        for row in rows
     ]
 
 
@@ -104,8 +127,10 @@ def record_activity(record: RecordRow, config: SourceConfig) -> Activity:
         Activity: normalized activity
     """
     details = {"duration": f"{record.hours:g} h"}
-    if record.project:
-        details["project"] = record.project
+    if record.projects:
+        details["project"] = ", ".join(record.projects)
+    if record.tags:
+        details["tags"] = ", ".join(record.tags)
     share = config.flag("share_people")
     if share and record.location:
         details["location"] = record.location
@@ -151,6 +176,15 @@ class TimeDataSource(DataSource):
             else f"{count} project{'s' if count != 1 else ''}"
         )
 
+    def content_fields(self) -> list[ContentField]:
+        """
+        Content a time entry activity can carry
+
+        Returns:
+            list[ContentField]: content fields
+        """
+        return TIME_CONTENT
+
     def config_fields(self) -> list[ConfigField]:
         """
         Declare projects, short-record and people settings
@@ -160,7 +194,8 @@ class TimeDataSource(DataSource):
         """
         with session_scope() as session:
             names = column_values(session, Project.name)
-        projects = [(NO_PROJECT, "No project"), *[(name, name) for name in names]]
+        kept = [name for name in names if name != ACTIVITY_PROJECT]
+        projects = [(NO_PROJECT, "No project"), *[(name, name) for name in kept]]
         return [
             ConfigField(
                 "projects",
@@ -203,5 +238,7 @@ class TimeDataSource(DataSource):
         return [
             record_activity(record, config)
             for record in records
-            if not projects or (record.project or NO_PROJECT) in projects
+            # Generated entries summarize the other sources: never fed back.
+            if ACTIVITY_PROJECT not in record.projects
+            and (not projects or projects & set(record.projects or (NO_PROJECT,)))
         ]

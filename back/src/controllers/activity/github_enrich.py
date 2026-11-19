@@ -5,6 +5,7 @@ import re
 from collections.abc import Callable, Iterable, Sequence
 
 from controllers.activity.github_client import GitHubClient, GitHubError, objects
+from controllers.activity.github_code import patches_of
 from controllers.activity.github_events import JsonObject, obj, pull_number, text
 
 LOGGER = logging.getLogger(__name__)
@@ -53,7 +54,11 @@ def enrich_push(event: JsonObject, client: GitHubClient) -> JsonObject:
         {"sha": text(item, "sha"), "message": text(obj(item, "commit"), "message")}
         for item in objects(raw)
     ]
-    return with_payload(event, {"commits": commits})
+    changed = compare.get("files") if isinstance(compare, dict) else None
+    files = [text(item, "filename") for item in objects(changed)]
+    return with_payload(
+        event, {"commits": commits, "files": files, "patches": patches_of(changed)}
+    )
 
 
 def enrich_pull(event: JsonObject, client: GitHubClient) -> JsonObject:

@@ -1,0 +1,95 @@
+<section class="result" aria-live="polite">
+  <h2><i class="pi pi-bolt" aria-hidden="true"></i> {{ period().label }}</h2>
+
+  @if (generating()) {
+    <div class="status" role="status">
+      <p-progressbar mode="indeterminate" [style]="{ height: '6px' }" ariaLabel="Generating" />
+      <small class="ac-muted">
+        {{ run()?.state === 'PENDING' ? 'Queued…' : 'Generating…' }}
+      </small>
+    </div>
+  } @else if (run()?.state === 'FAILED') {
+    <p class="error">
+      <i class="pi pi-exclamation-triangle" aria-hidden="true"></i> {{ run()?.result }}
+    </p>
+  }
+
+  @if (generation(); as generated) {
+    @if (generated.note; as note) {
+      <article class="block">
+        <header class="block-head">
+          <h4><i class="pi pi-bolt" aria-hidden="true" title="Activity generation"></i> Summary</h4>
+          <p-button
+            label="Open note"
+            icon="pi pi-external-link"
+            size="small"
+            [text]="true"
+            (onClick)="openNote(note.path)"
+          />
+        </header>
+        <ac-markdown-view [source]="noteBody(note.content)" />
+      </article>
+    }
+    @if (generated.records.length > 0) {
+      <article class="block">
+        <header class="block-head">
+          <h4>
+            <i class="pi pi-bolt" aria-hidden="true" title="Activity generation"></i> Time entries
+          </h4>
+        </header>
+        <ul class="records">
+          @for (record of generated.records; track record.id) {
+            <li>
+              <i class="pi pi-bolt" aria-hidden="true" title="Activity generation"></i>
+              <time class="ac-muted">{{ recordRange(record) }}</time>
+              <span class="record-text">
+                <strong>{{ record.title }}</strong>
+                @if (record.description) {
+                  <small class="ac-muted">{{ record.description }}</small>
+                }
+                @if (record.projects.length > 0 || record.tags.length > 0) {
+                  <span class="chips">
+                    @for (project of record.projects; track project) {
+                      <ac-tag-chip [name]="project" kind="project" />
+                    }
+                    @for (tag of record.tags; track tag) {
+                      <ac-tag-chip [name]="tag" kind="tag" />
+                    }
+                  </span>
+                }
+              </span>
+            </li>
+          }
+        </ul>
+      </article>
+    }
+  }
+
+  @if (hasResults()) {
+    @if (run()?.completed; as completed) {
+      <small class="ac-muted">Generated {{ completed.replace('T', ' ').slice(0, 16) }}</small>
+    }
+    <p-button
+      label="Regenerate"
+      icon="pi pi-refresh"
+      size="small"
+      [outlined]="true"
+      [disabled]="generating()"
+      (onClick)="formOpen.set(true)"
+    />
+  } @else if (!generating()) {
+    <button type="button" class="generate" (click)="formOpen.set(true)">
+      <i class="pi pi-bolt" aria-hidden="true"></i>
+      <span>Nothing generated yet, click to generate</span>
+    </button>
+  }
+</section>
+
+<ac-generation-dialog
+  [(visible)]="formOpen"
+  [span]="span()"
+  [periodLabel]="period().label"
+  [sources]="sources()"
+  [defaults]="defaults()"
+  (generate)="generate($event)"
+/>

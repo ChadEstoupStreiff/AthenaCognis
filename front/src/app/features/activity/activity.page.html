@@ -7,7 +7,19 @@
   />
 </ac-page-header>
 
-@if (added().length > 0) {
+@if (!sourcesLoaded()) {
+  <section class="sources" aria-label="Loading data sources" aria-busy="true">
+    @for (placeholder of sourcePlaceholders; track placeholder) {
+      <button type="button" class="source placeholder ac-panel" tabindex="-1" aria-hidden="true">
+        <i class="pi pi-circle-fill" aria-hidden="true"></i>
+        <span class="source-text">
+          <strong><span class="bar label">&nbsp;</span></strong>
+          <small><span class="bar detail">&nbsp;</span></small>
+        </span>
+      </button>
+    }
+  </section>
+} @else if (added().length > 0) {
   <section class="sources" aria-label="Data sources">
     @for (source of added(); track source.key) {
       <button
@@ -37,7 +49,7 @@
   />
 }
 
-<div class="detail" [class.with-panel]="selected() !== null">
+<div class="detail with-panel">
   <section class="feed ac-panel">
     @if (selected(); as source) {
       <header class="feed-head">
@@ -81,14 +93,9 @@
                 [value]="scanPercent()"
                 [showValue]="false"
                 [style]="{ height: '6px' }"
-                ariaLabel="Scan progress"
+                ariaLabel="Feed progress"
               />
-              <small class="ac-muted"
-                >Scanning… {{ progress.files | number }} files · {{ progress.done }}/{{
-                  progress.total
-                }}
-                folders</small
-              >
+              <small class="ac-muted scan-line">{{ progressLine(progress) }}</small>
             } @else {
               <p-progressbar
                 mode="indeterminate"
@@ -121,12 +128,13 @@
         }
       }
     } @else {
-      <h2>Activity summary</h2>
-      <p class="ac-muted">Incoming</p>
+      <ac-generation-panel [sources]="activeSources()" [span]="span()" [picked]="picked()" />
     }
   </section>
   @if (selected(); as source) {
     <ac-source-panel [source]="source" (removed)="selectedKey.set(null)" />
+  } @else {
+    <ac-generation-sidebar [(span)]="span" [(picked)]="picked" [sources]="activeSources()" />
   }
 </div>
 

@@ -16,7 +16,11 @@ from controllers.activity.github_client import (
     parse_repo,
 )
 from controllers.activity.github_commits import commit_event, unpublished
-from controllers.activity.github_events import event_activity
+from controllers.activity.github_events import (
+    MAX_FILE_PATCH_CHARS,
+    code_text,
+    event_activity,
+)
 from controllers.activity.github_source import GitHubDataSource
 
 DAY = datetime(2026, 11, 18)
@@ -203,7 +207,7 @@ def test_event_activities() -> None:
     assert push.title == "Pushed 2 commits to main"
     assert push.summary == "Fix login; Add tests"
     assert push.link == "https://github.com/me/app/compare/aaaaaaaaaaaa...bbbbbbbbbbbb"
-    assert push.details == {"repo": "me/app"}
+    assert push.details == {"repo": "me/app", "branch": "main"}
     assert push.occurred_at == DAY.replace(hour=9)
     pull = event_activity(PULL)
     assert pull is not None
@@ -481,3 +485,34 @@ def test_unreadable_commits_keep_the_events(
     feed = GitHubDataSource().activities(WINDOW)
     assert "/repos/me/app/commits" in slim_api.calls
     assert [item.id for item in feed] == ["github:22", "github:21", "github:20"]
+
+
+def test_code_changes_only_when_included(
+    settings: Settings, slim_api: SlimApi
+) -> None:
+    settings["activity_github_orgs"] = ""
+    slim_api.answers[f"/repos/me/app/compare/{'a' * 40}...{'b' * 40}"] = {
+        **COMPARE,
+        "files": [{"filename": "app.py", "patch": "@@ -1 +1 @@\n-old\n+new"}],
+    }
+    slim_api.answers["/repos/me/app/pulls/9/files"] = [
+        {"filename": "cache.py", "patch": "+cached = {}"},
+        {"filename": "logo.png"},
+    ]
+    feed = {item.id: item for item in GitHubDataSource().activities(WINDOW)}
+    assert all("code" not in item.details for item in feed.values())
+    assert "/repos/me/app/pulls/9/files" not in slim_api.calls
+    settings["activity_github_include"] = ["summary", "repo", "code"]
+    feed = {item.id: item for item in GitHubDataSource().activities(WINDOW)}
+    assert feed["github:20"].details["code"] == "--- app.py\n@@ -1 +1 @@\n-old\n+new"
+    assert feed["github:22"].details["code"] == (
+        "--- cache.py\n+cached = {}\n--- logo.png\n(binary or too large)"
+    )
+    assert "files" not in feed["github:20"].details
+
+
+def test_code_is_bounded() -> None:
+    patch = "+" + "x" * (MAX_FILE_PATCH_CHARS + 10)
+    text = code_text({"patches": [{"filename": "big.py", "patch": patch}]})
+    assert text.endswith("… (truncated)")
+    assert len(text) < MAX_FILE_PATCH_CHARS + 40

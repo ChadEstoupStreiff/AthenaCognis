@@ -138,3 +138,13 @@
     grid-template-columns: 1fr;
   }
 }
+
+.locked {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  .pi-bolt {
+    color: var(--p-primary-color);
+  }
+}

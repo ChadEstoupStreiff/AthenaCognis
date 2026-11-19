@@ -110,6 +110,10 @@ def settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
     """
     values: Settings = {
         "activity_activitywatch_added": True,
+        # Every content field: these tests check them all.
+        "activity_activitywatch_include": [
+            item.key for item in ActivityWatchDataSource().content_fields()
+        ],
         "activity_activitywatch_url": URL,
     }
     monkeypatch.setattr(DataSource, "read_setting", staticmethod(values.get))

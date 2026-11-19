@@ -96,7 +96,14 @@ def settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
     Returns:
         Settings: settings
     """
-    values: Settings = {"activity_agenda_added": True, "activity_agenda_google": GOOGLE}
+    values: Settings = {
+        "activity_agenda_added": True,
+        "activity_agenda_google": GOOGLE,
+        # Every content field: these tests check them all.
+        "activity_agenda_include": [
+            item.key for item in AgendaDataSource().content_fields()
+        ],
+    }
     monkeypatch.setattr(DataSource, "read_setting", staticmethod(values.get))
     return values
 

@@ -1,9 +1,17 @@
 """Library data source: files uploaded and processed (summary, transcription, OCR, tree)."""
 
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from controllers.activity.base import Activity, DataSource, SourceDescriptor, TimeRange
+from controllers.activity.base import (
+    SUMMARY_CONTENT,
+    Activity,
+    ContentField,
+    DataSource,
+    SourceDescriptor,
+    TimeRange,
+)
 from controllers.activity.common import (
     LIBRARY_ROOT,
     ProcessedFile,
@@ -16,6 +24,7 @@ from controllers.activity.common import (
     research_files,
     session_scope,
     tag_names,
+    projects_by_file,
     tags_by_file,
     uploaded_files,
 )
@@ -46,6 +55,15 @@ EVENT_TITLES = {
     "tree": "Section tree built",
 }
 
+LIBRARY_CONTENT = [
+    ContentField(SUMMARY_CONTENT, "Job result excerpt"),
+    ContentField("folder", "Folder", default=False),
+    ContentField("event", "Event"),
+    ContentField("tags", "Tags"),
+    ContentField("keywords", "Keywords", default=False),
+    ContentField("projects", "Projects"),
+]
+
 
 def keep_file(
     file: SharedFile, config: SourceConfig, tags: set[str], skipped: set[str]
@@ -70,11 +88,22 @@ def keep_file(
     return not wanted_tags or bool(tags & set(wanted_tags))
 
 
+@dataclass(frozen=True)
+class FileLabels:
+    """Tags and projects of one file."""
+
+    tags: frozenset[str] = frozenset()
+    projects: frozenset[str] = frozenset()
+
+
+NO_LABELS = FileLabels()
+
+
 def file_activity(
     file: SharedFile,
     kind: str,
     moment: datetime,
-    tags: set[str],
+    labels: FileLabels,
     result: ProcessedFile | None,
 ) -> Activity:
     """
@@ -84,14 +113,16 @@ def file_activity(
         file (SharedFile): file
         kind (str): event kind
         moment (datetime): when it happened
-        tags (set[str]): tags of the file
+        labels (FileLabels): tags and projects of the file
         result (ProcessedFile | None): job result, None for an upload
     Returns:
         Activity: normalized activity
     """
     details = {"folder": file.folder, "event": EVENT_TITLES[kind]}
-    if tags:
-        details["tags"] = ", ".join(sorted(tags))
+    if labels.tags:
+        details["tags"] = ", ".join(sorted(labels.tags))
+    if labels.projects:
+        details["projects"] = ", ".join(sorted(labels.projects))
     if result is not None and result.keywords:
         details["keywords"] = excerpt(result.keywords, 120)
     return Activity(
@@ -130,6 +161,15 @@ class LibraryDataSource(DataSource):
         """
         count = len(self.config().choices("events"))
         return f"{count} event type{'s' if count != 1 else ''}"
+
+    def content_fields(self) -> list[ContentField]:
+        """
+        Content a file activity can carry
+
+        Returns:
+            list[ContentField]: content fields
+        """
+        return LIBRARY_CONTENT
 
     def config_fields(self) -> list[ConfigField]:
         """
@@ -199,23 +239,24 @@ class LibraryDataSource(DataSource):
             skipped = research_files(session) if config.flag("skip_research") else set()
             paths = [file.path for file, _ in uploads] + [item.file for item in results]
             tags = tags_by_file(session, paths)
-        activities = [
-            file_activity(file, "uploaded", moment, tags.get(file.path, set()), None)
-            for file, moment in uploads
-            if keep_file(file, config, tags.get(file.path, set()), skipped)
+            projects = projects_by_file(session, paths)
+        labels = {
+            path: FileLabels(
+                frozenset(tags.get(path, set())), frozenset(projects.get(path, set()))
+            )
+            for path in paths
+        }
+        events_found: list[tuple[SharedFile, str, datetime, ProcessedFile | None]] = [
+            (file, "uploaded", moment, None) for file, moment in uploads
         ]
         for result in results:
             file = parse_shared(result.file)
-            if file is not None and keep_file(
-                file, config, tags.get(file.path, set()), skipped
-            ):
-                activities.append(
-                    file_activity(
-                        file,
-                        result.kind,
-                        result.occurred_at,
-                        tags.get(file.path, set()),
-                        result,
-                    )
-                )
-        return activities
+            if file is not None:
+                events_found.append((file, result.kind, result.occurred_at, result))
+        return [
+            file_activity(file, kind, moment, labels.get(file.path, NO_LABELS), result)
+            for file, kind, moment, result in events_found
+            if keep_file(
+                file, config, set(labels.get(file.path, NO_LABELS).tags), skipped
+            )
+        ]

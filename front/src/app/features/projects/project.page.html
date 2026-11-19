@@ -9,24 +9,30 @@
         <p class="ac-muted">No description</p>
       }
     </div>
-    <div class="actions">
-      <p-button
-        label="Edit"
-        icon="pi pi-pencil"
-        size="small"
-        severity="secondary"
-        [outlined]="true"
-        (onClick)="editing.set(true)"
-      />
-      <p-button
-        icon="pi pi-trash"
-        size="small"
-        severity="danger"
-        [text]="true"
-        ariaLabel="Delete project"
-        (onClick)="remove()"
-      />
-    </div>
+    @if (isGenerated()) {
+      <span class="locked ac-muted" title="Managed by Activity generation">
+        <i class="pi pi-bolt" aria-hidden="true"></i> Managed by Activity generation
+      </span>
+    } @else {
+      <div class="actions">
+        <p-button
+          label="Edit"
+          icon="pi pi-pencil"
+          size="small"
+          severity="secondary"
+          [outlined]="true"
+          (onClick)="editing.set(true)"
+        />
+        <p-button
+          icon="pi pi-trash"
+          size="small"
+          severity="danger"
+          [text]="true"
+          ariaLabel="Delete project"
+          (onClick)="remove()"
+        />
+      </div>
+    }
   </header>
 
   <p-tabs [value]="activeTab()" (valueChange)="selectTab($event)" [scrollable]="true">

@@ -134,8 +134,24 @@
       <button type="button" class="entry" (click)="edit(record)">
         <span class="entry-time">{{ record.startTime ?? '—' }}</span>
         <span class="entry-main">
-          <strong>{{ record.title }}</strong>
-          <ac-tag-chip [name]="record.project" kind="project" />
+          <strong>
+            @if (record.projects.includes(activityProject)) {
+              <i
+                class="pi pi-bolt generated"
+                aria-label="Activity generation"
+                title="Activity generation"
+              ></i>
+            }
+            {{ record.title }}
+          </strong>
+          <span class="chips">
+            @for (project of record.projects; track project) {
+              <ac-tag-chip [name]="project" kind="project" />
+            }
+            @for (tag of record.tags; track tag) {
+              <ac-tag-chip [name]="tag" kind="tag" />
+            }
+          </span>
           @if (record.description) {
             <ac-markdown-view
               class="entry-description ac-muted"

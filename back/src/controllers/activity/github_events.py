@@ -5,11 +5,17 @@ from datetime import datetime
 
 from controllers.activity.base import Activity, to_naive_utc
 from controllers.activity.common import excerpt
+from controllers.activity.github_client import objects
 
 GITHUB_SOURCE = "github"
 GITHUB_WEB = "https://github.com"
 BRANCH_PREFIX = "refs/heads/"
 MAX_COMMIT_MESSAGES = 5
+MAX_LISTED_FILES = 10
+# Diff kept per file and per activity: the AI context must stay bounded.
+MAX_FILE_PATCH_CHARS = 5000
+MAX_CODE_CHARS = 20000
+TRUNCATED = "… (truncated)"
 SHORT_SHA = 7
 COMMENT_EVENTS = (
     "IssueCommentEvent",
@@ -327,6 +333,108 @@ def event_actor(event: JsonObject) -> str:
     return text(obj(event, "actor"), "login")
 
 
+def branch_of(event_type: str, payload: JsonObject) -> str:
+    """
+    Branch an event is about
+
+    Args:
+        event_type (str): event type
+        payload (JsonObject): event payload
+    Returns:
+        str: pushed branch, or the pull request source branch; "" when none
+    """
+    if event_type == "PushEvent":
+        return text(payload, "ref").removeprefix(BRANCH_PREFIX)
+    return text(obj(obj(payload, "pull_request"), "head"), "ref")
+
+
+def files_text(payload: JsonObject) -> str:
+    """
+    Files changed by a push (listed by the completion step)
+
+    Args:
+        payload (JsonObject): event payload
+    Returns:
+        str: "a, b, … (+N more)", "" when unknown
+    """
+    raw = payload.get("files")
+    files = [str(name) for name in raw if name] if isinstance(raw, list) else []
+    if not files:
+        return ""
+    listed = ", ".join(files[:MAX_LISTED_FILES])
+    extra = len(files) - MAX_LISTED_FILES
+    return f"{listed} (+{extra} more)" if extra > 0 else listed
+
+
+def pull_size(payload: JsonObject) -> str:
+    """
+    Size of the pull request of an event
+
+    Args:
+        payload (JsonObject): event payload
+    Returns:
+        str: "+added −removed in N files", "" when unknown
+    """
+    pull = obj(payload, "pull_request")
+    if "changed_files" not in pull:
+        return ""
+    return (
+        f"+{text(pull, 'additions')} −{text(pull, 'deletions')} "
+        f"in {text(pull, 'changed_files')} files"
+    )
+
+
+def clip(value: str, limit: int) -> str:
+    """
+    Cut a text to a length, marking the cut
+
+    Args:
+        value (str): text
+        limit (int): maximum characters
+    Returns:
+        str: text, cut and marked when longer
+    """
+    return value if len(value) <= limit else value[:limit] + TRUNCATED
+
+
+def code_text(payload: JsonObject) -> str:
+    """
+    Diff of an event, file by file, bounded
+
+    Args:
+        payload (JsonObject): event payload (with "patches" once fetched)
+    Returns:
+        str: "--- file\\n<diff>" blocks, "" when unknown
+    """
+    blocks = [
+        f"--- {text(item, 'filename')}\n"
+        + (clip(text(item, "patch"), MAX_FILE_PATCH_CHARS) or "(binary or too large)")
+        for item in objects(payload.get("patches"))
+    ]
+    return clip("\n".join(blocks), MAX_CODE_CHARS)
+
+
+def event_details(event_type: str, repo: str, payload: JsonObject) -> dict[str, str]:
+    """
+    Details of an event: repository, branch, changed files, pull request size, diff
+
+    Args:
+        event_type (str): event type
+        repo (str): "owner/repo"
+        payload (JsonObject): event payload
+    Returns:
+        dict[str, str]: non-empty details
+    """
+    details = {
+        "repo": repo,
+        "branch": branch_of(event_type, payload),
+        "files": files_text(payload),
+        "changes": pull_size(payload),
+        "code": code_text(payload),
+    }
+    return {key: value for key, value in details.items() if value}
+
+
 def event_activity(event: JsonObject) -> Activity | None:
     """
     Convert one GitHub event
@@ -340,9 +448,11 @@ def event_activity(event: JsonObject) -> Activity | None:
     moment = event_moment(event)
     if kind is None or moment is None:
         return None
-    builder = BUILDERS[text(event, "type")]
+    event_type = text(event, "type")
+    builder = BUILDERS[event_type]
     repo = text(obj(event, "repo"), "name")
-    title, summary, link = builder(repo, obj(event, "payload"))
+    payload = obj(event, "payload")
+    title, summary, link = builder(repo, payload)
     actor = event_actor(event)
     return Activity(
         id=f"github:{text(event, 'id')}",
@@ -353,5 +463,5 @@ def event_activity(event: JsonObject) -> Activity | None:
         summary=summary,
         actors=(actor,) if actor else (),
         link=link,
-        details={"repo": repo},
+        details=event_details(event_type, repo, payload),
     )

@@ -15,6 +15,7 @@ from sqlalchemy.sql.elements import ColumnElement
 from db import (
     OCR,
     DocumentTree,
+    ProjectFile,
     StockPile,
     Summary,
     Tag,
@@ -213,6 +214,33 @@ def tag_names(session: Session) -> list[str]:
     return sorted(session.scalars(select(Tag.name)))
 
 
+def names_by_file(
+    session: Session,
+    files: Sequence[str],
+    file_column: ColumnElement[str],
+    name_column: ColumnElement[str],
+) -> dict[str, set[str]]:
+    """
+    Map files to the names linked to them (tags, projects…)
+
+    Args:
+        session (Session): session
+        files (Sequence[str]): file paths
+        file_column (ColumnElement[str]): link table file column
+        name_column (ColumnElement[str]): link table name column
+    Returns:
+        dict[str, set[str]]: names per file (files without links absent)
+    """
+    names: dict[str, set[str]] = {}
+    if not files:
+        return names
+    for file, name in session.execute(
+        select(file_column, name_column).where(file_column.in_(files))
+    ):
+        names.setdefault(file, set()).add(name)
+    return names
+
+
 def tags_by_file(session: Session, files: Sequence[str]) -> dict[str, set[str]]:
     """
     Map files to their tags
@@ -223,14 +251,27 @@ def tags_by_file(session: Session, files: Sequence[str]) -> dict[str, set[str]]:
     Returns:
         dict[str, set[str]]: tags per file (files without tags absent)
     """
-    tags: dict[str, set[str]] = {}
-    if not files:
-        return tags
-    for file, tag in session.execute(
-        select(TagFile.file, TagFile.tag).where(TagFile.file.in_(files))
-    ):
-        tags.setdefault(file, set()).add(tag)
-    return tags
+    return names_by_file(
+        session, files, typed_column(TagFile.file, str), typed_column(TagFile.tag, str)
+    )
+
+
+def projects_by_file(session: Session, files: Sequence[str]) -> dict[str, set[str]]:
+    """
+    Map files to their projects
+
+    Args:
+        session (Session): session
+        files (Sequence[str]): file paths
+    Returns:
+        dict[str, set[str]]: projects per file (files without project absent)
+    """
+    return names_by_file(
+        session,
+        files,
+        typed_column(ProjectFile.file, str),
+        typed_column(ProjectFile.project, str),
+    )
 
 
 @dataclass(frozen=True)

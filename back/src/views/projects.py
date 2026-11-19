@@ -2,8 +2,29 @@ import json
 import logging
 import traceback
 
+from controllers.activity.generation import ACTIVITY_PROJECT
 from db import Contact, ContactProject, Project, ProjectFile, get_db
 from fastapi import APIRouter, HTTPException
+
+HTTP_FORBIDDEN = 403
+
+
+def ensure_editable(project_name: str) -> None:
+    """
+    Refuse changes to the generated Activity project
+
+    Args:
+        project_name (str): project name
+    Returns:
+        None
+    Raises:
+        HTTPException: 403 for the Activity project
+    """
+    if project_name == ACTIVITY_PROJECT:
+        raise HTTPException(
+            status_code=HTTP_FORBIDDEN,
+            detail=f"{ACTIVITY_PROJECT} is managed by Activity generation.",
+        )
 
 router = APIRouter(tags=["Projects"])
 
@@ -232,6 +253,7 @@ async def update_project(
     """
     Update an existing project.
     """
+    ensure_editable(project_name)
     if color is not None and not color.startswith("#"):
         color = f"#{color}"
     db = get_db()
@@ -269,6 +291,7 @@ async def delete_project(project_name: str):
     """
     Delete a project by name.
     """
+    ensure_editable(project_name)
     db = get_db()
     try:
         project = db.query(Project).filter(Project.name == project_name).first()

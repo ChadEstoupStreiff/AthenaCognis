@@ -15,7 +15,7 @@ import { ButtonModule } from 'primeng/button';
 import { DrawerModule } from 'primeng/drawer';
 import { TabsModule } from 'primeng/tabs';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
-import type { CalendarRecord } from '@domain/contracts';
+import { ACTIVITY_PROJECT, type CalendarRecord } from '@domain/contracts';
 import { formatLocalDate } from '@domain/time';
 import { FilesApi } from '../../core/files/files.api';
 import { SettingsStore } from '../../core/settings/settings.store';
@@ -256,6 +256,9 @@ export class TimePage {
     this.editing.set(record);
     this.dialogOpen.set(true);
   }
+
+  /** Project of generated time entries (marked with a bolt). */
+  protected readonly activityProject = ACTIVITY_PROJECT;
 
   /**
    * Hours label.

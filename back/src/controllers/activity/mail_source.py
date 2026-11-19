@@ -1,12 +1,22 @@
 """Mail data source: mail of chosen boxes, sent mail and mail flagged for activity."""
 
+import json
 from dataclasses import replace
 from datetime import datetime, timedelta
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.sql.elements import ColumnElement
 
-from controllers.activity.base import Activity, DataSource, SourceDescriptor, TimeRange
+from controllers.activity.base import (
+    PEOPLE_CONTENT,
+    SUMMARY_CONTENT,
+    Activity,
+    ContentField,
+    DataSource,
+    SourceDescriptor,
+    TimeRange,
+)
+from controllers.activity.common import excerpt
 from controllers.activity.config import ConfigField, SourceConfig, options_of
 from controllers.mail import activity_flags, store
 from db import MailAccount, MailActivityFlag, MailMessage, MailSender
@@ -14,6 +24,20 @@ from db import MailAccount, MailActivityFlag, MailMessage, MailSender
 HIDDEN_PRIORITY = "hidden"
 MAX_MESSAGES = 1000
 MAX_RECIPIENTS = 5
+MAX_ATTACHMENTS = 5
+MAIL_CONTENT = [
+    ContentField(SUMMARY_CONTENT, "AI preview or snippet"),
+    ContentField(PEOPLE_CONTENT, "Sender / recipients"),
+    ContentField("category", "Category"),
+    ContentField("priority", "Priority", default=False),
+    ContentField("read", "Read state", default=False),
+    ContentField("needs_reply", "Needs reply"),
+    ContentField("suggested_action", "Suggested action"),
+    ContentField("flagged_for_activity", "Flagged for activity", default=False),
+    ContentField("cc", "Cc", default=False),
+    ContentField("attachments", "Attachment names", default=False),
+    ContentField("body", "Body excerpt", default=False),
+]
 # Flag made after midnight but before the reset time: shown at the end of its day.
 LAST_MOMENT_OFFSET = timedelta(seconds=1)
 # Received-mail boxes the feed can pull from ("sent" has its own toggle).
@@ -102,7 +126,30 @@ def _details(message: MailMessage, priority: str) -> dict[str, str]:
         details["needs_reply"] = "yes" if message.needs_reply else "no"
     if message.suggested_action:
         details["suggested_action"] = message.suggested_action
+    if message.cc:
+        details["cc"] = message.cc
+    names = attachment_names(message.attachments)
+    if names:
+        details["attachments"] = ", ".join(names[:MAX_ATTACHMENTS])
+    if message.body_text:
+        details["body"] = excerpt(message.body_text)
     return details
+
+
+def attachment_names(raw: str) -> list[str]:
+    """
+    Names of the attachments of a message
+
+    Args:
+        raw (str): JSON list stored on the message
+    Returns:
+        list[str]: names, empty when malformed
+    """
+    try:
+        names = json.loads(raw or "[]")
+    except json.JSONDecodeError:
+        return []
+    return [str(name) for name in names] if isinstance(names, list) else []
 
 
 def to_activity(message: MailMessage, priority: str) -> Activity:
@@ -215,6 +262,15 @@ class MailDataSource(DataSource):
         if count == 0:
             return "No account connected"
         return f"{count} account{'s' if count > 1 else ''}"
+
+    def content_fields(self) -> list[ContentField]:
+        """
+        Content a mail activity can carry
+
+        Returns:
+            list[ContentField]: summary, people, mail facts and optional body
+        """
+        return MAIL_CONTENT
 
     def config_fields(self) -> list[ConfigField]:
         """

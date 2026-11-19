@@ -191,6 +191,41 @@ class CalendarRecord(Base):
     attendees = Column(TEXT, nullable=True)
 
 
+class CalendarProject(Base):
+    """Project of a time entry (an entry may belong to several)."""
+
+    # Lowercase: see DocumentTree.
+    __tablename__ = "calendar_project"
+
+    calendar_id = mapped_column(
+        ForeignKey("CalendarRecord.id", ondelete="CASCADE", onupdate="CASCADE"),
+        primary_key=True,
+        index=True,
+    )
+    project = mapped_column(
+        ForeignKey("Project.name", ondelete="CASCADE", onupdate="CASCADE"),
+        primary_key=True,
+        index=True,
+    )
+
+
+class CalendarTag(Base):
+    """Tag of a time entry."""
+
+    __tablename__ = "calendar_tag"
+
+    calendar_id = mapped_column(
+        ForeignKey("CalendarRecord.id", ondelete="CASCADE", onupdate="CASCADE"),
+        primary_key=True,
+        index=True,
+    )
+    tag = mapped_column(
+        ForeignKey("Tag.name", ondelete="CASCADE", onupdate="CASCADE"),
+        primary_key=True,
+        index=True,
+    )
+
+
 class ChatSession(Base):
     __tablename__ = "ChatSession"
 
@@ -631,3 +666,12 @@ class MailPreviewTask(JobTask):
     """Mail Preview generation of one message (`file` holds the message id)."""
 
     __tablename__ = "mail_preview_task"
+
+
+class ActivityGenerationTask(JobTask):
+    """Activity generation run (`file` = "daily/<date>"); keeps the request as JSON."""
+
+    # Lowercase: see DocumentTree.
+    __tablename__ = "activity_generation_task"
+
+    params: Mapped[str | None] = mapped_column(TEXT, nullable=True)

@@ -4,10 +4,10 @@ import {
   computed,
   effect,
   inject,
+  linkedSignal,
   resource,
   signal,
 } from '@angular/core';
-import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ButtonModule } from 'primeng/button';
@@ -15,7 +15,7 @@ import { DatePickerModule } from 'primeng/datepicker';
 import { DialogModule } from 'primeng/dialog';
 import { ProgressBarModule } from 'primeng/progressbar';
 import { SelectButtonModule } from 'primeng/selectbutton';
-import type { ActivityItem, DataSourceInfo, ScanProgress } from '@domain/contracts';
+import type { ActivityItem, DataSourceInfo, GenerationSpan, ScanProgress } from '@domain/contracts';
 import {
   activityWindow,
   customWindow,
@@ -30,7 +30,10 @@ import { EmptyStateComponent } from '../../shared/ui/empty-state.component';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { mailTime } from '../mail/mail-model';
 import { isExternalLink } from './lines';
-import { scanPercent } from './scan-progress';
+import { readSourceCount, saveSourceCount } from './source-count';
+import { progressLine, scanPercent } from './scan-progress';
+import { GenerationPanelComponent } from './generation-panel.component';
+import { GenerationSidebarComponent } from './generation-sidebar.component';
 import { SourcePanelComponent } from './source-panel.component';
 
 /** Scan progress refresh while a feed loads. */
@@ -75,7 +78,6 @@ const KIND_ICONS: Readonly<Record<string, string>> = {
 @Component({
   selector: 'ac-activity-page',
   imports: [
-    DecimalPipe,
     FormsModule,
     ButtonModule,
     DatePickerModule,
@@ -83,6 +85,8 @@ const KIND_ICONS: Readonly<Record<string, string>> = {
     ProgressBarModule,
     SelectButtonModule,
     EmptyStateComponent,
+    GenerationPanelComponent,
+    GenerationSidebarComponent,
     PageHeaderComponent,
     SourcePanelComponent,
   ],
@@ -96,10 +100,16 @@ export class ActivityPage {
   private readonly sync = inject(DataSync);
 
   protected readonly rangeOptions = RANGE_OPTIONS;
+  /** One placeholder tile per data source seen last visit. */
+  protected readonly sourcePlaceholders = Array.from({ length: readSourceCount() }, (_, i) => i);
   protected readonly mailTime = mailTime;
+  protected readonly progressLine = progressLine;
   protected readonly adding = signal(false);
   protected readonly selectedKey = signal<string | null>(null);
   protected readonly range = signal<ActivityRange>('today');
+  /** Activity generation timeline and picked day (sidebar ↔ results). */
+  protected readonly span = signal<GenerationSpan>('daily');
+  protected readonly picked = signal<Date>(new Date());
   /** Picked days of the custom range; second entry null while picking. */
   protected readonly customDays = signal<(Date | null)[]>(defaultCustomDays());
   protected readonly today = new Date();
@@ -127,9 +137,15 @@ export class ActivityPage {
   protected readonly added = computed(() =>
     this.allSources().filter((source) => source.state === 'active' || source.state === 'disabled'),
   );
+  /** Enabled sources, offered to activity generation. */
+  protected readonly activeSources = computed(() => this.byState('active'));
   protected readonly available = computed(() => this.byState('available'));
   protected readonly inactive = computed(() => this.byState('inactive'));
-  protected readonly sourcesLoaded = computed(() => this.sourcesResource.hasValue());
+  /** True once sources loaded; stays true across reloads so placeholders never come back. */
+  protected readonly sourcesLoaded = linkedSignal<boolean, boolean>({
+    source: () => this.sourcesResource.hasValue(),
+    computation: (hasValue, previous) => hasValue || (previous?.value ?? false),
+  });
   protected readonly incomingGroups = computed(() => [
     { title: 'Incoming · external services', items: this.incoming('external') },
     { title: 'Incoming · AthenaCognis', items: this.incoming('athenacognis') },
@@ -169,6 +185,11 @@ export class ActivityPage {
       onCleanup(() => {
         clearInterval(timer);
       });
+    });
+    effect(() => {
+      if (this.sourcesResource.hasValue()) {
+        saveSourceCount(this.added().length);
+      }
     });
   }
 

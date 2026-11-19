@@ -1,4 +1,4 @@
-import type { CalendarRecord, NamedCount } from '@domain/contracts';
+import { ACTIVITY_PROJECT, type CalendarRecord, type NamedCount } from '@domain/contracts';
 import { addDays, daysBetween, formatLocalDate, parseLocalDate } from '@domain/time';
 
 /** One cell of the month grid. */
@@ -35,6 +35,8 @@ const PERCENT = 100;
 const MONTH_LENGTH = 7;
 const PERIOD_SEPARATOR = '-';
 const MONTHS_PER_YEAR = 12;
+/** Stats bucket for records left without a project. */
+export const NO_PROJECT = 'No project';
 
 /**
  * Weeks (Monday first) covering a month.
@@ -119,14 +121,45 @@ export function totalHours(records: readonly CalendarRecord[]): number {
 }
 
 /**
- * Hours per project, largest first.
+ * Drop the Activity project from records (entries stay, the ⚡ label does not count).
+ *
+ * @param records - Records.
+ * @returns Records whose projects exclude Activity (`No project` when nothing is left).
+ */
+export function withoutActivityProject(records: readonly CalendarRecord[]): CalendarRecord[] {
+  return records.map((record) => {
+    const projects = (record.projects.length > 0 ? record.projects : [record.project]).filter(
+      (project) => project !== ACTIVITY_PROJECT,
+    );
+    const kept = projects.length > 0 ? projects : [NO_PROJECT];
+    return { ...record, project: kept[0] ?? NO_PROJECT, projects: kept };
+  });
+}
+
+/**
+ * Hours of a record per project, split evenly between its projects.
+ *
+ * @param record - Record.
+ * @returns [project, hours] pairs (totals stay equal to the record hours).
+ */
+export function projectShares(record: CalendarRecord): [string, number][] {
+  const projects = record.projects.length > 0 ? record.projects : [record.project];
+  return projects.map((project) => [project, record.hours / projects.length]);
+}
+
+/**
+ * Hours per project, largest first (multi-project records split evenly).
  *
  * @param records - Records.
  * @returns Project totals.
  */
 export function hoursByProject(records: readonly CalendarRecord[]): NamedCount[] {
-  return [...groupBy(records, (record) => record.project)]
-    .map(([name, list]) => ({ name, count: totalHours(list) }))
+  const totals = new Map<string, number>();
+  for (const [name, hours] of records.flatMap(projectShares)) {
+    totals.set(name, (totals.get(name) ?? 0) + hours);
+  }
+  return [...totals]
+    .map(([name, count]) => ({ name, count }))
     .sort((left, right) => right.count - left.count);
 }
 
@@ -181,9 +214,11 @@ export function hoursSeries(
   for (const record of records) {
     const label = granularity === 'day' ? record.date : record.date.slice(0, MONTH_LENGTH);
     const position = index.get(label);
-    const series = values[record.project];
-    if (position !== undefined && series !== undefined) {
-      series[position] = (series[position] ?? 0) + record.hours;
+    for (const [project, hours] of projectShares(record)) {
+      const series = values[project];
+      if (position !== undefined && series !== undefined) {
+        series[position] = (series[position] ?? 0) + hours;
+      }
     }
   }
   return { labels, projects, values };

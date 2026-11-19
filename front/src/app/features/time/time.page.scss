@@ -284,6 +284,10 @@
   font-weight: 600;
 }
 
+.generated {
+  color: var(--p-primary-color);
+}
+
 .stats-head {
   display: flex;
   flex-wrap: wrap;
@@ -338,4 +342,10 @@
   .charts {
     grid-template-columns: 1fr;
   }
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }

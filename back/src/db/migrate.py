@@ -11,6 +11,8 @@ from db.models import Base
 MAIL_TABLE = "mail_message"
 FLAG_TABLE = "mail_activity_flag"
 LEGACY_ACTIVITY_COLUMN = "is_activity"
+CALENDAR_TABLE = "CalendarRecord"
+CALENDAR_PROJECT_TABLE = "calendar_project"
 
 logger = logging.getLogger(__name__)
 
@@ -99,3 +101,27 @@ def migrate_activity_flags(engine: Engine) -> int:
         )
     logger.info("Converted %d legacy activity flags", len(rows))
     return len(rows)
+
+
+def migrate_calendar_projects(engine: Engine) -> int:
+    """
+    Copy the single project of each time entry into its project links (once per entry)
+
+    Args:
+        engine (Engine): database engine (run after create_all)
+    Returns:
+        int: entries linked
+    """
+    with engine.begin() as connection:
+        result = connection.execute(
+            text(
+                f"INSERT INTO {CALENDAR_PROJECT_TABLE} (calendar_id, project) "
+                f"SELECT id, project FROM {CALENDAR_TABLE} "
+                "WHERE project IS NOT NULL AND id NOT IN "
+                f"(SELECT calendar_id FROM {CALENDAR_PROJECT_TABLE})"
+            )
+        )
+    linked = int(result.rowcount or 0)
+    if linked:
+        logger.info("Linked %d time entries to their project", linked)
+    return linked

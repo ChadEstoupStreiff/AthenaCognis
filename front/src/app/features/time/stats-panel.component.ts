@@ -14,7 +14,7 @@ import { CatalogStore } from '../../core/catalog/catalog.store';
 import { DataSync } from '../../core/state/data-sync.service';
 import { CalendarApi } from '../../core/time/calendar.api';
 import { ChartComponent } from '../../shared/ui/chart.component';
-import { groupBy, hoursByProject, hoursSeries, totalHours } from './time-model';
+import { groupBy, hoursByProject, hoursSeries, totalHours, withoutActivityProject } from './time-model';
 
 /** Range presets. */
 type RangePreset = 'month' | 'quarter' | 'year';
@@ -74,7 +74,8 @@ export class StatsPanelComponent {
       this.calendar.search({ start: params.start, end: params.end }, abortSignal),
   });
 
-  private readonly list = computed(() => this.records.value() ?? []);
+  /** Stats keep ⚡ Activity entries but never count ⚡ Activity as a project. */
+  private readonly list = computed(() => withoutActivityProject(this.records.value() ?? []));
   protected readonly total = computed(() => totalHours(this.list()).toFixed(DECIMALS));
   protected readonly days = computed(() => groupBy(this.list(), (record) => record.date).size);
 

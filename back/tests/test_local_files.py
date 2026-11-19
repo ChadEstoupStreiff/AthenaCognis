@@ -78,7 +78,15 @@ def settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
     Returns:
         Settings: settings
     """
-    values: Settings = {"activity_local_files_added": True}
+    values: Settings = {
+        "activity_local_files_added": True,
+        # Every content field but the text excerpt (checked on its own).
+        "activity_local_files_include": [
+            item.key
+            for item in LocalFilesDataSource().content_fields()
+            if item.key != "content"
+        ],
+    }
     monkeypatch.setattr(DataSource, "read_setting", staticmethod(values.get))
     return values
 
@@ -136,7 +144,18 @@ def test_feed_lists_modified_files_of_picked_folders(
         ("report.docx", "Documents/Work"),
     ]
     assert feed[1].occurred_at == DAY.replace(hour=10)
-    assert feed[1].details == {"size": "2.0 KB", "type": "docx"}
+    assert feed[1].details == {"size": "2.0 KB", "type": "docx", "path": "Documents/Work/report.docx"}
+
+
+def test_text_excerpt_only_when_included(root: Path, settings: Settings) -> None:
+    settings["activity_local_files_folders"] = ["Documents"]
+    feed = LocalFilesDataSource().activities(WINDOW)
+    assert all("content" not in item.details for item in feed)
+    included = [*settings["activity_local_files_include"], "content"]  # type: ignore[misc]
+    settings["activity_local_files_include"] = included
+    by_title = {item.title: item for item in LocalFilesDataSource().activities(WINDOW)}
+    assert by_title["notes.md"].details["content"].startswith("xxx")
+    assert "content" not in by_title["report.docx"].details
 
 
 def test_unknown_or_outside_folders_are_ignored(root: Path, settings: Settings) -> None:
