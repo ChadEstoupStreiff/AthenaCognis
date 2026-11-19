@@ -256,7 +256,9 @@ class AgendaDataSource(DataSource):
         share_people = config.flag("share_people")
         skip_all_day = config.flag("skip_all_day")
         activities: list[Activity] = []
-        for provider, link in self.links(config):
+        for provider, link in self.track(
+            self.links(config), "Reading calendars", "calendars"
+        ):
             try:
                 events = calendar_events(self.download(link), window)
             except CalendarError as error:

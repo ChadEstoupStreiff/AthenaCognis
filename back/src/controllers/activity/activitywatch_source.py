@@ -381,7 +381,7 @@ class ActivityWatchDataSource(DataSource):
             tracked = tracked_buckets(client.buckets(), config)
             return [
                 item
-                for bucket in tracked
+                for bucket in self.track(tracked, "Querying", "buckets")
                 for item in self._bucket_activities(client, bucket, slots, config)
             ]
         except ActivityWatchError as error:

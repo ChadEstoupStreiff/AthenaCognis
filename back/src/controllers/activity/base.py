@@ -1,10 +1,11 @@
 """Common shape of every activity data source: time range, activity record, source contract."""
 
+import time
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Literal
+from typing import Literal, TypeVar
 
 from controllers.activity.config import ConfigField, SettingReader, SourceConfig
 from controllers.activity.filters import FILTER_FIELDS, ActivityFilter
@@ -23,6 +24,8 @@ SourceOrigin = Literal["external", "athenacognis"]
 JsonDict = dict[str, object]
 SettingWriter = Callable[[str, object], None]
 SettingsClearer = Callable[[str], None]
+StepT = TypeVar("StepT")
+ELAPSED_DECIMALS = 1
 
 
 class InvalidRangeError(ValueError):
@@ -47,25 +50,70 @@ class FolderBrowsingError(LookupError):
 
 @dataclass
 class ScanProgress:
-    """Progress of a long collect: units (e.g. folders) done out of total, files seen."""
+    """Progress of one collect phase: steps done out of total, items found, timing."""
 
+    # Phase shown before the bar (e.g. "Scanning").
+    desc: str = ""
+    # Name of the steps (e.g. "folders").
+    unit: str = ""
+    # Name of the items found along the way (e.g. "files"), "" when not counted.
+    item_unit: str = ""
     total: int = 0
     done: int = 0
-    files: int = 0
+    items: int = 0
     running: bool = False
+    # time.monotonic() at begin and end, 0 when not reached.
+    started: float = 0.0
+    finished: float = 0.0
+
+    def begin(self, total: int) -> None:
+        """
+        Start the phase with its number of steps
+
+        Args:
+            total (int): steps to do
+        Returns:
+            None
+        """
+        self.total, self.done, self.running = total, 0, True
+        self.started, self.finished = time.monotonic(), 0.0
+
+    def end(self) -> None:
+        """
+        Stop the phase (finished or failed)
+
+        Returns:
+            None
+        """
+        self.running, self.finished = False, time.monotonic()
+
+    def elapsed(self) -> float:
+        """
+        Seconds spent in the phase
+
+        Returns:
+            float: seconds, 0 before begin
+        """
+        if not self.started:
+            return 0.0
+        return (self.finished or time.monotonic()) - self.started
 
     def view(self) -> "JsonDict":
         """
         Serialize for the API
 
         Returns:
-            JsonDict: running, done, total, files
+            JsonDict: running, desc, done, total, unit, items, item_unit, elapsed
         """
         return {
             "running": self.running,
+            "desc": self.desc,
             "done": self.done,
             "total": self.total,
-            "files": self.files,
+            "unit": self.unit,
+            "items": self.items,
+            "item_unit": self.item_unit,
+            "elapsed": round(self.elapsed(), ELAPSED_DECIMALS),
         }
 
 
@@ -271,14 +319,38 @@ class DataSource(ABC):
             str: short status text
         """
 
+    # Latest collect phase, set by track() (or a source scanning by itself).
+    _progress: ScanProgress | None = None
+
     def progress(self) -> ScanProgress:
         """
-        Progress of the running collect, for sources with long scans
+        Progress of the latest collect phase
 
         Returns:
-            ScanProgress: idle by default
+            ScanProgress: latest phase, idle when none ran
         """
-        return ScanProgress()
+        return self._progress or ScanProgress()
+
+    def track(self, steps: Sequence[StepT], desc: str, unit: str) -> Iterator[StepT]:
+        """
+        Yield the steps of a collect phase, publishing its progress (like tqdm)
+
+        Args:
+            steps (Sequence[StepT]): steps of the phase
+            desc (str): phase name (e.g. "Reading calendars")
+            unit (str): step name (e.g. "calendars")
+        Returns:
+            Iterator[StepT]: the steps, in order
+        """
+        progress = ScanProgress(desc=desc, unit=unit)
+        self._progress = progress
+        progress.begin(len(steps))
+        try:
+            for step in steps:
+                yield step
+                progress.done += 1
+        finally:
+            progress.end()
 
     def browse(self, path: str) -> list[FolderEntry]:
         """

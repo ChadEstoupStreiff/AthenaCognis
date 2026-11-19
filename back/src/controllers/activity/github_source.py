@@ -1,4 +1,4 @@
-"""GitHub data source: events of watched repositories and organisations."""
+"""GitHub data source: events and fresh commits of watched repositories and organisations."""
 
 import logging
 from dataclasses import dataclass
@@ -21,6 +21,7 @@ from controllers.activity.github_client import (
     parse_org,
     parse_repo,
 )
+from controllers.activity.github_commits import read_commits, unpublished
 from controllers.activity.github_enrich import enrich_all
 from controllers.activity.github_events import (
     GITHUB_SOURCE,
@@ -118,6 +119,18 @@ class EventFilter:
         return not self.actor or event_actor(event).lower() == self.actor.lower()
 
 
+def newest_first(events: list[JsonObject]) -> list[JsonObject]:
+    """
+    Sort events by creation moment, newest first
+
+    Args:
+        events (list[JsonObject]): events
+    Returns:
+        list[JsonObject]: sorted copy
+    """
+    return sorted(events, key=lambda event: text(event, "created_at"), reverse=True)
+
+
 def org_path(org: str, login: str) -> str:
     """
     Events feed of an organisation
@@ -190,24 +203,43 @@ class GitHubDataSource(DataSource):
         parts += [plural(orgs, "organisation", "organisations")] if orgs else []
         return " · ".join(parts) or "Nothing watched"
 
+    def org_repos(self, orgs: list[str]) -> list[str]:
+        """
+        Most active repositories of each organisation, skipping unreadable ones
+
+        Args:
+            orgs (list[str]): organisation logins
+        Returns:
+            list[str]: "owner/repo", organisation by organisation
+        """
+        repos: list[str] = []
+        for org in orgs:
+            try:
+                repos += self.client().org_repos(org)
+            except GitHubError as error:
+                LOGGER.warning("GitHub repositories of %s unavailable: %s", org, error)
+        return repos
+
     def suggestions(self) -> Suggestions:
         """
-        Own and organisation repositories (newest first) and organisations not watched yet
+        Most active own and organisation repositories, and organisations, not watched yet
 
         Returns:
             Suggestions: names, empty without token or when GitHub fails
         """
         raw = self.config()
         try:
-            repos, orgs = self.client().user_repos(), self.client().orgs()
             watched_repos = set(parse_all(raw.lines("repos"), is_org=False))
-            watched_orgs = set(parse_all(raw.lines("orgs"), is_org=True))
+            watched_orgs = parse_all(raw.lines("orgs"), is_org=True)
+            orgs = [name for name in self.client().orgs() if name]
+            user_repos = self.client().user_repos()
         except (GitHubError, InvalidSettingError) as error:
             LOGGER.warning("GitHub suggestions unavailable: %s", error)
             return Suggestions([], [])
+        repos = user_repos + self.org_repos(list(dict.fromkeys(orgs + watched_orgs)))
         return Suggestions(
-            [name for name in repos if name and name not in watched_repos],
-            [name for name in orgs if name and name not in watched_orgs],
+            [name for name in dict.fromkeys(repos) if name and name not in watched_repos],
+            [name for name in orgs if name not in watched_orgs],
         )
 
     def link_fields(self, found: Suggestions | None = None) -> list[ConfigField]:
@@ -323,7 +355,7 @@ class GitHubDataSource(DataSource):
             SourceUnavailableError: a feed could not be read (message names it)
         """
         events: dict[str, JsonObject] = {}
-        for feed in feeds:
+        for feed in self.track(feeds, "Reading events", "feeds"):
             try:
                 batch = self.client().events(feed.path, window.start)
             except GitHubError as error:
@@ -347,34 +379,58 @@ class GitHubDataSource(DataSource):
         except GitHubError as error:
             raise SourceUnavailableError(f"GitHub token: {error}") from error
 
+    def feed_filter(
+        self, config: SourceConfig, window: TimeRange, login: str
+    ) -> EventFilter:
+        """
+        Build the window / kind / actor filter of the feed
+
+        Args:
+            config (SourceConfig): GitHub settings
+            window (TimeRange): time window
+            login (str): login used by "Only my activity", "" when unknown
+        Returns:
+            EventFilter: filter
+        Raises:
+            InvalidSettingError: "Only my activity" without token nor username
+        """
+        only_mine = config.flag("only_mine")
+        if only_mine and not login:
+            raise InvalidSettingError(
+                "'Only my activity' needs a token or a GitHub username."
+            )
+        return EventFilter(
+            window, frozenset(config.choices("kinds")), login if only_mine else ""
+        )
+
     def collect(self, window: TimeRange) -> list[Activity]:
         """
-        Read the events of the watched repositories and organisations in the window
+        Read the events, plus commits not published as pushes yet, of the watched sources
 
         Args:
             window (TimeRange): time window
         Returns:
-            list[Activity]: one activity per supported event
+            list[Activity]: one activity per supported event or unpublished commit
         Raises:
             InvalidSettingError: bad link, or "Only my activity" without token nor username
             SourceUnavailableError: GitHub could not be read
         """
         config = self.config()
         login = self.me(config)
-        only_mine = config.flag("only_mine")
-        if only_mine and not login:
-            raise InvalidSettingError(
-                "'Only my activity' needs a token or a GitHub username."
-            )
+        keep = self.feed_filter(config, window, login)
         token_login = login if self.token() else ""
         events = self.read_events(self.watched(config, token_login), window)
-        keep = EventFilter(
-            window, frozenset(config.choices("kinds")), login if only_mine else ""
+        completed = enrich_all(
+            newest_first([event for event in events if keep.keeps(event)]),
+            self.client(),
+            lambda batch: self.track(batch, "Completing", "events"),
         )
-        kept = sorted(
-            (event for event in events if keep.keeps(event)),
-            key=lambda event: text(event, "created_at"),
-            reverse=True,
+        repos = parse_all(config.lines("repos"), is_org=False)
+        commits = read_commits(
+            self.client(), self.track(repos, "Reading commits", "repositories"), window
         )
-        completed = enrich_all(kept, self.client())
-        return [item for item in map(event_activity, completed) if item is not None]
+        fresh = [
+            commit for commit in unpublished(commits, completed) if keep.keeps(commit)
+        ]
+        merged = newest_first(completed + fresh)
+        return [item for item in map(event_activity, merged) if item is not None]

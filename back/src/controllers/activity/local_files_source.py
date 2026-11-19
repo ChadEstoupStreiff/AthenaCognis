@@ -343,7 +343,7 @@ def scan_unit(
         if file in seen:
             continue
         seen.add(file)
-        progress.files += 1
+        progress.items += 1
         change = change_of(job.root, file)
         if change is not None and job.window.contains(change.modified_at):
             changes.append(change)
@@ -365,7 +365,7 @@ def changed_files(
             (scan stops after MAX_SCANNED_FILES files)
     """
     units = [unit for folder in folders for unit in scan_units(folder, job.rules)]
-    progress.total, progress.running = len(units), True
+    progress.begin(len(units))
     seen: set[Path] = set()
     changes: list[FileChange] = []
     try:
@@ -373,7 +373,7 @@ def changed_files(
             changes += scan_unit(job, unit, seen, progress)
             progress.done += 1
     finally:
-        progress.running = False
+        progress.end()
     changes.sort(key=lambda change: change.modified_at, reverse=True)
     return changes[:MAX_CHANGES]
 
@@ -425,24 +425,6 @@ class LocalFilesDataSource(DataSource):
 
     descriptor = LOCAL_FILES_DESCRIPTOR
     root: Path = LOCAL_ROOT
-
-    def __init__(self) -> None:
-        """
-        Start with an idle progress
-
-        Returns:
-            None
-        """
-        self._progress = ScanProgress()
-
-    def progress(self) -> ScanProgress:
-        """
-        Progress of the latest scan
-
-        Returns:
-            ScanProgress: folders done out of total, files seen
-        """
-        return self._progress
 
     def is_configured(self) -> bool:
         """
@@ -552,7 +534,7 @@ class LocalFilesDataSource(DataSource):
         """
         job = ScanJob(self.root, window, ScanRules.from_config(self.config()))
         # Latest scan owns the progress shown in the UI.
-        progress = ScanProgress()
+        progress = ScanProgress(desc="Scanning", unit="folders", item_unit="files")
         self._progress = progress
         changes = changed_files(job, self.picked_folders(), progress)
         return [change_activity(change) for change in changes]

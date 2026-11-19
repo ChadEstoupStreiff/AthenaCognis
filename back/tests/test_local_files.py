@@ -187,17 +187,24 @@ def test_size_text() -> None:
     assert size_text(5 * 1024**3) == "5.0 GB"
 
 
+IDLE_PROGRESS: dict[str, object] = {
+    "running": False,
+    "desc": "",
+    "done": 0,
+    "total": 0,
+    "unit": "",
+    "items": 0,
+    "item_unit": "",
+    "elapsed": 0.0,
+}
+
+
 def test_scan_reports_progress(
     root: Path, settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     settings["activity_local_files_folders"] = ["Documents"]
     source = LocalFilesDataSource()
-    assert source.progress().view() == {
-        "running": False,
-        "done": 0,
-        "total": 0,
-        "files": 0,
-    }
+    assert source.progress().view() == IDLE_PROGRESS
     seen_running: list[dict[str, object]] = []
     original = local_files_source.change_of
 
@@ -219,12 +226,19 @@ def test_scan_reports_progress(
     # Documents: its own files, then the Work subfolder.
     assert seen_running[0]["running"] is True
     assert seen_running[0]["total"] == 2
-    assert source.progress().view() == {
+    final = source.progress().view()
+    assert {key: final[key] for key in ("running", "done", "total", "items")} == {
         "running": False,
         "done": 2,
         "total": 2,
-        "files": 3,
+        "items": 3,
     }
+    assert (final["desc"], final["unit"], final["item_unit"]) == (
+        "Scanning",
+        "folders",
+        "files",
+    )
+    assert isinstance(final["elapsed"], float)
 
 
 def test_progress_route(root: Path, settings: Settings) -> None:
@@ -232,5 +246,5 @@ def test_progress_route(root: Path, settings: Settings) -> None:
     app.include_router(views.activity.router)
     client = TestClient(app)
     response = client.get("/activity/sources/mail/progress")
-    assert response.json() == {"running": False, "done": 0, "total": 0, "files": 0}
+    assert response.json() == IDLE_PROGRESS
     assert client.get("/activity/sources/nope/progress").status_code == 404

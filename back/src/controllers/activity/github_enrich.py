@@ -2,7 +2,7 @@
 
 import logging
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Sequence
 
 from controllers.activity.github_client import GitHubClient, GitHubError, objects
 from controllers.activity.github_events import JsonObject, obj, pull_number, text
@@ -50,7 +50,8 @@ def enrich_push(event: JsonObject, client: GitHubClient) -> JsonObject:
     compare = client.get(f"/repos/{repo}/compare/{before}...{head}")
     raw = compare.get("commits") if isinstance(compare, dict) else None
     commits = [
-        {"message": text(obj(item, "commit"), "message")} for item in objects(raw)
+        {"sha": text(item, "sha"), "message": text(obj(item, "commit"), "message")}
+        for item in objects(raw)
     ]
     return with_payload(event, {"commits": commits})
 
@@ -107,15 +108,33 @@ def enrich(event: JsonObject, client: GitHubClient) -> JsonObject:
         return event
 
 
-def enrich_all(events: list[JsonObject], client: GitHubClient) -> list[JsonObject]:
+Tracker = Callable[[Sequence[JsonObject]], Iterable[JsonObject]]
+
+
+def untracked(events: Sequence[JsonObject]) -> Iterable[JsonObject]:
+    """
+    Pass events through without progress
+
+    Args:
+        events (Sequence[JsonObject]): events
+    Returns:
+        Iterable[JsonObject]: same events
+    """
+    return events
+
+
+def enrich_all(
+    events: list[JsonObject], client: GitHubClient, track: Tracker = untracked
+) -> list[JsonObject]:
     """
     Complete the first MAX_ENRICHED events (newest first), keep the rest as is
 
     Args:
         events (list[JsonObject]): events, newest first
         client (GitHubClient): client
+        track (Tracker): wraps the completed events to report progress
     Returns:
         list[JsonObject]: events
     """
-    head = [enrich(event, client) for event in events[:MAX_ENRICHED]]
+    head = [enrich(event, client) for event in track(events[:MAX_ENRICHED])]
     return head + events[MAX_ENRICHED:]

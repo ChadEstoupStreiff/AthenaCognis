@@ -18,9 +18,10 @@ CACHE_TTL_SECONDS = 120.0
 PER_PAGE = 100
 # Events API serves at most 300 events (3 pages of 100).
 MAX_EVENT_PAGES = 3
-MAX_SUGGESTIONS = 20
-# Repositories the token owner owns or reaches as an organisation member.
-SUGGESTED_AFFILIATIONS = "owner,organization_member"
+# Suggested repositories per owner (the token owner, then each organisation).
+MAX_REPO_SUGGESTIONS = 10
+# Most active first: latest push.
+ACTIVE_REPOS_QUERY = f"sort=pushed&direction=desc&per_page={MAX_REPO_SUGGESTIONS}"
 HTTP_UNAUTHORIZED = 401
 HTTP_FORBIDDEN = 403
 HTTP_NOT_FOUND = 404
@@ -205,22 +206,44 @@ class GitHubClient:
         payload = self.get("/user")
         return str(payload.get("login", "")) if isinstance(payload, dict) else ""
 
-    def user_repos(self) -> list[str]:
+    def repo_names(self, path: str) -> list[str]:
         """
-        Repositories the token owner owns or reaches through an organisation, newest first
+        Full names of a repository listing
 
+        Args:
+            path (str): listing path with query
         Returns:
-            list[str]: "owner/repo", at most MAX_SUGGESTIONS, empty without token
+            list[str]: "owner/repo", empty without token
         Raises:
             GitHubError: request failed
         """
         if not self.token:
             return []
-        path = (
-            f"/user/repos?affiliation={SUGGESTED_AFFILIATIONS}"
-            f"&sort=created&direction=desc&per_page={MAX_SUGGESTIONS}"
-        )
         return [str(item.get("full_name", "")) for item in objects(self.get(path))]
+
+    def user_repos(self) -> list[str]:
+        """
+        Most active repositories the token owner owns
+
+        Returns:
+            list[str]: "owner/repo", at most MAX_REPO_SUGGESTIONS, empty without token
+        Raises:
+            GitHubError: request failed
+        """
+        return self.repo_names(f"/user/repos?affiliation=owner&{ACTIVE_REPOS_QUERY}")
+
+    def org_repos(self, org: str) -> list[str]:
+        """
+        Most active repositories of an organisation
+
+        Args:
+            org (str): organisation login
+        Returns:
+            list[str]: "owner/repo", at most MAX_REPO_SUGGESTIONS, empty without token
+        Raises:
+            GitHubError: request failed
+        """
+        return self.repo_names(f"/orgs/{org}/repos?{ACTIVE_REPOS_QUERY}")
 
     def orgs(self) -> list[str]:
         """

@@ -755,3 +755,30 @@ def test_invalid_regex_filter_is_a_bad_request(
     response = client.get("/activity/sources/mail/feed", params=params)
     assert response.status_code == 400
     assert "Invalid exclude regex" in response.json()["detail"]
+
+
+def test_track_reports_each_step_like_tqdm() -> None:
+    source = LocalFilesDataSource()
+    seen: list[dict[str, object]] = []
+    for _ in source.track(["a", "b", "c"], "Reading calendars", "calendars"):
+        seen.append(source.progress().view())
+    assert [(view["done"], view["total"], view["running"]) for view in seen] == [
+        (0, 3, True),
+        (1, 3, True),
+        (2, 3, True),
+    ]
+    final = source.progress().view()
+    assert (final["done"], final["running"], final["desc"], final["unit"]) == (
+        3,
+        False,
+        "Reading calendars",
+        "calendars",
+    )
+
+
+def test_track_stops_the_bar_on_failure() -> None:
+    source = LocalFilesDataSource()
+    with pytest.raises(RuntimeError):
+        for _ in source.track([1, 2], "Querying", "buckets"):
+            raise RuntimeError("down")
+    assert source.progress().view()["running"] is False

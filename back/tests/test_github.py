@@ -15,6 +15,7 @@ from controllers.activity.github_client import (
     parse_org,
     parse_repo,
 )
+from controllers.activity.github_commits import commit_event, unpublished
 from controllers.activity.github_events import event_activity
 from controllers.activity.github_source import GitHubDataSource
 
@@ -132,6 +133,8 @@ class FakeGitHub:
             "/repos/me/app/events": [STAR, OTHERS_REVIEW, PULL, PUSH, OLD],
             "/users/Me/events/orgs/acme": [ORG_ISSUE, PUSH],
             "/orgs/acme/events": [ORG_ISSUE],
+            "/orgs/acme/repos": [{"full_name": "acme/api"}, {"full_name": "me/app"}],
+            "/orgs/lab/repos": [{"full_name": "lab/notes"}],
         }
         return answers.get(path.split("?")[0], [])
 
@@ -244,8 +247,10 @@ def test_anonymous_uses_public_feeds_and_username(
 
 def test_suggestions_skip_watched(settings: Settings, api: FakeGitHub) -> None:
     fields = {item["key"]: item for item in GitHubDataSource().info().config}
-    assert fields["activity_github_repos"]["options"] == [
-        {"value": "me/new", "label": "me/new"}
+    assert [item["value"] for item in fields["activity_github_repos"]["options"]] == [
+        "me/new",
+        "acme/api",
+        "lab/notes",
     ]
     assert fields["activity_github_orgs"]["options"] == [
         {"value": "lab", "label": "lab"}
@@ -253,13 +258,17 @@ def test_suggestions_skip_watched(settings: Settings, api: FakeGitHub) -> None:
     assert fields["activity_github_token"]["secret"] is True
 
 
-def test_suggestions_include_organisation_repos(
+def test_suggestions_ask_ten_most_active_per_owner(
     settings: Settings, api: FakeGitHub
 ) -> None:
     GitHubDataSource().info()
-    repo_calls = [path for path, _ in api.calls if path.startswith("/user/repos")]
-    assert repo_calls
-    assert all("affiliation=owner,organization_member" in path for path in repo_calls)
+    listings = [path for path, _ in api.calls if path.split("?")[0].endswith("/repos")]
+    assert {path.split("?")[0] for path in listings} == {
+        "/user/repos",
+        "/orgs/acme/repos",
+        "/orgs/lab/repos",
+    }
+    assert all("sort=pushed" in path and "per_page=10" in path for path in listings)
 
 
 def test_errors(settings: Settings, api: FakeGitHub) -> None:
@@ -397,3 +406,78 @@ def test_failed_completion_keeps_the_event(
     feed = GitHubDataSource().activities(WINDOW)
     assert feed[0].title == "Opened PR #404"
     assert feed[0].link == "https://github.com/me/app/pull/404"
+
+
+def commit(sha: str, hour: int, login: str, message: str) -> Event:
+    """
+    Build one Commits API item
+
+    Args:
+        sha (str): commit SHA
+        hour (int): committer hour of the day
+        login (str): author login
+        message (str): commit message
+    Returns:
+        Event: commit
+    """
+    return {
+        "sha": sha,
+        "html_url": f"https://github.com/me/app/commit/{sha}",
+        "author": {"login": login},
+        "commit": {
+            "message": message,
+            "committer": {"date": f"2026-11-18T{hour:02d}:30:00Z"},
+        },
+    }
+
+
+def test_commits_not_yet_pushed_as_events_are_added(
+    settings: Settings, slim_api: SlimApi
+) -> None:
+    settings["activity_github_orgs"] = ""
+    slim_api.answers["/repos/me/app/commits"] = [
+        commit("e" * 40, 20, "ann", "Their change"),
+        commit("d" * 40, 19, "me", "Fresh work\n\nbody"),
+        commit("b" * 40, 13, "me", "Already in a push event"),
+    ]
+    feed = GitHubDataSource().activities(WINDOW)
+    fresh = feed[0]
+    assert fresh.id == f"github:commit-{'d' * 40}"
+    assert fresh.kind == "push"
+    assert (fresh.title, fresh.summary) == ("Fresh work", "Commit ddddddd")
+    assert fresh.link == f"https://github.com/me/app/commit/{'d' * 40}"
+    assert fresh.occurred_at == DAY.replace(hour=19, minute=30)
+    ids = [item.id for item in feed]
+    assert f"github:commit-{'b' * 40}" not in ids
+    assert f"github:commit-{'e' * 40}" not in ids
+
+
+def test_commits_follow_the_kind_filter(settings: Settings, slim_api: SlimApi) -> None:
+    settings["activity_github_orgs"] = ""
+    settings["activity_github_kinds"] = ["pull_request"]
+    slim_api.answers["/repos/me/app/commits"] = [commit("d" * 40, 19, "me", "Work")]
+    feed = GitHubDataSource().activities(WINDOW)
+    assert all(item.kind == "pull_request" for item in feed)
+
+
+def test_commits_listed_by_a_push_are_covered() -> None:
+    push = event(
+        "30",
+        "PushEvent",
+        9,
+        {"head": "h" * 40, "commits": [{"sha": "c" * 40, "message": "Old"}]},
+    )
+    commits = [
+        commit_event("me/app", commit(sha * 40, 9, "me", "x")) for sha in "hcz"
+    ]
+    kept = unpublished(commits, [push])
+    assert [item["id"] for item in kept] == [f"commit-{'z' * 40}"]
+
+
+def test_unreadable_commits_keep_the_events(
+    settings: Settings, slim_api: SlimApi
+) -> None:
+    settings["activity_github_orgs"] = ""
+    feed = GitHubDataSource().activities(WINDOW)
+    assert "/repos/me/app/commits" in slim_api.calls
+    assert [item.id for item in feed] == ["github:22", "github:21", "github:20"]

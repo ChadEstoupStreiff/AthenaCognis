@@ -10,6 +10,7 @@ GITHUB_SOURCE = "github"
 GITHUB_WEB = "https://github.com"
 BRANCH_PREFIX = "refs/heads/"
 MAX_COMMIT_MESSAGES = 5
+SHORT_SHA = 7
 COMMENT_EVENTS = (
     "IssueCommentEvent",
     "PullRequestReviewCommentEvent",
@@ -18,6 +19,8 @@ COMMENT_EVENTS = (
 # Event type -> activity kind (also the values of the "kinds" setting).
 EVENT_KINDS: dict[str, str] = {
     "PushEvent": "push",
+    # Commit read from the Commits API, not yet published as a push event.
+    "CommitEvent": "push",
     "PullRequestEvent": "pull_request",
     "PullRequestReviewEvent": "review",
     "IssuesEvent": "issue",
@@ -124,6 +127,23 @@ def push_parts(repo: str, payload: JsonObject) -> tuple[str, str, str]:
         else f"{GITHUB_WEB}/{repo}/tree/{branch}"
     )
     return title, "; ".join(messages[:MAX_COMMIT_MESSAGES]), link
+
+
+def commit_parts(repo: str, payload: JsonObject) -> tuple[str, str, str]:
+    """
+    Title, summary and link of a commit not yet published as a push
+
+    Args:
+        repo (str): "owner/repo"
+        payload (JsonObject): CommitEvent payload
+    Returns:
+        tuple[str, str, str]: first message line, short SHA, commit link
+    """
+    sha = text(payload, "sha")
+    lines = text(payload, "message").splitlines()
+    title = lines[0] if lines else f"Commit {sha[:SHORT_SHA]}"
+    link = text(payload, "html_url") or f"{GITHUB_WEB}/{repo}/commit/{sha}"
+    return title, f"Commit {sha[:SHORT_SHA]}", link
 
 
 def numbered(prefix: str, number: str, title: str) -> str:
@@ -268,6 +288,7 @@ def release_parts(repo: str, payload: JsonObject) -> tuple[str, str, str]:
 PartsBuilder = Callable[[str, JsonObject], tuple[str, str, str]]
 BUILDERS: dict[str, PartsBuilder] = {
     "PushEvent": push_parts,
+    "CommitEvent": commit_parts,
     "PullRequestEvent": pull_request_parts,
     "PullRequestReviewEvent": review_parts,
     "IssuesEvent": issue_parts,

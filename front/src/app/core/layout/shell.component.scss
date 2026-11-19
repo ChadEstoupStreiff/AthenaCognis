@@ -241,6 +241,8 @@
 .content {
   flex: 1;
   overflow: auto;
+  /* Reserve the scrollbar width: content growing past the fold must not reflow grids. */
+  scrollbar-gutter: stable;
   padding: 20px 24px 32px;
 }
 
