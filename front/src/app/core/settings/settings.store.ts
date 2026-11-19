@@ -1,7 +1,8 @@
-import { computed, inject, Injectable, resource } from '@angular/core';
+import { inject, Injectable, resource } from '@angular/core';
 import { guardSettingValue, type SettingValue } from '@domain/contracts';
 import { ApiClient, backendUrl } from '../api/api-client';
 import { DataSync } from '../state/data-sync.service';
+import { latestValue } from '../state/latest-value';
 
 /** Settings read by several pages, with their types. */
 interface KnownSettings {
@@ -15,6 +16,9 @@ interface KnownSettings {
   readonly research_subject: string;
   readonly research_default_scope: string;
   readonly research_default_period: string;
+  readonly mail_auto_preview: boolean;
+  readonly mail_auto_download_images: boolean;
+  readonly mail_activity_reset_time: string;
 }
 
 /** Defaults (mirror `back/src/views/settings.py`). */
@@ -29,6 +33,9 @@ export const SETTING_DEFAULTS: KnownSettings = {
   research_subject: '',
   research_default_scope: 'library',
   research_default_period: '1',
+  mail_auto_preview: true,
+  mail_auto_download_images: false,
+  mail_activity_reset_time: '04:00',
 };
 
 /** Keys with typed defaults. */
@@ -47,10 +54,8 @@ export class SettingsStore {
       this.api.get<Record<string, SettingValue>>(backendUrl('/settings'), { signal: abortSignal }),
   });
 
-  /** Raw values (empty while loading). */
-  readonly values = computed<Readonly<Record<string, SettingValue>>>(() =>
-    this.snapshot.hasValue() ? this.snapshot.value() : {},
-  );
+  /** Raw values (empty before the first load, previous ones while reloading). */
+  readonly values = latestValue<Readonly<Record<string, SettingValue>>>(this.snapshot, {});
 
   /**
    * Typed value of a known setting.
@@ -62,6 +67,19 @@ export class SettingsStore {
     const fallback = SETTING_DEFAULTS[key];
     const value = this.values()[key];
     return typeof value === typeof fallback ? (value as KnownSettings[K]) : fallback;
+  }
+
+  /**
+   * String list setting.
+   *
+   * @param key - Setting key.
+   * @returns Strings of the setting (empty when unset or not a list).
+   */
+  list(key: string): readonly string[] {
+    const value = this.values()[key];
+    return Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === 'string')
+      : [];
   }
 
   /**

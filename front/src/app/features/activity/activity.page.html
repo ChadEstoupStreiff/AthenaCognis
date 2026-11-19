@@ -1,0 +1,185 @@
+<ac-page-header title="Activity" subtitle="Everything that happened, from every source.">
+  <p-button
+    label="Add data source"
+    icon="pi pi-plus"
+    [outlined]="true"
+    (onClick)="adding.set(true)"
+  />
+</ac-page-header>
+
+@if (added().length > 0) {
+  <section class="sources" aria-label="Data sources">
+    @for (source of added(); track source.key) {
+      <button
+        type="button"
+        class="source ac-panel"
+        [class.selected]="source.key === selectedKey()"
+        [class.disabled]="source.state === 'disabled'"
+        [attr.aria-pressed]="source.key === selectedKey()"
+        (click)="toggle(source.key)"
+      >
+        <i [class]="source.icon" aria-hidden="true"></i>
+        <span class="source-text">
+          <strong>{{ source.label }}</strong>
+          <small class="ac-muted">{{ source.detail }}</small>
+        </span>
+        @if (source.state === 'disabled') {
+          <span class="state">Disabled</span>
+        }
+      </button>
+    }
+  </section>
+} @else if (sourcesLoaded()) {
+  <ac-empty-state
+    icon="pi pi-link"
+    title="No data source added"
+    message="Add a data source to build your activity feed."
+  />
+}
+
+<div class="detail" [class.with-panel]="selected() !== null">
+  <section class="feed ac-panel">
+    @if (selected(); as source) {
+      <header class="feed-head">
+        <h2><i [class]="source.icon" aria-hidden="true"></i> Activity feed · {{ source.label }}</h2>
+        <div class="range">
+          @if (range() === 'custom') {
+            <p-datepicker
+              selectionMode="range"
+              [ngModel]="customDays()"
+              (ngModelChange)="customDays.set($event ?? [])"
+              [maxDate]="today"
+              [readonlyInput]="true"
+              dateFormat="yy-mm-dd"
+              appendTo="body"
+              size="small"
+              ariaLabel="Custom range"
+            />
+          }
+          <p-selectbutton
+            [options]="rangeOptions"
+            optionValue="value"
+            [allowEmpty]="false"
+            [ngModel]="range()"
+            (ngModelChange)="range.set($event)"
+            size="small"
+            ariaLabel="Time range"
+          />
+        </div>
+      </header>
+      @if (source.state === 'disabled') {
+        <ac-empty-state
+          icon="pi pi-power-off"
+          title="Data source disabled"
+          message="Enable it to see its activity."
+        />
+      } @else {
+        @if (feed.isLoading()) {
+          <div class="scan" role="status" aria-live="polite">
+            @if (scan(); as progress) {
+              <p-progressbar
+                [value]="scanPercent()"
+                [showValue]="false"
+                [style]="{ height: '6px' }"
+                ariaLabel="Scan progress"
+              />
+              <small class="ac-muted"
+                >Scanning… {{ progress.files | number }} files · {{ progress.done }}/{{
+                  progress.total
+                }}
+                folders</small
+              >
+            } @else {
+              <p-progressbar
+                mode="indeterminate"
+                [style]="{ height: '6px' }"
+                ariaLabel="Loading feed"
+              />
+            }
+          </div>
+        }
+        @for (item of feedRows(); track item.id) {
+          <button type="button" class="item" [disabled]="item.link === null" (click)="open(item)">
+            <i [class]="iconOf(item)" aria-hidden="true"></i>
+            <span class="item-text">
+              <strong>{{ item.title }}</strong>
+              @if (item.actors.length > 0) {
+                <span class="ac-muted actors">{{ item.actors.join(', ') }}</span>
+              }
+              @if (item.summary) {
+                <small class="ac-muted">{{ item.summary }}</small>
+              }
+            </span>
+            <time class="ac-muted">{{ mailTime(item.occurred_at) }}</time>
+          </button>
+        } @empty {
+          <ac-empty-state
+            icon="pi pi-bolt"
+            [title]="feed.isLoading() ? 'Loading…' : 'Nothing in this range'"
+            [message]="feed.error() ? 'Could not load the feed.' : null"
+          />
+        }
+      }
+    } @else {
+      <h2>Activity summary</h2>
+      <p class="ac-muted">Incoming</p>
+    }
+  </section>
+  @if (selected(); as source) {
+    <ac-source-panel [source]="source" (removed)="selectedKey.set(null)" />
+  }
+</div>
+
+<p-dialog
+  header="Add data source"
+  [modal]="true"
+  [visible]="adding()"
+  (visibleChange)="adding.set($event)"
+  [style]="{ width: 'min(720px, 96vw)' }"
+>
+  @if (available().length > 0) {
+    <h3>Ready to add</h3>
+    <div class="catalog">
+      @for (source of available(); track source.key) {
+        <button type="button" class="entry" (click)="add(source)">
+          <i [class]="source.icon" aria-hidden="true"></i>
+          <span class="source-text">
+            <strong>{{ source.label }}</strong>
+            <small class="ac-muted">{{ source.description }}</small>
+          </span>
+          <span class="state">Add</span>
+        </button>
+      }
+    </div>
+  }
+  @if (inactive().length > 0) {
+    <h3>Needs setup</h3>
+    <div class="catalog">
+      @for (source of inactive(); track source.key) {
+        <button type="button" class="entry" (click)="setUp(source)">
+          <i [class]="source.icon" aria-hidden="true"></i>
+          <span class="source-text">
+            <strong>{{ source.label }}</strong>
+            <small class="ac-muted">{{ source.detail }}</small>
+          </span>
+          <span class="state">Set up</span>
+        </button>
+      }
+    </div>
+  }
+  @for (group of incomingGroups(); track group.title) {
+    <h3>{{ group.title }}</h3>
+    <div class="catalog">
+      @for (source of group.items; track source.key) {
+        <div class="entry incoming">
+          <i [class]="source.icon" aria-hidden="true"></i>
+          <span class="source-text">
+            <strong>{{ source.label }}</strong>
+            <small class="ac-muted">{{ source.description }}</small>
+          </span>
+          <span class="state">{{ source.detail }}</span>
+        </div>
+      }
+    </div>
+  }
+</p-dialog>

@@ -18,6 +18,7 @@ import { FilePeekComponent } from '../../features/viewer/file-peek.component';
 import { persistedWidth } from '../../shared/ui/persisted-width';
 import { ResizeHandleComponent } from '../../shared/ui/resize-handle.component';
 import { CaptureService } from '../capture/capture.service';
+import { SettingsStore } from '../settings/settings.store';
 import { fileKindOf, fileNameOf, FILE_KIND_ICONS } from '@domain/files';
 import { viewerCommands } from '../../shared/files/file-row';
 import { LastOpenedService } from '../files/last-opened.service';
@@ -28,7 +29,7 @@ import { TelemetryService } from '../telemetry/telemetry.service';
 import { ThemeService } from '../theme/theme.service';
 import { CommandPaletteComponent } from './command-palette.component';
 import { JobsIndicatorComponent } from './jobs-indicator.component';
-import { MAIN_NAV, SETTINGS_NAV } from './nav-items';
+import { arrangeNav, MAIN_NAV, NAV_HIDDEN_KEY, NAV_ORDER_KEY, SETTINGS_NAV } from './nav-items';
 import { PaletteService } from './palette.service';
 
 const THEME_ICONS = { light: 'pi pi-sun', dark: 'pi pi-moon', system: 'pi pi-desktop' } as const;
@@ -73,7 +74,12 @@ export class ShellComponent {
   private readonly lastOpened = inject(LastOpenedService);
   protected readonly telemetry = inject(TelemetryService);
 
-  protected readonly mainNav = MAIN_NAV;
+  private readonly settings = inject(SettingsStore);
+
+  /** Rail sections in the user's order, hidden ones removed (still reachable by ⌘K and `g` keys). */
+  protected readonly mainNav = computed(() =>
+    arrangeNav(MAIN_NAV, this.settings.list(NAV_ORDER_KEY), this.settings.list(NAV_HIDDEN_KEY)),
+  );
   protected readonly settingsNav = SETTINGS_NAV;
   protected readonly collapsed = signal(false);
   /** Icon-only content; lags `collapsed` on expand so labels appear once the rail is wide. */

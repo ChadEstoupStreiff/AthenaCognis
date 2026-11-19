@@ -33,6 +33,7 @@ import { SaveStatusComponent } from '../../shared/ui/save-status.component';
 import { TagChipComponent } from '../../shared/ui/tag-chip.component';
 import { ContactDialogComponent } from './contact-dialog.component';
 import { MarkdownViewComponent } from '../../shared/ui/markdown-view.component';
+import { ContactMailsComponent } from '../mail/contact-mails.component';
 
 const SEARCH_DEBOUNCE_MS = 250;
 const AVATAR_SIZE = 72;
@@ -59,6 +60,7 @@ const NOTE_ROWS = 10;
     SaveStatusComponent,
     TagChipComponent,
     MarkdownViewComponent,
+    ContactMailsComponent,
   ],
   templateUrl: './people.page.html',
   styleUrl: './people.page.scss',

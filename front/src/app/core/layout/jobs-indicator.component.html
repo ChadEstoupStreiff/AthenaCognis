@@ -34,7 +34,7 @@
           <strong>{{ labels[service.service] }}</strong>
           <small class="ac-muted">
             @if (service.running) {
-              Working on {{ fileName(service.running) }}
+              Working on {{ runningName(service.service, service.running) }}
             } @else {
               Idle
             }

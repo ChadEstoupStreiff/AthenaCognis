@@ -29,6 +29,10 @@ describe('AI routing', () => {
     expect(modelsFor(task('blip'), 'llama', ['llama3.2:1b', 'llava:7b'])).toEqual(['llava:7b']);
     expect(modelsFor(task('ocr'), 'paddle', [])).toEqual([]);
     expect(modelsFor(task('transcription'), 'groq', [])).toContain('whisper-large-v3-turbo');
+    expect(modelsFor(task('transcription'), 'qwen_asr', [])).toEqual([
+      'Qwen/Qwen3-ASR-0.6B',
+      'Qwen/Qwen3-ASR-1.7B',
+    ]);
   });
 
   it('prefers live lists and falls back to built-in ones', () => {

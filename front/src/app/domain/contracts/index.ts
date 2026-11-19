@@ -1,3 +1,4 @@
+export * from './activity';
 export * from './ai';
 export * from './chat';
 export * from './api-problem';
@@ -5,6 +6,7 @@ export * from './dashboard';
 export * from './entities';
 export * from './files';
 export * from './jobs';
+export * from './mail';
 export * from './ops';
 export * from './settings';
 export * from './time';

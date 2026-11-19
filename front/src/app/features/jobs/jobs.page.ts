@@ -13,10 +13,17 @@ import { ButtonModule } from 'primeng/button';
 import { SelectButtonModule } from 'primeng/selectbutton';
 import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
-import { JOB_SERVICES, type JobService, type JobState, type JobTask } from '@domain/contracts';
+import {
+  JOB_SERVICES,
+  type JobService,
+  type JobState,
+  type JobTask,
+  MAIL_JOB_SERVICES,
+} from '@domain/contracts';
 import { fileNameOf } from '@domain/files';
 import { ApiClient, backendUrl } from '../../core/api/api-client';
 import { jobFailure } from '../../core/jobs/job-error';
+import { Router } from '@angular/router';
 import { latestRuns } from '../../core/jobs/jobs-overview';
 import { JobsStore } from '../../core/jobs/jobs.store';
 import { PeekService } from '../../core/files/peek.service';
@@ -28,6 +35,7 @@ const SERVICE_LABELS: Readonly<Record<JobService, string>> = {
   summarize: 'Summaries',
   tree: 'Section trees',
   preview: 'Previews',
+  'mail-preview': 'Mail Previews',
 };
 const STATE_SEVERITY: Readonly<Record<JobState, 'info' | 'warn' | 'success' | 'danger'>> = {
   PENDING: 'warn',
@@ -56,6 +64,7 @@ export class JobsPage {
   private readonly api = inject(ApiClient);
   protected readonly jobs = inject(JobsStore);
   protected readonly peek = inject(PeekService);
+  private readonly router = inject(Router);
 
   protected readonly rows = ROWS;
   protected readonly services = JOB_SERVICES.map((value) => ({
@@ -122,6 +131,48 @@ export class JobsPage {
    */
   protected failure(task: JobTask): string | null {
     return jobFailure(task);
+  }
+
+  /**
+   * Whether the selected service works on mails.
+   *
+   * @returns True for Mail Preview.
+   */
+  protected isMailService(): boolean {
+    return MAIL_JOB_SERVICES.has(this.service());
+  }
+
+  /**
+   * Name of a task: mail subject for mail jobs, file name otherwise.
+   *
+   * @param task - Task.
+   * @returns Name.
+   */
+  protected taskName(task: JobTask): string {
+    return task.label ?? this.nameOf(task.file);
+  }
+
+  /**
+   * Name of the item being processed (mail jobs already report a subject).
+   *
+   * @param running - Running file path or mail subject.
+   * @returns Name.
+   */
+  protected runningName(running: string): string {
+    return MAIL_JOB_SERVICES.has(this.service()) ? running : this.nameOf(running);
+  }
+
+  /**
+   * Open a task's item: the mail in Mail, or the file peek.
+   *
+   * @param task - Task.
+   */
+  protected openTask(task: JobTask): void {
+    if (MAIL_JOB_SERVICES.has(this.service())) {
+      void this.router.navigate(['/mail'], { queryParams: { open: task.file } });
+      return;
+    }
+    this.peek.open(task.file);
   }
 
   /**

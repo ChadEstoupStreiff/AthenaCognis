@@ -40,6 +40,13 @@ from db.models import (
     TaskContact,
     CalendarContact,
     PinnedFile,
+    MailAccount,
+    MailMessage,
+    MailActivityFlag,
+    MailSender,
+    MailOutgoing,
+    MailDraft,
+    MailPreviewTask,
 )
 
 

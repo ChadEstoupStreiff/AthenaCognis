@@ -7,6 +7,16 @@
   border: 1px solid var(--ac-panel-border);
   border-radius: 14px;
   background: var(--ac-panel-background);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+  column-gap: 32px;
+  align-content: start;
+
+  // Rows flow into two columns; headings, intros, lists and wide rows span both.
+  > :not(.row),
+  > .row.stacked {
+    grid-column: 1 / -1;
+  }
 
   h2 {
     margin: 0 0 12px;
@@ -40,8 +50,9 @@
 .row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: 16px;
+  gap: 8px 16px;
   padding: 10px 0;
   border-top: 1px solid var(--ac-panel-border);
 

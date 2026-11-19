@@ -60,11 +60,9 @@
 }
 
 .sections {
-  columns: 2 420px;
-  column-gap: 20px;
   min-width: 0;
 
-  // Section components only wrap their groups; let groups flow into columns.
+  // Section components only wrap their groups; each group is a full-width card.
   > * {
     display: contents;
   }

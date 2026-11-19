@@ -2,9 +2,11 @@
 FROM node:24-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+# npm download cache kept across builds: a package change only fetches new tarballs.
+RUN --mount=type=cache,target=/root/.npm npm ci
 COPY . .
-RUN npm run build
+# Angular build cache kept across builds: unchanged files are not recompiled.
+RUN --mount=type=cache,target=/app/.angular/cache npm run build
 
 FROM nginx:1.28-alpine
 ENV BACKEND_HOST=back:80 \

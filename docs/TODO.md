@@ -1,5 +1,6 @@
 
 Ideas:
+- Add MCP systeme
 - Add RAG systeme to let AI use and learn from data -> goal of custom AI for better research
 - Summaries should cites their fact to the document
 - Auto rewrite bibtext export on a targeted file

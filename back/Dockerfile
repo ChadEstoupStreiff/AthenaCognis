@@ -16,7 +16,8 @@ RUN apt-get install -y libgl1 \
 
 WORKDIR /
 COPY requirements.txt /requirements.txt
-RUN pip3 install -r requirements.txt
+# Pip download cache kept across builds: a requirements change only fetches new packages.
+RUN --mount=type=cache,target=/root/.cache/pip pip3 install -r requirements.txt
 
 
 COPY src /app

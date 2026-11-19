@@ -1,6 +1,7 @@
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, TypedDict
+from typing import TypedDict
 
 from sqlalchemy.orm import Session
 
@@ -9,8 +10,42 @@ from db import Transcription, TranscriptionTask, get_db
 from tools.ai import request_transcription
 from views.settings import get_setting
 
-WHISPER_SCRIPT = Path("/app/whisper.py")
-LOCAL_TRANSCRIPTION_TYPE = "local"
+APP_DIR = Path("/app")
+
+
+@dataclass(frozen=True)
+class LocalEngine:
+    """Speech-to-text engine run in a subprocess inside the container."""
+
+    script: Path
+    default_model: str
+    # Accepted models (None: any name the engine knows).
+    models: tuple[str, ...] | None = None
+
+    def pick_model(self, stored: object) -> str:
+        """
+        Use the stored model when this engine accepts it, else the engine default
+
+        Args:
+            stored (object): "transcription_model" setting
+        Returns:
+            str: model to run
+        """
+        if not isinstance(stored, str) or not stored:
+            return self.default_model
+        if self.models is not None and stored not in self.models:
+            return self.default_model
+        return stored
+
+
+QWEN_ASR_MODELS = ("Qwen/Qwen3-ASR-0.6B", "Qwen/Qwen3-ASR-1.7B")
+# Provider value (setting "transcription_type") → local engine.
+LOCAL_ENGINES: dict[str, LocalEngine] = {
+    "local": LocalEngine(APP_DIR / "whisper.py", "small"),
+    "qwen_asr": LocalEngine(
+        APP_DIR / "qwen_asr_transcribe.py", QWEN_ASR_MODELS[0], QWEN_ASR_MODELS
+    ),
+}
 
 
 class TranscriptionRecord(TypedDict):
@@ -55,9 +90,10 @@ class TranscriptionManager(JobManager):
         Returns:
             str: transcription
         """
-        if get_setting("transcription_type", "local") == LOCAL_TRANSCRIPTION_TYPE:
-            model = str(get_setting("transcription_model", "small"))
-            return run_python_script(WHISPER_SCRIPT, model, file)
+        engine = LOCAL_ENGINES.get(str(get_setting("transcription_type", "local")))
+        if engine is not None:
+            model = engine.pick_model(get_setting("transcription_model"))
+            return run_python_script(engine.script, model, file)
         _, _, transcription = request_transcription("transcription", file)
         return str(transcription)
 
@@ -91,7 +127,7 @@ class TranscriptionManager(JobManager):
         )
 
     @classmethod
-    def get(cls, file: str) -> Optional[TranscriptionRecord]:
+    def get(cls, file: str) -> TranscriptionRecord | None:
         """
         Get the transcription of a file
 

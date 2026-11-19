@@ -1,0 +1,45 @@
+.nav-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.nav-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-top: 1px solid var(--ac-panel-border);
+  background: var(--ac-panel-background);
+
+  &.off > :not(p-toggleswitch) {
+    opacity: 0.5;
+  }
+
+  .handle {
+    cursor: grab;
+  }
+
+  .grow {
+    flex: 1;
+    min-width: 0;
+  }
+
+  kbd {
+    font-size: 12px;
+  }
+}
+
+.cdk-drag-preview {
+  border: 1px solid var(--ac-panel-border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 18%);
+}
+
+.cdk-drag-placeholder {
+  opacity: 0.3;
+}
+
+.cdk-drop-list-dragging .nav-row:not(.cdk-drag-placeholder) {
+  transition: transform 200ms ease;
+}

@@ -9,9 +9,13 @@ from controllers.FileManager import FileManager
 from controllers.OCRManager import OCRManager
 from controllers.PreviewManager import PreviewManager
 from controllers.SummarizeManager import SummarizeManager
+from controllers.MailManager import MailManager
+from controllers.mail.outbox import OutboxSender
+from controllers.mail import service as mail_service
 from controllers.DocumentTreeManager import DocumentTreeManager
 from controllers.TranscriptionManager import TranscriptionManager
 from db import DB, ProjectFile, TagFile, Link, create_default_values, get_db
+from db.migrate import add_missing_columns, migrate_activity_flags
 from db.models import Base, CalendarRecord, Summary, Contact, Task, KanbanBoard
 from fastapi import FastAPI
 from pillow_heif import register_heif_opener
@@ -124,6 +128,18 @@ app.include_router(views.usage.router)
 import views.ai_models
 
 app.include_router(views.ai_models.router)
+
+import views.mail
+
+app.include_router(views.mail.router)
+
+import views.mail_preview
+
+app.include_router(views.mail_preview.router)
+
+import views.activity
+
+app.include_router(views.activity.router)
 
 
 def du_size(path: str) -> int:
@@ -259,6 +275,8 @@ if __name__ == "__main__":
         level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
     )
     Base.metadata.create_all(bind=DB().engine)
+    add_missing_columns(DB().engine)
+    migrate_activity_flags(DB().engine)
     create_default_values()
 
     FileManager.setup()
@@ -267,11 +285,14 @@ if __name__ == "__main__":
     for job_manager in (
         TranscriptionManager,
         SummarizeManager,
+        MailManager,
         DocumentTreeManager,
         OCRManager,
         PreviewManager,
     ):
         job_manager.start()
+    mail_service.NEW_MAIL_HOOK = MailManager.queue_new_mail
+    OutboxSender.start()
 
     # if len(list_models()) == 0:
     #     pull_model(get_setting("summarization_model"))

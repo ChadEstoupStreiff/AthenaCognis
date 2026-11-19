@@ -16,7 +16,10 @@ export type SyncTopic =
   | 'links'
   | 'jobs'
   | 'sota'
-  | 'ollama';
+  | 'ollama'
+  | 'mail'
+  | 'mail-drafts'
+  | 'mail-trash';
 
 /** Version counters per topic: resources read them, writes bump them. */
 @Injectable({ providedIn: 'root' })

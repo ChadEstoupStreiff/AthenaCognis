@@ -40,7 +40,7 @@ SUMMARY_PROMPT = """"! FILE CONTENT START !
 ! TASK !
 You are an expert summarizer.
 
-Write a **summary** from the CONTENT of the file above. Maximum of **400 WORDS**. Focus on the main ideas and key points. Use clear and concise language.
+Write a **summary** from the CONTENT of the file above. Maximum of **200 WORDS**. Focus on the main ideas and key points. Use clear and concise language.
 
 ! FORMAT !
 Respond ONLY with plain markdown.  

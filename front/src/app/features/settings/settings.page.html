@@ -28,6 +28,9 @@
     @if (visible().has('general')) {
       <ac-general-section />
     }
+    @if (visible().has('navigation')) {
+      <ac-navigation-section />
+    }
     @if (visible().has('ai')) {
       <ac-ai-section />
     }
@@ -39,6 +42,9 @@
     }
     @if (visible().has('processing')) {
       <ac-processing-section />
+    }
+    @if (visible().has('mail')) {
+      <ac-mail-section />
     }
     @if (visible().has('research')) {
       <ac-research-section />

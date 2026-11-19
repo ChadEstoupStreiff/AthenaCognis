@@ -19,6 +19,10 @@ PyMuPDF
 
 # TRANSCRIPTION
 faster_whisper
+# av 16+ dropped open(metadata_errors=...) used by faster_whisper.decode_audio
+av<16
+# Qwen3-ASR 0.6B / 1.7B (pins transformers and accelerate)
+qwen-asr
 
 # OCR
 # pytesseract==0.3.*
@@ -30,6 +34,13 @@ transformers
 accelerate
 torch
 torchvision
+
+# MAIL (Exchange EWS)
+exchangelib
+
+# AGENDA (ICS calendars, recurrence expansion)
+icalendar
+recurring-ical-events
 
 # LLM
 tiktoken

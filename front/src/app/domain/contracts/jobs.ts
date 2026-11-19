@@ -1,5 +1,15 @@
 /** Background job services of the backend. */
-export const JOB_SERVICES = ['ocr', 'transcription', 'summarize', 'tree', 'preview'] as const;
+export const JOB_SERVICES = [
+  'ocr',
+  'transcription',
+  'summarize',
+  'tree',
+  'preview',
+  'mail-preview',
+] as const;
+
+/** Services whose tasks are mail messages (`file` = message id), not files. */
+export const MAIL_JOB_SERVICES: ReadonlySet<string> = new Set(['mail-preview']);
 
 /** One background job service. */
 export type JobService = (typeof JOB_SERVICES)[number];
@@ -11,6 +21,7 @@ export const JOB_SERVICE_LABELS: Readonly<Record<JobService, string>> = {
   summarize: 'Summary',
   tree: 'Section tree',
   preview: 'Preview',
+  'mail-preview': 'Mail Preview',
 };
 
 /** State of one job run. */
@@ -23,6 +34,8 @@ export interface JobTask {
   readonly added: string;
   readonly completed: string | null;
   readonly result: string | null;
+  /** Display name when `file` is not a path (mail subject for Mail Preview). */
+  readonly label?: string;
 }
 
 /** Daemon health. */

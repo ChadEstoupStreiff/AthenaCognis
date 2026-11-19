@@ -1,0 +1,630 @@
+@if (hasAccounts()) {
+  <div class="mail" [style.--mail-side-width.px]="sideWidth()">
+    <aside class="side ac-panel">
+      <p-button
+        label="Compose"
+        icon="pi pi-pencil"
+        [fluid]="true"
+        (onClick)="compose.set({ replyTo: null, to: null })"
+      />
+      @if (accountList().length > 1) {
+        <p-select
+          [options]="accountOptions()"
+          optionLabel="email"
+          optionValue="id"
+          [ngModel]="accountId()"
+          (ngModelChange)="accountId.set($event)"
+          [fluid]="true"
+          size="small"
+          aria-label="Account"
+        />
+      }
+      <nav class="views" aria-label="Mailbox views">
+        @for (meta of views; track meta.view) {
+          <button
+            type="button"
+            class="view"
+            [class.active]="mode() === 'mail' && view() === meta.view && !senderFilter()"
+            [pTooltip]="meta.hint"
+            tooltipPosition="right"
+            (click)="openView(meta.view)"
+          >
+            <i [class]="meta.icon"></i>
+            <span>{{ meta.label }}</span>
+            @if (unreadCounts()[meta.view]; as count) {
+              <span class="count">{{ count }}</span>
+            }
+          </button>
+        }
+        <button
+          type="button"
+          class="view"
+          [class.active]="mode() === 'senders'"
+          (click)="mode.set('senders')"
+        >
+          <i class="pi pi-users"></i><span>Senders</span>
+        </button>
+        <button
+          type="button"
+          class="view"
+          [class.active]="mode() === 'drafts'"
+          pTooltip="Saved, not sent yet"
+          tooltipPosition="right"
+          (click)="mode.set('drafts')"
+        >
+          <i class="pi pi-file-edit"></i><span>Drafts</span>
+          @if (drafts.count(); as count) {
+            <span class="count">{{ count }}</span>
+          }
+        </button>
+        <button
+          type="button"
+          class="view"
+          [class.active]="mode() === 'outbox'"
+          pTooltip="Mail waiting to be sent"
+          tooltipPosition="right"
+          (click)="mode.set('outbox')"
+        >
+          <i class="pi pi-upload"></i><span>Outbox</span>
+          @if (outbox.count(); as count) {
+            <span class="count" [class.failed]="outbox.failedCount() > 0">{{ count }}</span>
+          }
+        </button>
+        <button
+          type="button"
+          class="view"
+          [class.active]="mode() === 'trash'"
+          pTooltip="Deleted mail and drafts, restorable until removed"
+          tooltipPosition="right"
+          (click)="mode.set('trash')"
+        >
+          <i class="pi pi-trash"></i><span>Trash</span>
+          @if (trash.count(); as count) {
+            <span class="count">{{ count }}</span>
+          }
+        </button>
+      </nav>
+    </aside>
+    <ac-resize-handle
+      class="splitter"
+      panel="before"
+      [(width)]="sideWidth"
+      [min]="sideMinWidth"
+      [reserve]="mainMinWidth"
+      label="Resize mail sidebar"
+      (restore)="sideWidth.set(defaultSideWidth)"
+    />
+
+    @if (mode() === 'senders') {
+      <section class="senders ac-panel">
+        <h2>Senders</h2>
+        <p class="ac-muted">
+          VIP → always in Priority. Muted → arrives read, low priority. Blocked → hidden. Contacts
+          from People are Priority automatically.
+        </p>
+        <ac-mail-senders (openMails)="filterSender($event)" (openContact)="openContact($event)" />
+      </section>
+    } @else if (mode() === 'drafts') {
+      <section class="senders ac-panel">
+        <h2>Drafts</h2>
+        <p class="ac-muted">
+          Closing a message without sending keeps it here. Open one to finish and send it.
+        </p>
+        <ac-mail-drafts
+          [accounts]="accountList()"
+          (openDraft)="compose.set({ replyTo: null, to: null, draft: $event })"
+        />
+      </section>
+    } @else if (mode() === 'outbox') {
+      <section class="senders ac-panel">
+        <h2>Outbox</h2>
+        <p class="ac-muted">
+          Sent in the background, one at a time. Refused mail stays here with the server error.
+        </p>
+        <ac-mail-outbox [accounts]="accountList()" />
+      </section>
+    } @else if (mode() === 'trash') {
+      <section class="senders ac-panel">
+        <h2>Trash</h2>
+        <p class="ac-muted">
+          Deleted mail and drafts stay {{ trash.content().retention_days }} days (Settings → Mail),
+          then are removed for good. Mail stays on the server.
+        </p>
+        <ac-mail-trash [accounts]="accountList()" />
+      </section>
+    } @else if (selectedId() === null) {
+      <section class="list ac-panel">
+        <div class="list-head">
+          <div class="list-title">
+            <h2>{{ senderFilter() ?? currentView().label }}</h2>
+            <div class="list-actions">
+              <p-button
+                icon="pi pi-refresh"
+                [text]="true"
+                size="small"
+                [loading]="syncing()"
+                pTooltip="Fetch new mail"
+                ariaLabel="Fetch new mail"
+                (onClick)="syncNow()"
+              />
+              <p-button
+                icon="pi pi-sparkles"
+                [text]="true"
+                size="small"
+                [loading]="digesting()"
+                pTooltip="AI briefing of unread mail"
+                ariaLabel="AI briefing"
+                (onClick)="digest()"
+              />
+              <p-button
+                icon="pi pi-star"
+                [text]="true"
+                size="small"
+                [loading]="previewing().size > 0"
+                pTooltip="Mail Preview of the listed mail (AI title + 40-word summary)"
+                ariaLabel="Generate Mail Previews"
+                (onClick)="previewList()"
+              />
+              <p-button
+                icon="pi pi-check-square"
+                [text]="true"
+                size="small"
+                pTooltip="Mark all read"
+                ariaLabel="Mark all read"
+                (onClick)="markAllRead()"
+              />
+            </div>
+          </div>
+          <div class="search-row">
+            <p-iconfield>
+              <p-inputicon class="pi pi-search" />
+              <input
+                pInputText
+                placeholder="Search mail…"
+                [ngModel]="query()"
+                (ngModelChange)="search($event)"
+                aria-label="Search mail"
+              />
+            </p-iconfield>
+            <p-button
+              [label]="filterCount() > 0 ? 'Filters · ' + filterCount() : 'Filters'"
+              icon="pi pi-filter"
+              size="small"
+              [severity]="filterCount() > 0 ? 'primary' : 'secondary'"
+              [outlined]="filterCount() === 0"
+              (onClick)="filtersPanel.toggle($event)"
+            />
+            @if (filterCount() > 0) {
+              <p-button
+                icon="pi pi-filter-slash"
+                size="small"
+                severity="secondary"
+                [text]="true"
+                pTooltip="Clear filters"
+                ariaLabel="Clear filters"
+                (onClick)="filters.set(emptyFilters)"
+              />
+            }
+          </div>
+          <p-popover #filtersPanel>
+            <ac-mail-filters-panel [(filters)]="filters" />
+          </p-popover>
+          @for (account of syncErrors(); track account.id) {
+            <p class="sync-error">
+              <i class="pi pi-exclamation-triangle"></i> {{ account.email }}:
+              {{ account.last_error }}
+            </p>
+          }
+        </div>
+
+        @if (digestText(); as text) {
+          <div class="digest">
+            <div class="digest-head">
+              <strong><i class="pi pi-sparkles"></i> Briefing</strong>
+              <p-button
+                icon="pi pi-times"
+                [text]="true"
+                size="small"
+                ariaLabel="Close briefing"
+                (onClick)="digestText.set(null)"
+              />
+            </div>
+            <ac-markdown-view [source]="text" />
+          </div>
+        }
+
+        <ul class="rows" aria-label="Messages">
+          @for (row of rows(); track row.id) {
+            <li>
+              <div
+                class="row"
+                role="button"
+                tabindex="0"
+                [class.unread]="!row.is_read"
+                [class.active]="row.id === selectedId()"
+                (click)="openMail(row.id)"
+                (keydown.enter)="openMail(row.id)"
+              >
+                <span
+                  class="account-bar"
+                  [style.background]="colorOf(row.account_id)"
+                  aria-hidden="true"
+                ></span>
+                <span class="avatar-column">
+                  @if (row.contact_id && row.mailbox === 'inbox') {
+                    <ac-contact-avatar
+                      [contactId]="row.contact_id"
+                      [name]="senderLabel(row)"
+                      [size]="avatarSize"
+                    />
+                  } @else {
+                    <span
+                      class="avatar"
+                      [style.background]="avatarColors(listName(row)).background"
+                      [style.color]="avatarColors(listName(row)).color"
+                      >{{ initials(listName(row)) }}</span
+                    >
+                  }
+                  @if (row.preview_title) {
+                    <button
+                      type="button"
+                      class="preview-toggle"
+                      [class.off]="!showsPreview(row.id)"
+                      [pTooltip]="
+                        showsPreview(row.id)
+                          ? 'Mail Preview on: click for the original'
+                          : 'Mail Preview off: click for the AI preview'
+                      "
+                      [attr.aria-pressed]="showsPreview(row.id)"
+                      aria-label="Toggle Mail Preview"
+                      (click)="togglePreview(row.id, $event)"
+                    >
+                      <ac-preview-icon />
+                    </button>
+                  }
+                </span>
+                <span class="row-main">
+                  <span class="row-top">
+                    <span class="sender">{{ listName(row) }}</span>
+                    @if (row.sender_flag === 'vip') {
+                      <i class="pi pi-star-fill vip" title="VIP"></i>
+                    }
+                    @if (row.needs_reply) {
+                      <i class="pi pi-reply reply" title="Needs a reply"></i>
+                    }
+                    @if (row.is_pinned) {
+                      <i class="pi pi-thumbtack pinned" title="Pinned"></i>
+                    }
+                    @if (isActivity(row)) {
+                      <i class="pi pi-bolt activity" title="In Activity feed"></i>
+                    }
+                    @if (row.is_flagged) {
+                      <i class="pi pi-flag-fill flagged" title="Flagged"></i>
+                    }
+                    @if (row.has_attachments) {
+                      <i class="pi pi-paperclip ac-muted" title="Attachments"></i>
+                    }
+                    <time class="ac-muted">{{ mailTime(row.date) }}</time>
+                  </span>
+                  @if (row.preview_title && showsPreview(row.id)) {
+                    <span class="subject preview">{{ row.preview_title }}</span>
+                    <span class="snippet preview-text">{{ row.preview_text }}</span>
+                  } @else {
+                    <span class="subject">{{ row.subject || '(no subject)' }}</span>
+                    <span class="snippet ac-muted">{{ row.summary ?? row.snippet }}</span>
+                  }
+                </span>
+              </div>
+            </li>
+          } @empty {
+            <li class="ac-muted empty">
+              {{ list.isLoading() ? 'Loading…' : 'Nothing here. ' + currentView().hint + '.' }}
+            </li>
+          }
+          @if (rows().length >= limit()) {
+            <li class="more">
+              <p-button label="Load more" [text]="true" size="small" (onClick)="more()" />
+            </li>
+          }
+        </ul>
+      </section>
+    } @else {
+      <section class="reader">
+        @if (openMessage(); as mail) {
+          <header class="reader-head ac-panel" [style.border-left-color]="colorOf(mail.account_id)">
+            <div class="toolbar">
+              <p-button
+                label="Back"
+                icon="pi pi-arrow-left"
+                size="small"
+                severity="secondary"
+                [outlined]="true"
+                pTooltip="Back to the list (Esc)"
+                (onClick)="backToList()"
+              />
+              <span class="spacer"></span>
+              <p-button
+                label="Reply"
+                icon="pi pi-reply"
+                size="small"
+                (onClick)="compose.set({ replyTo: mail, to: null })"
+              />
+              <p-button
+                label="Forward"
+                icon="pi pi-share-alt"
+                size="small"
+                severity="secondary"
+                [outlined]="true"
+                pTooltip="Forward (attachments are not included)"
+                (onClick)="compose.set({ replyTo: null, forwardOf: mail, to: null })"
+              />
+              @if (!mail.preview_title) {
+                <p-button
+                  label="Mail Preview"
+                  icon="pi pi-star"
+                  size="small"
+                  severity="secondary"
+                  [outlined]="true"
+                  [loading]="previewing().has(mail.id)"
+                  pTooltip="AI title and 40-word summary"
+                  (onClick)="generatePreviews([mail.id])"
+                />
+              }
+              <p-button
+                label="Summarize"
+                icon="pi pi-sparkles"
+                size="small"
+                severity="secondary"
+                [outlined]="true"
+                [loading]="summarizing()"
+                (onClick)="summarize(mail)"
+              />
+              <p-button
+                icon="pi pi-thumbtack"
+                size="small"
+                [severity]="mail.is_pinned ? 'primary' : 'secondary'"
+                [text]="!mail.is_pinned"
+                [pTooltip]="mail.is_pinned ? 'Unpin' : 'Pin (keeps it on top)'"
+                [ariaLabel]="mail.is_pinned ? 'Unpin' : 'Pin'"
+                (onClick)="setState(mail, { is_pinned: !mail.is_pinned })"
+              />
+              <p-button
+                icon="pi pi-bolt"
+                size="small"
+                severity="secondary"
+                [text]="!isActivity(mail)"
+                [style]="isActivity(mail) ? activityOnStyle : activityOffStyle"
+                [pTooltip]="isActivity(mail) ? 'Remove from Activity feed' : 'Add to Activity feed'"
+                [ariaLabel]="
+                  isActivity(mail) ? 'Remove from Activity feed' : 'Add to Activity feed'
+                "
+                [attr.aria-pressed]="isActivity(mail)"
+                (onClick)="setState(mail, { is_activity: !isActivity(mail) })"
+              />
+              <p-button
+                [icon]="mail.is_flagged ? 'pi pi-flag-fill' : 'pi pi-flag'"
+                size="small"
+                severity="secondary"
+                [text]="true"
+                [pTooltip]="mail.is_flagged ? 'Unflag' : 'Flag'"
+                [ariaLabel]="mail.is_flagged ? 'Unflag' : 'Flag'"
+                (onClick)="setState(mail, { is_flagged: !mail.is_flagged })"
+              />
+              <p-button
+                icon="pi pi-eye-slash"
+                size="small"
+                severity="secondary"
+                [text]="true"
+                pTooltip="Mark unread"
+                ariaLabel="Mark unread"
+                (onClick)="setState(mail, { is_read: false })"
+              />
+              <p-button
+                icon="pi pi-trash"
+                size="small"
+                severity="danger"
+                [text]="true"
+                pTooltip="Move to Trash"
+                ariaLabel="Move to Trash"
+                (onClick)="deleteMessage(mail)"
+              />
+            </div>
+            <h1>{{ mail.subject || '(no subject)' }}</h1>
+            <div class="people" [style.--people-columns]="peopleColumns(mail.mailbox === 'inbox')">
+              <div class="from">
+                <span class="avatar-column">
+                  @if (mail.contact_id && mail.mailbox === 'inbox') {
+                    <ac-contact-avatar
+                      [contactId]="mail.contact_id"
+                      [name]="senderLabel(mail)"
+                      [size]="largeAvatarSize"
+                    />
+                  } @else {
+                    <span
+                      class="avatar large"
+                      [style.background]="avatarColors(senderLabel(mail)).background"
+                      [style.color]="avatarColors(senderLabel(mail)).color"
+                      >{{ initials(senderLabel(mail)) }}</span
+                    >
+                  }
+                  @if (mail.preview_title) {
+                    <button
+                      type="button"
+                      class="preview-toggle"
+                      [class.off]="!showsPreview(mail.id)"
+                      [pTooltip]="showsPreview(mail.id) ? 'Hide Mail Preview' : 'Show Mail Preview'"
+                      [attr.aria-pressed]="showsPreview(mail.id)"
+                      aria-label="Toggle Mail Preview"
+                      (click)="togglePreview(mail.id, $event)"
+                    >
+                      <ac-preview-icon />
+                    </button>
+                  }
+                </span>
+                <div class="from-text">
+                  <strong>{{ senderLabel(mail) }}</strong>
+                  @if (mail.mailbox === 'inbox') {
+                    <p-selectbutton
+                      class="role"
+                      [options]="flagOptions"
+                      optionValue="flag"
+                      [ngModel]="mail.sender.flag"
+                      (ngModelChange)="setFlag(mail.sender_email, $event)"
+                      [allowEmpty]="false"
+                      size="small"
+                      ariaLabel="Sender treatment"
+                    >
+                      <ng-template #item let-option>
+                        <span class="role-option" [pTooltip]="option.hint">
+                          <i [class]="option.icon"></i> {{ option.label }}
+                        </span>
+                      </ng-template>
+                    </p-selectbutton>
+                  }
+                  <ac-mail-addresses label="From" [value]="mail.sender_email" />
+                  <ac-mail-addresses label="To" [value]="mail.recipients" />
+                  @if (mail.cc) {
+                    <ac-mail-addresses label="Cc" [value]="mail.cc" />
+                  }
+                </div>
+                <time class="ac-muted">{{ mailTime(mail.date) }}</time>
+              </div>
+              @if (mail.mailbox === 'inbox') {
+                <ac-resize-handle
+                  class="people-splitter"
+                  panel="after"
+                  [(width)]="contactWidth"
+                  [min]="contactMinWidth"
+                  [reserve]="senderMinWidth"
+                  label="Resize contact panel"
+                  (restore)="contactWidth.set(0)"
+                />
+                <aside class="contact-panel">
+                  <div class="contact-actions">
+                    <p-button
+                      [label]="mail.sender.contact_id ? 'Open contact' : 'Add to People'"
+                      [icon]="mail.sender.contact_id ? 'pi pi-id-card' : 'pi pi-user-plus'"
+                      size="small"
+                      [text]="true"
+                      (onClick)="openContact(mail.sender_email)"
+                    />
+                    <p-button
+                      [label]="mail.sender.message_count + ' mails'"
+                      icon="pi pi-list"
+                      size="small"
+                      [text]="true"
+                      (onClick)="filterSender(mail.sender_email)"
+                    />
+                  </div>
+                  <div class="note">
+                    <textarea
+                      pTextarea
+                      [rows]="noteRows"
+                      placeholder="Note about this sender (who they are, how to answer). Used by AI reply drafts."
+                      [ngModel]="note()"
+                      (ngModelChange)="editNote(mail.sender_email, $event)"
+                      aria-label="Sender note"
+                    ></textarea>
+                    <ac-save-status [status]="noteSave.status()" />
+                  </div>
+                </aside>
+              }
+            </div>
+          </header>
+
+          @if (mail.preview_title && showsPreview(mail.id)) {
+            <div class="mail-preview ac-panel">
+              <span class="mail-preview-label"><ac-preview-icon [size]="12" /> Mail Preview</span>
+              <strong>{{ mail.preview_title }}</strong>
+              <p>{{ mail.preview_text }}</p>
+            </div>
+          }
+
+          @if (mail.summary) {
+            <div class="insight ac-panel">
+              <p><i class="pi pi-sparkles"></i> {{ mail.summary }}</p>
+              @if (mail.suggested_action) {
+                <p class="action">
+                  <i class="pi pi-arrow-right"></i> {{ mail.suggested_action }}
+                  @if (mail.needs_reply) {
+                    <span class="badge">Needs reply</span>
+                  }
+                </p>
+              }
+            </div>
+          }
+
+          <article class="body ac-panel">
+            @if (mail.attachments.length) {
+              <div class="attachments" aria-label="Attachments">
+                <i class="pi pi-paperclip ac-muted"></i>
+                @for (name of mail.attachments; track $index) {
+                  <button
+                    type="button"
+                    class="attachment"
+                    [title]="attachmentHint(name)"
+                    (click)="openAttachment(mail, $index)"
+                  >
+                    <i [class]="attachmentIcon(name)"></i>
+                    <span>{{ name }}</span>
+                  </button>
+                }
+              </div>
+            }
+            @if (mail.body_html) {
+              <div class="body-toggles">
+                @if (!allowImages()) {
+                  <p-button
+                    label="Load remote images"
+                    icon="pi pi-image"
+                    size="small"
+                    [text]="true"
+                    pTooltip="Blocked by default: they can track that you opened the mail"
+                    (onClick)="allowImages.set(true)"
+                  />
+                }
+              </div>
+            }
+            @if (mail.body_html) {
+              <ac-mail-frame [html]="mail.body_html" [allowImages]="allowImages()" />
+            } @else {
+              <pre class="text">{{ mail.body_text }}</pre>
+            }
+          </article>
+        } @else {
+          <p class="ac-muted loading">Loading…</p>
+        }
+      </section>
+    }
+  </div>
+} @else if (accountsSettled()) {
+  <div class="add-only">
+    <p-button
+      label="Connect a mail account in Settings"
+      icon="pi pi-cog"
+      size="large"
+      routerLink="/settings"
+      fragment="mail-accounts"
+    />
+  </div>
+}
+
+@if (compose(); as draft) {
+  <ac-mail-compose-dialog
+    [visible]="true"
+    (visibleChange)="$event || compose.set(null)"
+    [accounts]="accountList()"
+    [replyTo]="draft.replyTo"
+    [recipient]="draft.to"
+    [forwardOf]="draft.forwardOf ?? null"
+    [savedDraft]="draft.draft ?? null"
+  />
+}
+
+@if (attachmentPreview(); as file) {
+  <ac-mail-attachment-preview
+    [attachment]="file"
+    [visible]="true"
+    (visibleChange)="$event || attachmentPreview.set(null)"
+  />
+}

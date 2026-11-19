@@ -4,7 +4,7 @@ import { ButtonModule } from 'primeng/button';
 import { PopoverModule } from 'primeng/popover';
 import { ProgressBarModule } from 'primeng/progressbar';
 import { TooltipModule } from 'primeng/tooltip';
-import { JOB_SERVICE_LABELS } from '@domain/contracts';
+import { JOB_SERVICE_LABELS, MAIL_JOB_SERVICES } from '@domain/contracts';
 import { fileNameOf } from '@domain/files';
 import { JobsStore } from '../jobs/jobs.store';
 import { TriathleteComponent } from './triathlete.component';
@@ -44,13 +44,14 @@ export class JobsIndicatorComponent {
   );
 
   /**
-   * File name for display.
+   * Name of the item being processed (mail jobs report a subject, others a path).
    *
-   * @param path - Path or null.
+   * @param service - Job service.
+   * @param running - Path or mail subject.
    * @returns Name.
    */
-  protected fileName(path: string | null): string {
-    return path === null ? '' : fileNameOf(path);
+  protected runningName(service: string, running: string): string {
+    return MAIL_JOB_SERVICES.has(service) ? running : fileNameOf(running);
   }
 
   /**

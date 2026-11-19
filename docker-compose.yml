@@ -8,6 +8,7 @@ services:
       MYSQL_DATABASE: superdiary
     volumes:
       - ${DATA_PATH}/back/db:/var/lib/mysql
+      - ${LOCAL_PATH}:/local:ro
     hostname: back_db
     networks:
       - appnet
@@ -81,11 +82,16 @@ services:
       - ${DATA_PATH}/paddleocr:/root/.paddleocr
       - ${DATA_PATH}/ollama:/ollama
       - ${DATA_PATH}/back/db:/mysql
+      # Local file changes data source (folders picked on the Activity page).
+      - ${LOCAL_PATH}:/local:ro
     depends_on:
       - back_db
     ports:
       - "${BACK_PORT}:80"
     hostname: back
+    # Reach host services (ActivityWatch) on Linux too; built in on Docker Desktop.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - appnet
 

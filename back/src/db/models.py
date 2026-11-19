@@ -1,10 +1,21 @@
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Optional
 
-from sqlalchemy import TEXT, Column, DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import (
+    TEXT,
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+    false,
+)
 from sqlalchemy import Enum as SQLEnum
+from sqlalchemy.dialects.mysql import MEDIUMTEXT
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -51,8 +62,8 @@ class JobTask(Base):
         SQLEnum(TaskStateEnum), nullable=False, default=TaskStateEnum.PENDING
     )
     added: Mapped[datetime] = mapped_column(DateTime, primary_key=True)
-    completed: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    result: Mapped[Optional[str]] = mapped_column(TEXT, nullable=True)
+    completed: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    result: Mapped[str | None] = mapped_column(TEXT, nullable=True)
 
 
 class OCR(Base):
@@ -61,7 +72,7 @@ class OCR(Base):
     file: Mapped[str] = mapped_column(String(512), primary_key=True, index=True)
     date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     ocr: Mapped[str] = mapped_column(TEXT, nullable=False)
-    blip: Mapped[Optional[str]] = mapped_column(TEXT, nullable=True)
+    blip: Mapped[str | None] = mapped_column(TEXT, nullable=True)
 
 
 class OCRTask(JobTask):
@@ -108,7 +119,7 @@ class DocumentTreeTask(JobTask):
 
     __tablename__ = "document_tree_task"
 
-    params: Mapped[Optional[str]] = mapped_column(TEXT, nullable=True)
+    params: Mapped[str | None] = mapped_column(TEXT, nullable=True)
 
 
 class Transcription(Base):
@@ -229,7 +240,8 @@ class Task(Base):
     end_date = Column(DateTime, nullable=True)
     completed = Column(DateTime, nullable=True)
     priority = Column(Float, nullable=False, default=0.0)
-    
+
+
 class TaskTag(Base):
     __tablename__ = "TaskTag"
 
@@ -243,6 +255,7 @@ class TaskTag(Base):
         primary_key=True,
         index=True,
     )
+
 
 class TaskProject(Base):
     __tablename__ = "TaskProject"
@@ -258,6 +271,7 @@ class TaskProject(Base):
         index=True,
     )
 
+
 class TaskFile(Base):
     __tablename__ = "TaskFile"
 
@@ -267,6 +281,7 @@ class TaskFile(Base):
         index=True,
     )
     file = Column(String(512), primary_key=True, index=True)
+
 
 class TaskCalendar(Base):
     __tablename__ = "TaskCalendar"
@@ -432,3 +447,187 @@ class PinnedFile(Base):
     __tablename__ = "PinnedFile"
 
     file = Column(String(512), primary_key=True, index=True)
+
+
+# Lowercase table names: see DocumentTree (MariaDB + macOS bind mount, error 1033).
+LONG_TEXT = TEXT().with_variant(MEDIUMTEXT(), "mysql")
+
+
+class MailAccount(Base):
+    """Mailbox the mail client reads and sends with (IMAP/SMTP or Exchange EWS)."""
+
+    __tablename__ = "mail_account"
+
+    id: Mapped[str] = mapped_column(
+        String(64), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    label: Mapped[str] = mapped_column(String(128), nullable=False)
+    protocol: Mapped[str] = mapped_column(
+        String(8), nullable=False, default="imap", server_default="imap"
+    )
+    color: Mapped[str] = mapped_column(
+        String(7), nullable=False, default="#3b82f6", server_default="#3b82f6"
+    )
+    email: Mapped[str] = mapped_column(String(255), nullable=False)
+    username: Mapped[str] = mapped_column(String(255), nullable=False)
+    password: Mapped[str] = mapped_column(TEXT, nullable=False)
+    imap_host: Mapped[str] = mapped_column(String(255), nullable=False)
+    imap_port: Mapped[int] = mapped_column(Integer, nullable=False)
+    smtp_host: Mapped[str] = mapped_column(String(255), nullable=False)
+    smtp_port: Mapped[int] = mapped_column(Integer, nullable=False)
+    last_sync: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_error: Mapped[str | None] = mapped_column(TEXT, nullable=True)
+    signature: Mapped[str | None] = mapped_column(TEXT, nullable=True)
+
+
+class MailMessage(Base):
+    """One message fetched from an account folder."""
+
+    __tablename__ = "mail_message"
+    __table_args__ = (UniqueConstraint("account_id", "folder", "uid"),)
+
+    id: Mapped[str] = mapped_column(
+        String(64), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    account_id: Mapped[str] = mapped_column(
+        ForeignKey("mail_account.id", ondelete="CASCADE", onupdate="CASCADE"),
+        index=True,
+    )
+    folder: Mapped[str] = mapped_column(String(255), nullable=False)
+    uid: Mapped[int] = mapped_column(Integer, nullable=False)
+    remote_id: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    message_id: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    thread_refs: Mapped[str | None] = mapped_column(TEXT, nullable=True)
+    sender_email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    sender_name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    recipients: Mapped[str] = mapped_column(TEXT, nullable=False, default="")
+    cc: Mapped[str] = mapped_column(TEXT, nullable=False, default="")
+    subject: Mapped[str] = mapped_column(TEXT, nullable=False, default="")
+    date: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    snippet: Mapped[str] = mapped_column(String(512), nullable=False, default="")
+    body_text: Mapped[str] = mapped_column(LONG_TEXT, nullable=False, default="")
+    body_html: Mapped[str | None] = mapped_column(LONG_TEXT, nullable=True)
+    attachments: Mapped[str] = mapped_column(TEXT, nullable=False, default="[]")
+    category: Mapped[str] = mapped_column(String(32), nullable=False, default="person")
+    is_read: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_flagged: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_pinned: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
+    # Last time flagged for the Activity feed (kept in AthenaCognis only); counts
+    # as flagged until the next "Activity reset time".
+    activity_flagged_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True
+    )
+    # Logical mailbox: "inbox" (received) or "sent"; folder is the server name.
+    mailbox: Mapped[str] = mapped_column(
+        String(8), nullable=False, default="inbox", server_default="inbox", index=True
+    )
+    summary: Mapped[str | None] = mapped_column(TEXT, nullable=True)
+    needs_reply: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    suggested_action: Mapped[str | None] = mapped_column(TEXT, nullable=True)
+    # Mail Preview: AI title and short summary (MailManager).
+    preview_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    preview_text: Mapped[str | None] = mapped_column(TEXT, nullable=True)
+    # Trash: set when deleted (hidden from every view, restorable); purged rows keep
+    # only a tombstone so the sync cursor does not fetch them again.
+    trashed_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True, index=True
+    )
+    is_purged: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
+
+
+class MailActivityFlag(Base):
+    """One flag of a message for the Activity feed (history: one per activity day)."""
+
+    __tablename__ = "mail_activity_flag"
+
+    id: Mapped[str] = mapped_column(
+        String(64), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    message_id: Mapped[str] = mapped_column(
+        ForeignKey("mail_message.id", ondelete="CASCADE", onupdate="CASCADE"),
+        index=True,
+    )
+    flagged_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+
+
+class MailSender(Base):
+    """How the mail client treats one sender (VIP, muted, blocked) and its contact."""
+
+    __tablename__ = "mail_sender"
+
+    email: Mapped[str] = mapped_column(String(255), primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    flag: Mapped[str] = mapped_column(String(16), nullable=False, default="normal")
+    note: Mapped[str] = mapped_column(TEXT, nullable=False, default="")
+    contact_id: Mapped[str | None] = mapped_column(
+        ForeignKey("Contact.id", ondelete="SET NULL", onupdate="CASCADE"),
+        nullable=True,
+    )
+
+
+class MailOutgoing(Base):
+    """Message waiting in the Outbox until the server accepted it."""
+
+    __tablename__ = "mail_outgoing"
+
+    id: Mapped[str] = mapped_column(
+        String(64), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    account_id: Mapped[str] = mapped_column(
+        ForeignKey("mail_account.id", ondelete="CASCADE", onupdate="CASCADE"),
+        index=True,
+    )
+    # JSON lists of bare addresses.
+    recipients: Mapped[str] = mapped_column(TEXT, nullable=False, default="[]")
+    cc: Mapped[str] = mapped_column(TEXT, nullable=False, default="[]")
+    subject: Mapped[str] = mapped_column(TEXT, nullable=False, default="")
+    # Written text only; signature and quote are added when sending.
+    body: Mapped[str] = mapped_column(LONG_TEXT, nullable=False, default="")
+    quote: Mapped[str] = mapped_column(LONG_TEXT, nullable=False, default="")
+    # Replied message (no foreign key: the original may be deleted meanwhile).
+    reply_to_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    # "queued", "sending" or "failed".
+    state: Mapped[str] = mapped_column(String(16), nullable=False, default="queued")
+    error: Mapped[str | None] = mapped_column(TEXT, nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class MailDraft(Base):
+    """Message saved from the compose dialog, not sent yet (Drafts box)."""
+
+    __tablename__ = "mail_draft"
+
+    id: Mapped[str] = mapped_column(
+        String(64), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    account_id: Mapped[str] = mapped_column(
+        ForeignKey("mail_account.id", ondelete="CASCADE", onupdate="CASCADE"),
+        index=True,
+    )
+    # "new", "reply" or "forward" (compose dialog title).
+    kind: Mapped[str] = mapped_column(String(16), nullable=False, default="new")
+    # JSON lists of addresses as typed (may still be incomplete).
+    recipients: Mapped[str] = mapped_column(TEXT, nullable=False, default="[]")
+    cc: Mapped[str] = mapped_column(TEXT, nullable=False, default="[]")
+    subject: Mapped[str] = mapped_column(TEXT, nullable=False, default="")
+    # Written text only; signature and quote are added when sending.
+    body: Mapped[str] = mapped_column(LONG_TEXT, nullable=False, default="")
+    quote: Mapped[str] = mapped_column(LONG_TEXT, nullable=False, default="")
+    # Replied message (no foreign key: the original may be deleted meanwhile).
+    reply_to_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    updated: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    # Trash: set when deleted, removed for good after the retention period.
+    trashed_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True, index=True
+    )
+
+
+class MailPreviewTask(JobTask):
+    """Mail Preview generation of one message (`file` holds the message id)."""
+
+    __tablename__ = "mail_preview_task"

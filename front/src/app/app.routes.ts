@@ -73,6 +73,17 @@ export const routes: Routes = [
         loadComponent: () => import('./features/people/people.page').then((m) => m.PeoplePage),
       },
       {
+        path: 'activity',
+        title: 'Activity · AthenaCognis',
+        loadComponent: () =>
+          import('./features/activity/activity.page').then((m) => m.ActivityPage),
+      },
+      {
+        path: 'mail',
+        title: 'Mail · AthenaCognis',
+        loadComponent: () => import('./features/mail/mail.page').then((m) => m.MailPage),
+      },
+      {
         path: 'research',
         title: 'Research · AthenaCognis',
         loadComponent: () =>

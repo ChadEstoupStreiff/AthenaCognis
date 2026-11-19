@@ -89,6 +89,7 @@
         <p-tablist>
           <p-tab value="about">About</p-tab>
           <p-tab value="notes">Notes</p-tab>
+          <p-tab value="mail"><i class="pi pi-envelope"></i> Mail</p-tab>
           <p-tab value="files"
             >Files <span class="count">{{ person.files.length }}</span></p-tab
           >
@@ -154,6 +155,9 @@
                 context="These are notes about a person."
               />
             </section>
+          </p-tabpanel>
+          <p-tabpanel value="mail">
+            <ac-contact-mails [contactId]="person.id" />
           </p-tabpanel>
           <p-tabpanel value="files">
             <div class="tab-actions">

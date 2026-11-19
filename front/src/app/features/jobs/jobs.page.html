@@ -20,7 +20,7 @@
   @if (status(); as current) {
     <p class="ac-muted intro">
       Daemon {{ current.health.toLowerCase()
-      }}{{ current.running ? ' · working on ' + nameOf(current.running) : '' }}
+      }}{{ current.running ? ' · working on ' + runningName(current.running) : '' }}
     </p>
   }
   <div class="inline toolbar">
@@ -49,7 +49,7 @@
   >
     <ng-template #header>
       <tr>
-        <th>File</th>
+        <th>{{ isMailService() ? 'Mail' : 'File' }}</th>
         <th>State</th>
         <th>Added</th>
         <th>Completed</th>
@@ -59,8 +59,8 @@
     <ng-template #body let-task>
       <tr>
         <td>
-          <button type="button" class="link" (click)="peek.open(task.file)">
-            {{ nameOf(task.file) }}
+          <button type="button" class="link" (click)="openTask(task)">
+            {{ taskName(task) }}
           </button>
         </td>
         <td>

@@ -32,6 +32,19 @@ export const AI_TASKS: readonly AiTask[] = [
     kind: 'text',
   },
   {
+    key: 'mail',
+    label: 'Mail assistant',
+    hint: 'Mail summaries, unread briefings and reply drafts',
+    kind: 'text',
+  },
+  {
+    key: 'mail_preview',
+    label: 'Mail Preview',
+    hint: 'AI title and 40-word summary of each mail; uses Mail assistant until set',
+    kind: 'text',
+    fallbackKey: 'mail',
+  },
+  {
     key: 'summarization',
     label: 'Summaries',
     hint: 'Summary and keywords of every file',
@@ -90,6 +103,7 @@ const VISION_PROVIDERS: readonly ProviderOption[] = TEXT_PROVIDERS.filter(
 /** Transcription providers. */
 export const TRANSCRIPTION_PROVIDERS: readonly ProviderOption[] = [
   { value: 'local', label: 'Local (faster-whisper)' },
+  { value: 'qwen_asr', label: 'Local (Qwen3-ASR)' },
   { value: 'openai', label: 'OpenAI Whisper' },
   { value: 'groq', label: 'Groq Whisper' },
 ];
@@ -143,6 +157,7 @@ const VISION_MODELS: Readonly<Record<string, readonly string[]>> = {
 
 const TRANSCRIPTION_MODELS: Readonly<Record<string, readonly string[]>> = {
   local: ['tiny', 'base', 'small', 'medium', 'large-v3'],
+  qwen_asr: ['Qwen/Qwen3-ASR-0.6B', 'Qwen/Qwen3-ASR-1.7B'],
   openai: ['whisper-1'],
   groq: ['whisper-large-v3', 'whisper-large-v3-turbo'],
 };

@@ -14,6 +14,8 @@ import { InputTextModule } from 'primeng/inputtext';
 import { AiSectionComponent } from './sections/ai.section';
 import { AssistantSectionComponent } from './sections/assistant.section';
 import { GeneralSectionComponent } from './sections/general.section';
+import { MailSectionComponent } from './sections/mail.section';
+import { NavigationSectionComponent } from './sections/navigation.section';
 import { ProcessingSectionComponent } from './sections/processing.section';
 import { ProvidersSectionComponent } from './sections/providers.section';
 import { ResearchSectionComponent } from './sections/research.section';
@@ -36,6 +38,12 @@ const SECTIONS: readonly SectionEntry[] = [
     icon: 'pi pi-sliders-h',
     keywords:
       'appearance theme dark light display size limit target hours search semantic view cards list table progress banner phd',
+  },
+  {
+    id: 'navigation',
+    label: 'Sidebar',
+    icon: 'pi pi-bars',
+    keywords: 'navigation sidebar rail menu tabs order reorder hide show visible',
   },
   {
     id: 'ai',
@@ -62,6 +70,13 @@ const SECTIONS: readonly SectionEntry[] = [
     label: 'Processing',
     icon: 'pi pi-cog',
     keywords: 'auto upload preview thumbnail quality summary ocr transcription archive',
+  },
+  {
+    id: 'mail',
+    label: 'Mail',
+    icon: 'pi pi-envelope',
+    keywords:
+      'mail email account connect imap smtp exchange ews password signature preview ai summary images download tracking',
   },
   {
     id: 'research',
@@ -91,6 +106,8 @@ const SECTIONS: readonly SectionEntry[] = [
     AssistantSectionComponent,
     GeneralSectionComponent,
     ProcessingSectionComponent,
+    MailSectionComponent,
+    NavigationSectionComponent,
     ProvidersSectionComponent,
     ResearchSectionComponent,
     TagsSectionComponent,

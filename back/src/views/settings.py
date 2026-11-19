@@ -56,6 +56,15 @@ default_settings = {
     "research_subject": "",
     "research_type": "llama",
     "research_model": "llama3.2:1b",
+    "mail_type": "llama",
+    "mail_model": "llama3.2:1b",
+    "mail_auto_preview": True,
+    "mail_auto_preview_boxes": ["priority", "inbox"],
+    "mail_auto_download_images": False,
+    "mail_activity_reset_time": "04:00",
+    "mail_trash_retention_days": 30,  # deleted mail and drafts kept in the Trash  # flags before it count for the day before
+    "nav_order": [],  # sidebar routes in display order (front-only)
+    "nav_hidden": [],  # sidebar routes hidden from the rail (front-only)
     "research_default_scope": "library",  # library | recent | subject | custom
     "research_default_period": "1",  # months back, or "custom"
     "chat_max_concurrent_generations": 3,
