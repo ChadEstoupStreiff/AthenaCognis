@@ -430,7 +430,7 @@ def test_sources_route_lists_mail_and_incoming(client: TestClient) -> None:
     sources = client.get("/activity/sources").json()
     assert sources[0]["key"] == "mail"
     assert sources[0]["state"] == "active"
-    assert [source["key"] for source in sources[1:9]] == [
+    assert [source["key"] for source in sources[1:10]] == [
         "library",
         "work",
         "time",
@@ -439,10 +439,11 @@ def test_sources_route_lists_mail_and_incoming(client: TestClient) -> None:
         "agenda",
         "local_files",
         "github",
+        "overleaf",
     ]
-    assert {source["state"] for source in sources[1:9]} == {"available"}
+    assert {source["state"] for source in sources[1:10]} == {"available"}
     assert len(sources) == len(IMPLEMENTED) + len(INCOMING)
-    assert {source["state"] for source in sources[9:]} == {"incoming"}
+    assert {source["state"] for source in sources[10:]} == {"incoming"}
     boxes = sources[0]["config"][0]
     assert boxes["key"] == "activity_mail_boxes"
     assert boxes["default"] == ["priority"]

@@ -7,6 +7,7 @@ from controllers.activity.github_source import GitHubDataSource
 from controllers.activity.library_source import LibraryDataSource
 from controllers.activity.local_files_source import LocalFilesDataSource
 from controllers.activity.mail_source import MailDataSource
+from controllers.activity.overleaf_source import OverleafDataSource
 from controllers.activity.research_source import ResearchDataSource
 from controllers.activity.time_source import TimeDataSource
 from controllers.activity.work_source import WorkDataSource
@@ -32,6 +33,7 @@ IMPLEMENTED: tuple[DataSource, ...] = (
     AgendaDataSource(),
     LocalFilesDataSource(),
     GitHubDataSource(),
+    OverleafDataSource(),
 )
 
 INCOMING: tuple[SourceDescriptor, ...] = (
@@ -40,12 +42,6 @@ INCOMING: tuple[SourceDescriptor, ...] = (
         "GitLab",
         "pi pi-code",
         "Commits, merge requests, pipelines and issues.",
-    ),
-    SourceDescriptor(
-        "overleaf",
-        "Overleaf",
-        "pi pi-file-edit",
-        "LaTeX projects edited, comments and tracked changes.",
     ),
     SourceDescriptor(
         "mlflow",
