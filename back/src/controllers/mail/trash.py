@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from controllers.mail import drafts, store
+from controllers.mail import drafts, store, uploads
 from db import MailActivityFlag, MailDraft, MailMessage, MailSender
 from views.settings import get_setting
 
@@ -221,4 +221,6 @@ def purge_expired(days: int) -> int:
     Returns:
         int: items purged
     """
-    return purge_before(store.utc_now() - timedelta(days=days))
+    purged = purge_before(store.utc_now() - timedelta(days=days))
+    uploads.purge_orphans()
+    return purged

@@ -1,5 +1,5 @@
 import { inject, Injectable } from '@angular/core';
-import type { DailyGeneration, DailyGenerationRequest } from '@domain/contracts';
+import type { DailyGeneration, DailyGenerationRequest, GenerationDryRun } from '@domain/contracts';
 import { ApiClient, backendUrl } from '../api/api-client';
 
 /** Activity generation: queue a period and read what was generated. */
@@ -27,5 +27,18 @@ export class ActivityGenerationApi {
    */
   generateDaily(request: DailyGenerationRequest): Promise<{ key: string }> {
     return this.api.post<{ key: string }>(backendUrl('/activity-generation/daily'), request);
+  }
+
+  /**
+   * Build the prompts of a day without asking the LLM.
+   *
+   * @param request - Day, sources and outputs.
+   * @returns Prompts with their size, activities per source, routed model.
+   */
+  dryRunDaily(request: DailyGenerationRequest): Promise<GenerationDryRun> {
+    return this.api.post<GenerationDryRun>(
+      backendUrl('/activity-generation/daily/dry-run'),
+      request,
+    );
   }
 }

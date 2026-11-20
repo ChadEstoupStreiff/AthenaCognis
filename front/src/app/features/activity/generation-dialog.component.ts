@@ -11,26 +11,29 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import type { DataSourceInfo, GenerationOutput, GenerationSpan } from '@domain/contracts';
-import type { GenerationBasis, ScheduleDefaults } from '../../core/activity/generation-settings';
+import {
+  FILL_WITH_DAILY_LABEL,
+  contextOptions,
+  offersFillWithDaily,
+  type GenerationBasis,
+  type ScheduleDefaults,
+} from '../../core/activity/generation-settings';
 import { ButtonModule } from 'primeng/button';
 import { CheckboxModule } from 'primeng/checkbox';
 import { DialogModule } from 'primeng/dialog';
 import { MultiSelectModule } from 'primeng/multiselect';
 import { SelectButtonModule } from 'primeng/selectbutton';
+import { ToggleSwitchModule } from 'primeng/toggleswitch';
 
 /** Generation asked by the form. */
 export interface GenerationChoice {
   readonly basis: GenerationBasis;
+  /** Monthly from weekly: fill uncovered days with daily summaries. */
+  readonly fillWithDaily: boolean;
   readonly sources: readonly string[];
   readonly outputs: readonly GenerationOutput[];
 }
 
-/** Span made of the summaries of a shorter span. */
-const BUILT_FROM: Readonly<Record<GenerationSpan, string | null>> = {
-  daily: null,
-  weekly: 'Use generated daily',
-  monthly: 'Use generated weekly',
-};
 /** Spans the backend generates today. */
 const AVAILABLE_SPANS: ReadonlySet<GenerationSpan> = new Set(['daily']);
 const OUTPUT_OPTIONS: readonly { value: GenerationOutput; label: string }[] = [
@@ -48,6 +51,7 @@ const OUTPUT_OPTIONS: readonly { value: GenerationOutput; label: string }[] = [
     DialogModule,
     MultiSelectModule,
     SelectButtonModule,
+    ToggleSwitchModule,
   ],
   template: `
     <p-dialog
@@ -58,23 +62,30 @@ const OUTPUT_OPTIONS: readonly { value: GenerationOutput; label: string }[] = [
       [style]="{ width: 'min(520px, 96vw)' }"
     >
       <div class="form">
-        @if (builtFrom(); as builtLabel) {
+        @if (hasContextChoice()) {
           <section>
             <h3>Context</h3>
             <p-selectbutton
-              [options]="[
-                { value: 'generated', label: builtLabel },
-                { value: 'sources', label: 'Select data sources' },
-              ]"
+              [options]="contextChoices()"
               optionValue="value"
               [allowEmpty]="false"
               [ngModel]="basis()"
               (ngModelChange)="basis.set($event)"
               ariaLabel="Context"
             />
+            @if (showsFillWithDaily()) {
+              <label class="fill">
+                <p-toggleswitch
+                  [ngModel]="fillWithDaily()"
+                  (ngModelChange)="fillWithDaily.set($event)"
+                  [ariaLabel]="fillWithDailyLabel"
+                />
+                {{ fillWithDailyLabel }}
+              </label>
+            }
           </section>
         }
-        @if (basis() === 'sources' || builtFrom() === null) {
+        @if (usesSources()) {
           <section>
             <h3>Data sources</h3>
             <p-multiselect
@@ -112,6 +123,13 @@ const OUTPUT_OPTIONS: readonly { value: GenerationOutput; label: string }[] = [
       <ng-template #footer>
         <p-button label="Cancel" [text]="true" (onClick)="visible.set(false)" />
         <p-button
+          label="Dry run"
+          icon="pi pi-eye"
+          [outlined]="true"
+          [disabled]="!canGenerate()"
+          (onClick)="dryRun.emit(choice())"
+        />
+        <p-button
           label="Generate"
           icon="pi pi-bolt"
           [disabled]="!canGenerate()"
@@ -131,6 +149,13 @@ const OUTPUT_OPTIONS: readonly { value: GenerationOutput; label: string }[] = [
     }
     p-multiselect {
       width: 100%;
+    }
+    .fill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+      cursor: pointer;
     }
     .output {
       display: flex;
@@ -158,17 +183,29 @@ export class GenerationDialogComponent {
   readonly defaults = input.required<ScheduleDefaults>();
   /** Generation asked. */
   readonly generate = output<GenerationChoice>();
+  /** Prompt preview asked (form stays open). */
+  readonly dryRun = output<GenerationChoice>();
 
   protected readonly outputOptions = OUTPUT_OPTIONS;
+  protected readonly fillWithDailyLabel = FILL_WITH_DAILY_LABEL;
   /** Sources as a mutable array (PrimeNG options). */
   protected readonly sourceOptions = computed(() => [...this.sources()]);
   protected readonly basis = signal<GenerationBasis>('generated');
+  protected readonly fillWithDaily = signal(false);
   protected readonly picked = signal<readonly string[]>([]);
   protected readonly outputs = signal<readonly GenerationOutput[]>(['summary', 'time']);
-  protected readonly builtFrom = computed(() => BUILT_FROM[this.span()]);
+  /** Context choices as a mutable array (PrimeNG options). */
+  protected readonly contextChoices = computed(() => [...contextOptions(this.span())]);
+  protected readonly hasContextChoice = computed(() => this.contextChoices().length > 0);
+  protected readonly usesSources = computed(
+    () => !this.hasContextChoice() || this.basis() === 'sources',
+  );
+  protected readonly showsFillWithDaily = computed(() =>
+    offersFillWithDaily(this.span(), this.basis()),
+  );
   protected readonly isAvailable = computed(() => AVAILABLE_SPANS.has(this.span()));
   protected readonly canGenerate = computed(
-    () => this.isAvailable() && this.outputs().length > 0 && this.hasContext(),
+    () => this.isAvailable() && this.outputs().length > 0 && this.hasSourcesWhenNeeded(),
   );
 
   constructor() {
@@ -195,9 +232,22 @@ export class GenerationDialogComponent {
 
   /** Send the choice and close. */
   protected submit(): void {
-    const basis = this.builtFrom() === null ? 'sources' : this.basis();
-    this.generate.emit({ basis, sources: this.picked(), outputs: this.outputs() });
+    this.generate.emit(this.choice());
     this.visible.set(false);
+  }
+
+  /**
+   * Choice made in the form.
+   *
+   * @returns Context, fill toggle, sources and outputs.
+   */
+  protected choice(): GenerationChoice {
+    return {
+      basis: this.hasContextChoice() ? this.basis() : 'sources',
+      fillWithDaily: this.showsFillWithDaily() && this.fillWithDaily(),
+      sources: this.picked(),
+      outputs: this.outputs(),
+    };
   }
 
   /**
@@ -205,9 +255,8 @@ export class GenerationDialogComponent {
    *
    * @returns True when built from generated summaries or with sources picked.
    */
-  private hasContext(): boolean {
-    const usesSources = this.builtFrom() === null || this.basis() === 'sources';
-    return !usesSources || this.picked().length > 0;
+  private hasSourcesWhenNeeded(): boolean {
+    return !this.usesSources() || this.picked().length > 0;
   }
 
   /** Start from the timeline's schedule (no source picked there: every active source). */
@@ -216,6 +265,7 @@ export class GenerationDialogComponent {
     const active = this.sources().map((source) => source.key);
     const scheduled = defaults.sources.filter((key) => active.includes(key));
     this.basis.set(defaults.basis);
+    this.fillWithDaily.set(defaults.fillWithDaily);
     this.picked.set(scheduled.length > 0 ? scheduled : active);
     this.outputs.set(defaults.outputs);
   }

@@ -33,6 +33,16 @@ const KIND_LABEL: Readonly<Record<MailDraftKind, string | null>> = {
               @if (kindLabel[item.kind]; as label) {
                 <p-tag [value]="label" severity="secondary" />
               }
+              @if (item.attachments?.length; as count) {
+                <span
+                  class="files ac-muted"
+                  [pTooltip]="fileNames(item)"
+                  tooltipPosition="top"
+                  [attr.aria-label]="count + ' attachments'"
+                >
+                  <i class="pi pi-paperclip" aria-hidden="true"></i>{{ count }}
+                </span>
+              }
               <span class="time ac-muted">{{ mailTime(item.updated) }}</span>
             </div>
             <div class="subject">{{ item.subject || '(no subject)' }}</div>
@@ -112,8 +122,14 @@ const KIND_LABEL: Readonly<Record<MailDraftKind, string | null>> = {
       font-weight: 500;
     }
     .time,
+    .files,
     .foot {
       font-size: 12px;
+    }
+    .files {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
     }
     .subject {
       font-weight: 600;
@@ -138,6 +154,16 @@ export class MailDraftsComponent {
   readonly accounts = input.required<MailAccount[]>();
   /** Draft to resume in the compose dialog. */
   readonly openDraft = output<MailDraft>();
+
+  /**
+   * Names of a draft's attachments (tooltip).
+   *
+   * @param draft - Draft.
+   * @returns Names, one per line.
+   */
+  protected fileNames(draft: MailDraft): string {
+    return (draft.attachments ?? []).map((file) => file.filename).join('\n');
+  }
 
   protected readonly kindLabel = KIND_LABEL;
   protected readonly mailTime = mailTime;

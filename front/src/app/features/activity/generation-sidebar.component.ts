@@ -17,8 +17,13 @@ import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import {
   DAY_START_SETTING,
   TIMEZONE_SETTING,
+  FILL_WITH_DAILY_LABEL,
   WEEK_START_SETTING,
+  contextOptions,
+  offersFillWithDaily,
   spanSetting,
+  storedBasis,
+  type GenerationBasis,
 } from '../../core/activity/generation-settings';
 import { SettingsSection } from '../settings/sections/settings-section';
 import { SettingsWriter } from '../settings/settings-writer';
@@ -27,12 +32,6 @@ const SPAN_LABELS: Readonly<Record<GenerationSpan, string>> = {
   daily: 'Daily',
   weekly: 'Weekly',
   monthly: 'Monthly',
-};
-/** Summaries a longer span is built from. */
-const BUILT_FROM: Readonly<Record<GenerationSpan, string | null>> = {
-  daily: null,
-  weekly: 'Use generated daily',
-  monthly: 'Use generated weekly',
 };
 /** Spans the backend generates (and schedules) today. */
 const AVAILABLE_SPANS: ReadonlySet<GenerationSpan> = new Set(['daily']);
@@ -125,12 +124,15 @@ export class GenerationSidebarComponent extends SettingsSection {
     label: SPAN_LABELS[value],
   }));
   protected readonly outputOptions = OUTPUT_OPTIONS;
+  protected readonly fillWithDailyLabel = FILL_WITH_DAILY_LABEL;
   protected readonly weekdays = WEEKDAYS;
   protected readonly dayStartKey = DAY_START_SETTING;
   protected readonly weekStartKey = WEEK_START_SETTING;
   protected readonly today = new Date();
   protected readonly spanLabel = computed(() => SPAN_LABELS[this.span()]);
-  protected readonly builtFrom = computed(() => BUILT_FROM[this.span()]);
+  /** Context choices as a mutable array (PrimeNG options). */
+  protected readonly contextChoices = computed(() => [...contextOptions(this.span())]);
+  protected readonly hasContextChoice = computed(() => this.contextChoices().length > 0);
   protected readonly isAvailable = computed(() => AVAILABLE_SPANS.has(this.span()));
   protected readonly sourceOptions = computed(() => [...this.sources()]);
   /** PrimeNG first day of week (0 = Sunday) from the week start setting. */
@@ -167,10 +169,19 @@ export class GenerationSidebarComponent extends SettingsSection {
   /**
    * Context of the selected weekly or monthly schedule.
    *
-   * @returns `generated` or `sources`.
+   * @returns Stored context, `generated` when unset or not offered.
    */
-  protected basis(): string {
-    return this.text(this.key('basis'), 'generated');
+  protected basis(): GenerationBasis {
+    return storedBasis(this.writer.value(this.key('basis')), this.span());
+  }
+
+  /**
+   * Whether the selected schedule offers the fill-with-daily toggle.
+   *
+   * @returns True for monthly built from weekly summaries.
+   */
+  protected showsFillWithDaily(): boolean {
+    return offersFillWithDaily(this.span(), this.basis());
   }
 
   /**
@@ -179,7 +190,7 @@ export class GenerationSidebarComponent extends SettingsSection {
    * @returns True for daily, or longer spans set to data sources.
    */
   protected usesSources(): boolean {
-    return this.builtFrom() === null || this.basis() === 'sources';
+    return !this.hasContextChoice() || this.basis() === 'sources';
   }
 
   /**

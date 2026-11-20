@@ -2,6 +2,7 @@
 
 import logging
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -20,19 +21,24 @@ from controllers.activity.generation import (
     ACTIVITY_PROJECT,
     ACTIVITY_PROJECT_COLOR,
     ACTIVITY_PROJECT_DESCRIPTION,
-    SUMMARY_PROMPT,
-    TIME_PROMPT,
     Catalog,
     DailyRequest,
     GenerationRequestError,
     SourceSection,
     TimeEntry,
-    build_context,
     daily_key,
     daily_note,
     daily_note_path,
     has_activity,
     parse_time_entries,
+)
+from controllers.activity.generation_prompt import (
+    DryRun,
+    Prompt,
+    PromptStats,
+    build_prompt,
+    part_stats,
+    split_answer,
 )
 from controllers.activity.generation_schedule import GenerationScheduler, SchedulerHooks
 from controllers.activity.registry import (
@@ -54,7 +60,7 @@ from db import (
     TaskStateEnum,
     get_db,
 )
-from tools.ai import request_llm
+from tools.ai import get_model_context_tokens, request_llm
 from views.settings import get_setting
 
 SETTING_PREFIX = "activity"
@@ -96,6 +102,49 @@ def ask_activity_llm(prompt: str) -> str:
     """
     _, _, answer = request_llm(setting_prefix=routing_prefix(), prompt=prompt)
     return str(answer)
+
+
+@dataclass(frozen=True)
+class PreparedPrompt:
+    """Prompt of a request with what reading its answer needs."""
+
+    prompt: Prompt
+    # Projects and tags allowed in time entries (empty without time entries).
+    catalog: Catalog
+    has_activity: bool
+
+
+def prepare_prompt(db: Session, request: DailyRequest) -> PreparedPrompt:
+    """
+    Read the sources of a request and build its single prompt
+
+    Args:
+        db (Session): session
+        request (DailyRequest): request
+    Returns:
+        PreparedPrompt: prompt, catalog, whether any source returned an activity
+    """
+    window = TimeRange(request.start, request.end)
+    sections = [read_section(key, window) for key in request.sources]
+    catalog = load_catalog(db) if "time" in request.outputs else Catalog()
+    prompt = build_prompt(
+        request.day, sections, request.outputs, catalog, request.utc_offset_minutes
+    )
+    return PreparedPrompt(prompt, catalog, has_activity(sections))
+
+
+def routed_model() -> tuple[str, int]:
+    """
+    Model routed for activity generation and its context window
+
+    Returns:
+        tuple[str, int]: "type · model" ("" when unset), context window in tokens
+    """
+    prefix = routing_prefix()
+    ai_type = str(get_setting(f"{prefix}_type") or "")
+    model = str(get_setting(f"{prefix}_model") or "")
+    label = " · ".join(part for part in (ai_type, model) if part)
+    return label, get_model_context_tokens(ai_type, model)
 
 
 def ensure_activity_project(db: Session) -> None:
@@ -282,24 +331,17 @@ class ActivityGenerationManager(JobManager):
             str: what was generated
         Raises:
             GenerationRequestError: bad request, or no activity in the picked sources
-            ValueError: time entries answer unreadable
+            ValueError: answer misses a section, or time entries unreadable
         """
         request = cls.running_request(db, file)
-        window = TimeRange(request.start, request.end)
-        sections = [read_section(key, window) for key in request.sources]
-        if not has_activity(sections):
+        prepared = prepare_prompt(db, request)
+        if not prepared.has_activity:
             raise GenerationRequestError("No activity in the picked data sources.")
-        context = build_context(sections, request.utc_offset_minutes)
-        # Ask everything first: a failed answer must leave nothing half written.
-        summary = (
-            cls.ask(SUMMARY_PROMPT, request.day, context)
-            if "summary" in request.outputs
-            else None
-        )
+        # One call for every output; read it all first so a bad answer writes nothing.
+        answers = split_answer(cls.llm(prepared.prompt.text()), request.outputs)
+        summary = answers.get("summary")
         entries = (
-            cls.ask_time_entries(db, request.day, context)
-            if "time" in request.outputs
-            else None
+            parse_time_entries(answers["time"], prepared.catalog) if "time" in answers else None
         )
         ensure_activity_project(db)
         done: list[str] = []
@@ -312,36 +354,26 @@ class ActivityGenerationManager(JobManager):
         return f"Generated {' and '.join(done)}."
 
     @classmethod
-    def ask(cls, prompt: str, day: str, context: str) -> str:
+    def dry_run(cls, request: DailyRequest) -> DryRun:
         """
-        Ask the LLM a generation prompt filled with the day and its context
+        Build the prompt of a request without asking the LLM or writing anything
 
         Args:
-            prompt (str): prompt with {day} and {input}
-            day (str): "YYYY-MM-DD"
-            context (str): activity context
+            request (DailyRequest): request
         Returns:
-            str: answer
+            DryRun: prompt, its size overall and per block, routed model
         """
-        return cls.llm(prompt.replace("{day}", day).replace("{input}", context))
-
-    @classmethod
-    def ask_time_entries(cls, db: Session, day: str, context: str) -> list[TimeEntry]:
-        """
-        Ask the time entries of a day, with projects and tags picked from the catalog
-
-        Args:
-            db (Session): session
-            day (str): "YYYY-MM-DD"
-            context (str): activity context
-        Returns:
-            list[TimeEntry]: entries
-        Raises:
-            ValueError: answer unreadable
-        """
-        catalog = load_catalog(db)
-        prompt = TIME_PROMPT.replace("{catalog}", catalog.text())
-        return parse_time_entries(cls.ask(prompt, day, context), catalog)
+        with get_db() as db:
+            prompt = prepare_prompt(db, request).prompt
+        text = prompt.text()
+        model, context_tokens = routed_model()
+        return DryRun(
+            prompt=text,
+            stats=PromptStats.of(text),
+            parts=part_stats(prompt),
+            model=model,
+            context_tokens=context_tokens,
+        )
 
     @classmethod
     def write_note(cls, db: Session, day: str, summary: str) -> None:

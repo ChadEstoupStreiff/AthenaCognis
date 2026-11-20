@@ -622,6 +622,10 @@ class MailOutgoing(Base):
     subject: Mapped[str] = mapped_column(TEXT, nullable=False, default="")
     # Written text only; signature and quote are added when sending.
     body: Mapped[str] = mapped_column(LONG_TEXT, nullable=False, default="")
+    # Formatted version of `body` (inline images as data URIs), None = plain text.
+    body_html: Mapped[str | None] = mapped_column(LONG_TEXT, nullable=True)
+    # JSON list of attached MailUpload ids, None = no attachment.
+    attachments: Mapped[str | None] = mapped_column(TEXT, nullable=True)
     quote: Mapped[str] = mapped_column(LONG_TEXT, nullable=False, default="")
     # Replied message (no foreign key: the original may be deleted meanwhile).
     reply_to_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -652,6 +656,10 @@ class MailDraft(Base):
     subject: Mapped[str] = mapped_column(TEXT, nullable=False, default="")
     # Written text only; signature and quote are added when sending.
     body: Mapped[str] = mapped_column(LONG_TEXT, nullable=False, default="")
+    # Formatted version of `body` (inline images as data URIs), None = plain text.
+    body_html: Mapped[str | None] = mapped_column(LONG_TEXT, nullable=True)
+    # JSON list of attached MailUpload ids, None = no attachment.
+    attachments: Mapped[str | None] = mapped_column(TEXT, nullable=True)
     quote: Mapped[str] = mapped_column(LONG_TEXT, nullable=False, default="")
     # Replied message (no foreign key: the original may be deleted meanwhile).
     reply_to_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -660,6 +668,20 @@ class MailDraft(Base):
     trashed_at: Mapped[datetime | None] = mapped_column(
         DateTime, nullable=True, index=True
     )
+
+
+class MailUpload(Base):
+    """File attached in the compose dialog (bytes stored on disk under its id)."""
+
+    __tablename__ = "mail_upload"
+
+    id: Mapped[str] = mapped_column(
+        String(64), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(127), nullable=False)
+    size: Mapped[int] = mapped_column(Integer, nullable=False)
+    created: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
 
 
 class MailPreviewTask(JobTask):

@@ -6,6 +6,7 @@ from html import escape
 from html.parser import HTMLParser
 
 PARAGRAPH = "\n\n"
+HTML_LINE_BREAK = "<br>"
 HTML_TAG = re.compile(r"</?[a-zA-Z][a-zA-Z0-9]*(\s[^>]*)?/?>")
 BLANK_LINES = re.compile(r"\n{3,}")
 LINE_BREAK_TAGS = frozenset({"br", "p", "div", "tr", "li", "h1", "h2", "h3", "table"})
@@ -116,7 +117,8 @@ def text_html(text: str, style: str) -> str:
     Returns:
         str: HTML block
     """
-    return f'<div style="{style}">{escape(text)}</div>'
+    lines = escape(text).replace("\r\n", "\n").replace("\n", HTML_LINE_BREAK)
+    return f'<div style="{style}">{lines}</div>'
 
 
 def compose_text(text: str, signature: str, quote: str) -> str:
@@ -134,39 +136,60 @@ def compose_text(text: str, signature: str, quote: str) -> str:
     return PARAGRAPH.join(part for part in parts if part)
 
 
-def compose_html(text: str, signature_html: str, quote: str) -> str:
+def compose_html(written_html: str, signature_html: str, quote: str) -> str:
     """
-    Join text, HTML signature and quote as HTML
+    Join written HTML, HTML signature and quote as HTML
 
     Args:
-        text (str): written text
-        signature_html (str): HTML signature
-        quote (str): quoted original, empty = none
+        written_html (str): written text as HTML
+        signature_html (str): signature as HTML, empty = none
+        quote (str): quoted original (plain text), empty = none
     Returns:
         str: HTML body
     """
-    parts = [
-        text_html(text.rstrip(), TEXT_STYLE),
-        f"<div>{signature_html}</div>",
-    ]
+    parts = [f"<div>{written_html}</div>"]
+    if signature_html:
+        parts.append(f"<div>{signature_html}</div>")
     if quote:
         parts.append(text_html(quote, QUOTE_STYLE))
     return "<br>".join(parts)
 
 
-def compose_body(text: str, signature: str | None, quote: str) -> ComposedBody:
+def signature_parts(signature: str | None) -> tuple[str, str]:
+    """
+    Give a signature as plain text and as HTML
+
+    Args:
+        signature (str | None): account signature (plain text or HTML), None = none
+    Returns:
+        tuple[str, str]: plain text and HTML versions, both empty when none
+    """
+    cleaned = (signature or "").strip()
+    if not cleaned:
+        return "", ""
+    if is_html(cleaned):
+        return html_to_text(cleaned), cleaned
+    return cleaned, text_html(cleaned, TEXT_STYLE)
+
+
+def compose_body(
+    text: str, signature: str | None, quote: str, written_html: str | None = None
+) -> ComposedBody:
     """
     Build the outgoing body: text, then signature, then the quoted original
 
     Args:
-        text (str): written text
+        text (str): written text (plain)
         signature (str | None): account signature (plain text or HTML)
         quote (str): quoted original, empty = none
+        written_html (str | None): formatted written text, None = plain only
     Returns:
-        ComposedBody: plain text and, for an HTML signature, an HTML alternative
+        ComposedBody: plain text and, for formatted text or an HTML signature,
+            an HTML alternative
     """
-    cleaned = (signature or "").strip()
-    if not is_html(cleaned):
-        return ComposedBody(compose_text(text, cleaned, quote), None)
-    plain = compose_text(text, html_to_text(cleaned), quote)
-    return ComposedBody(plain, compose_html(text, cleaned, quote))
+    signature_text, signature_html = signature_parts(signature)
+    plain = compose_text(text, signature_text, quote)
+    if written_html is None and not is_html((signature or "").strip()):
+        return ComposedBody(plain, None)
+    body_html = written_html or text_html(text.rstrip(), TEXT_STYLE)
+    return ComposedBody(plain, compose_html(body_html, signature_html, quote))

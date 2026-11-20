@@ -7,10 +7,20 @@ from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid
 
 from controllers.mail.imap_client import MailServerError, ServerLogin
+from controllers.mail.inline_images import extract_inline_images
 
 SMTP_SSL_PORT = 465
 TIMEOUT_SECONDS = 30
 REPLY_PREFIX = "Re:"
+
+
+@dataclass(frozen=True)
+class MailFile:
+    """File attached to an outgoing message."""
+
+    filename: str
+    content_type: str
+    data: bytes
 
 
 @dataclass(frozen=True)
@@ -26,6 +36,7 @@ class OutgoingMail:
     in_reply_to: str | None = None
     thread_refs: str | None = None
     html_body: str | None = None
+    attachments: list[MailFile] = field(default_factory=list)
 
 
 def reply_subject(subject: str) -> str:
@@ -67,8 +78,35 @@ def build_message(mail: OutgoingMail) -> EmailMessage:
         )
     message.set_content(mail.body)
     if mail.html_body is not None:
-        message.add_alternative(mail.html_body, subtype="html")
+        add_html(message, mail.html_body, mail.sender_email.split("@")[-1])
+    for file in mail.attachments:
+        maintype, _, subtype = file.content_type.partition("/")
+        message.add_attachment(
+            file.data, maintype, subtype or "octet-stream", filename=file.filename
+        )
     return message
+
+
+def add_html(message: EmailMessage, html: str, domain: str) -> None:
+    """
+    Add the HTML alternative, its data URI images as inline related parts
+
+    Args:
+        message (EmailMessage): message holding the plain text body
+        html (str): HTML body
+        domain (str): sender domain (Content-IDs)
+    """
+    html, images = extract_inline_images(html, domain)
+    message.add_alternative(html, subtype="html")
+    if not images:
+        return
+    html_part = message.get_body(preferencelist=("html",))
+    if html_part is None:
+        raise ValueError("HTML part missing after add_alternative.")
+    for image in images:
+        html_part.add_related(
+            image.data, "image", image.subtype, cid=f"<{image.content_id}>"
+        )
 
 
 def send_message(login: ServerLogin, message: EmailMessage) -> None:

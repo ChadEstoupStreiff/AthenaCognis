@@ -78,7 +78,8 @@ const ACTIVITY_ON_STYLE = {
 };
 const PAGE_SIZE = 50;
 const SEARCH_DEBOUNCE_MS = 250;
-const AUTO_SYNC_MS = 300_000;
+/** Reload of the stored mail while the page is open (the backend fetches in the background). */
+const AUTO_REFRESH_MS = 60_000;
 const NOTE_ROWS = 3;
 const INITIALS = 2;
 const PREVIEW_POLL_MS = 4_000;
@@ -236,6 +237,16 @@ export class MailPage {
   protected readonly digestText = signal<string | null>(null);
   /** Open compose dialog: new message, reply or forward. */
   protected readonly compose = signal<ComposeRequest | null>(null);
+  /**
+   * Open request as a list, tracked by identity: a new request replaces the dialog
+   * (the previous one keeps its draft) instead of reusing it.
+   */
+  protected readonly composeRequests = computed(() => {
+    const request = this.compose();
+    return request === null ? [] : [request];
+  });
+  /** Compose dialog collapsed to its bottom-right bar. */
+  protected readonly composeMinimized = signal(false);
   /** Attachment shown in the preview dialog. */
   protected readonly attachmentPreview = signal<AttachmentRef | null>(null);
   protected readonly note = signal('');
@@ -309,7 +320,7 @@ export class MailPage {
     inject(DestroyRef),
   );
 
-  /** Load the sender note, mark opened mail read, sync on open and every few minutes. */
+  /** Load the sender note, mark opened mail read, sync on open, refresh with background fetches. */
   constructor() {
     effect(() => {
       const message = this.openMessage() ?? undefined;
@@ -337,7 +348,7 @@ export class MailPage {
   }
 
   /**
-   * Sync once accounts are known, then every few minutes; stop timers on destroy.
+   * Sync once accounts are known, then show mail fetched in the background; stop timers on destroy.
    *
    * @param destroyRef - Page lifetime.
    */
@@ -350,10 +361,10 @@ export class MailPage {
       }
     });
     const timer = setInterval(() => {
-      if (this.hasAccounts()) {
-        void this.syncNow(true);
+      if (this.hasAccounts() && this.settings.get('mail_auto_fetch')) {
+        this.sync.invalidate('mail');
       }
-    }, AUTO_SYNC_MS);
+    }, AUTO_REFRESH_MS);
     destroyRef.onDestroy(() => {
       clearInterval(timer);
       if (this.previewPoll !== null) {
@@ -644,7 +655,8 @@ export class MailPage {
 
   /** Escape: back to the list (ignored while a dialog is open). */
   protected onEscape(): void {
-    if (this.selectedId() !== null && this.compose() === null) {
+    const dialogOpen = this.compose() !== null && !this.composeMinimized();
+    if (this.selectedId() !== null && !dialogOpen) {
       this.backToList();
     }
   }

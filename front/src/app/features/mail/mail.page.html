@@ -609,10 +609,11 @@
   </div>
 }
 
-@if (compose(); as draft) {
+@for (draft of composeRequests(); track draft) {
   <ac-mail-compose-dialog
     [visible]="true"
     (visibleChange)="$event || compose.set(null)"
+    [(minimized)]="composeMinimized"
     [accounts]="accountList()"
     [replyTo]="draft.replyTo"
     [recipient]="draft.to"

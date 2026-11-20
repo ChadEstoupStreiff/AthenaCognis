@@ -1,4 +1,11 @@
-import { clockMinutes, periodOptions, scheduleDefaults, spanSetting } from './generation-settings';
+import {
+  clockMinutes,
+  contextOptions,
+  offersFillWithDaily,
+  periodOptions,
+  scheduleDefaults,
+  spanSetting,
+} from './generation-settings';
 
 describe('generation settings', () => {
   it('reads clock values', () => {
@@ -18,6 +25,7 @@ describe('generation settings', () => {
   it('reads schedule defaults of a span', () => {
     expect(scheduleDefaults({}, 'daily')).toEqual({
       basis: 'generated',
+      fillWithDaily: false,
       sources: [],
       outputs: ['summary', 'time'],
     });
@@ -28,8 +36,41 @@ describe('generation settings', () => {
     };
     expect(scheduleDefaults(values, 'weekly')).toEqual({
       basis: 'sources',
+      fillWithDaily: false,
       sources: ['github'],
       outputs: ['time'],
     });
+  });
+
+  it('offers daily summaries as monthly context only', () => {
+    expect(contextOptions('daily')).toEqual([]);
+    expect(contextOptions('weekly').map((option) => option.value)).toEqual([
+      'generated',
+      'sources',
+    ]);
+    expect(contextOptions('monthly').map((option) => option.label)).toEqual([
+      'Use generated weekly',
+      'Use generated daily',
+      'Select data sources',
+    ]);
+  });
+
+  it('reads monthly daily context and fill toggle', () => {
+    const values = {
+      [spanSetting('monthly', 'basis')]: 'generated_daily',
+      [spanSetting('monthly', 'fill_daily')]: true,
+      [spanSetting('weekly', 'basis')]: 'generated_daily',
+    };
+    expect(scheduleDefaults(values, 'monthly')).toMatchObject({
+      basis: 'generated_daily',
+      fillWithDaily: true,
+    });
+    expect(scheduleDefaults(values, 'weekly').basis).toBe('generated');
+  });
+
+  it('offers the fill toggle for monthly from weekly only', () => {
+    expect(offersFillWithDaily('monthly', 'generated')).toBe(true);
+    expect(offersFillWithDaily('monthly', 'generated_daily')).toBe(false);
+    expect(offersFillWithDaily('weekly', 'generated')).toBe(false);
   });
 });

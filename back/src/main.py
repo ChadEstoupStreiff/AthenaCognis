@@ -11,6 +11,7 @@ from controllers.PreviewManager import PreviewManager
 from controllers.SummarizeManager import SummarizeManager
 from controllers.MailManager import MailManager
 from controllers.mail.outbox import OutboxSender
+from controllers.mail.auto_fetch import MailAutoFetcher
 from controllers.mail import service as mail_service
 from controllers.DocumentTreeManager import DocumentTreeManager
 from controllers.ActivityGenerationManager import (
@@ -310,6 +311,7 @@ if __name__ == "__main__":
     start_scheduler()
     mail_service.NEW_MAIL_HOOK = MailManager.queue_new_mail
     OutboxSender.start()
+    MailAutoFetcher.start(views.settings.get_setting)
 
     # if len(list_models()) == 0:
     #     pull_model(get_setting("summarization_model"))

@@ -4,9 +4,9 @@ import json
 from dataclasses import dataclass, field
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
-from controllers.mail import store
+from controllers.mail import store, uploads
 from db import MailDraft
 
 DRAFT_KINDS = frozenset({"new", "reply", "forward"})
@@ -26,6 +26,8 @@ class DraftContent:
     body: str = ""
     quote: str = ""
     reply_to_id: str | None = None
+    body_html: str | None = None
+    attachment_ids: list[str] = field(default_factory=list)
 
 
 def draft_view(draft: MailDraft) -> JsonDict:
@@ -45,11 +47,28 @@ def draft_view(draft: MailDraft) -> JsonDict:
         "cc": json.loads(draft.cc),
         "subject": draft.subject,
         "body": draft.body,
+        "body_html": draft.body_html,
+        "attachments": _attachments(draft),
         "quote": draft.quote,
         "reply_to_id": draft.reply_to_id,
         "updated": draft.updated.isoformat(),
         "trashed_at": draft.trashed_at.isoformat() if draft.trashed_at else None,
     }
+
+
+def _attachments(draft: MailDraft) -> list[JsonDict]:
+    """
+    Serialize the attachments of a draft
+
+    Args:
+        draft (MailDraft): row (attached to a session when it has attachments)
+    Returns:
+        list[JsonDict]: attachments still stored
+    """
+    session = object_session(draft)
+    if session is None or not draft.attachments:
+        return []
+    return uploads.upload_views(session, draft.attachments)
 
 
 def get_draft(session: Session, draft_id: str, trashed: bool = False) -> MailDraft:
@@ -90,6 +109,8 @@ def fill(draft: MailDraft, content: DraftContent) -> None:
     draft.cc = json.dumps(content.cc)
     draft.subject = content.subject
     draft.body = content.body
+    draft.body_html = content.body_html
+    draft.attachments = uploads.encode_ids(content.attachment_ids)
     draft.quote = content.quote
     draft.reply_to_id = content.reply_to_id
     draft.updated = store.utc_now()

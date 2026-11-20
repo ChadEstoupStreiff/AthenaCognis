@@ -18,6 +18,7 @@ from controllers.activity.generation import (
     daily_key,
     daily_note_path,
 )
+from controllers.activity.generation_prompt import DryRun
 from controllers.ActivityGenerationManager import ActivityGenerationManager
 from controllers.calendar_links import links_of, record_ids_in_project
 from controllers.JobManager import JobAlreadyQueuedError
@@ -138,6 +139,45 @@ def generated_records(date: datetime) -> list[JsonDict]:
         ]
 
 
+def daily_request(body: DailyBody) -> DailyRequest:
+    """
+    Validate a daily request body
+
+    Args:
+        body (DailyBody): request
+    Returns:
+        DailyRequest: request, window in naive UTC
+    Raises:
+        HTTPException: 400 malformed request
+    """
+    try:
+        return DailyRequest(
+            day=body.day,
+            start=to_naive_utc(body.start),
+            end=to_naive_utc(body.end),
+            utc_offset_minutes=body.utc_offset_minutes,
+            sources=tuple(body.sources),
+            outputs=tuple(body.outputs),
+        )
+    except GenerationRequestError as error:
+        raise HTTPException(HTTP_BAD_REQUEST, str(error)) from error
+
+
+@router.post("/daily/dry-run")
+def dry_run_daily(body: DailyBody) -> DryRun:
+    """
+    Prompt a daily generation would send, with its size; nothing asked nor written
+
+    Args:
+        body (DailyBody): request
+    Returns:
+        DryRun: prompt, size overall and per block, routed model
+    Raises:
+        HTTPException: 400 malformed request
+    """
+    return ActivityGenerationManager.dry_run(daily_request(body))
+
+
 @router.post("/daily")
 def request_daily(body: DailyBody) -> JsonDict:
     """
@@ -150,18 +190,9 @@ def request_daily(body: DailyBody) -> JsonDict:
     Raises:
         HTTPException: 400 malformed request, 409 day already generating
     """
+    request = daily_request(body)
     try:
-        request = DailyRequest(
-            day=body.day,
-            start=to_naive_utc(body.start),
-            end=to_naive_utc(body.end),
-            utc_offset_minutes=body.utc_offset_minutes,
-            sources=tuple(body.sources),
-            outputs=tuple(body.outputs),
-        )
         ActivityGenerationManager.request_daily(request)
-    except GenerationRequestError as error:
-        raise HTTPException(HTTP_BAD_REQUEST, str(error)) from error
     except JobAlreadyQueuedError as error:
         raise HTTPException(HTTP_CONFLICT, str(error)) from error
     return {"key": request.key}

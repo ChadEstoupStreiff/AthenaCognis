@@ -1,5 +1,6 @@
-import type { MailDraft, MailDraftInput, MailDraftKind } from '@domain/contracts';
+import type { MailDraft, MailDraftInput, MailDraftKind, MailUploadRef } from '@domain/contracts';
 import { joinRecipients, splitAddresses } from './mail-model';
+import { textToHtml } from './rich-text';
 
 /** Compose form. */
 export interface ComposeForm {
@@ -7,7 +8,12 @@ export interface ComposeForm {
   readonly to: string;
   readonly cc: string;
   readonly subject: string;
+  /** Written text as plain text (previews, plain part). */
   readonly body: string;
+  /** Written text as formatted HTML, empty when nothing written. */
+  readonly bodyHtml: string;
+  /** Files attached, in order. */
+  readonly attachments: readonly MailUploadRef[];
 }
 
 /** Message context a draft keeps besides the form. */
@@ -21,10 +27,21 @@ export interface DraftContext {
  * Tell whether the user typed something worth keeping.
  *
  * @param form - Compose form.
- * @returns True when a recipient, the subject or the text is filled.
+ * @returns True when a recipient, the subject, the text, an image or a file is filled.
  */
 export function hasContent(form: ComposeForm): boolean {
-  return [form.to, form.cc, form.subject, form.body].some((value) => value.trim() !== '');
+  const fields = [form.to, form.cc, form.subject, form.body, form.bodyHtml];
+  return form.attachments.length > 0 || fields.some((value) => value.trim() !== '');
+}
+
+/**
+ * Ids of the attached files, in order.
+ *
+ * @param form - Compose form.
+ * @returns Upload ids.
+ */
+export function attachmentIds(form: ComposeForm): string[] {
+  return form.attachments.map((file) => file.id);
 }
 
 /**
@@ -40,7 +57,9 @@ export function sameForm(left: ComposeForm, right: ComposeForm): boolean {
     left.to === right.to &&
     left.cc === right.cc &&
     left.subject === right.subject &&
-    left.body === right.body
+    left.body === right.body &&
+    left.bodyHtml === right.bodyHtml &&
+    attachmentIds(left).join() === attachmentIds(right).join()
   );
 }
 
@@ -59,6 +78,8 @@ export function draftInput(form: ComposeForm, context: DraftContext): MailDraftI
     cc: splitAddresses(form.cc),
     subject: form.subject,
     body: form.body,
+    body_html: form.bodyHtml === '' ? null : form.bodyHtml,
+    attachment_ids: attachmentIds(form),
     quote: context.quote,
     reply_to_id: context.replyToId,
   };
@@ -77,6 +98,8 @@ export function formOfDraft(draft: MailDraft): ComposeForm {
     cc: joinRecipients(draft.cc),
     subject: draft.subject,
     body: draft.body,
+    bodyHtml: draft.body_html ?? textToHtml(draft.body),
+    attachments: draft.attachments ?? [],
   };
 }
 

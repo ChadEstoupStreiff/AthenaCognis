@@ -139,6 +139,14 @@ export interface MailSyncResult {
   readonly error: string | null;
 }
 
+/** File uploaded with `POST /mail/uploads`, attached to a message being written. */
+export interface MailUploadRef {
+  readonly id: string;
+  readonly filename: string;
+  readonly content_type: string;
+  readonly size: number;
+}
+
 /** Body of `POST /mail/send`. */
 export interface MailOutgoing {
   readonly account_id: string;
@@ -147,6 +155,10 @@ export interface MailOutgoing {
   readonly subject: string;
   /** Written text only: the server adds the account signature, then the quote. */
   readonly body: string;
+  /** Formatted version of `body` (inline images as data URIs), null = plain text. */
+  readonly body_html?: string | null;
+  /** Uploaded files attached, in order. */
+  readonly attachment_ids?: readonly string[];
   /** Quoted original (reply) or forwarded message, empty for a new message. */
   readonly quote: string;
   readonly reply_to_id: string | null;
@@ -166,6 +178,10 @@ export interface MailDraftInput {
   readonly subject: string;
   /** Written text only (signature and quote added when sending). */
   readonly body: string;
+  /** Formatted version of `body` (inline images as data URIs), null = plain text. */
+  readonly body_html?: string | null;
+  /** Uploaded files attached, in order. */
+  readonly attachment_ids?: readonly string[];
   /** Quoted original (reply) or forwarded message, empty for a new message. */
   readonly quote: string;
   readonly reply_to_id: string | null;
@@ -174,6 +190,8 @@ export interface MailDraftInput {
 /** Saved draft (`GET /mail/drafts`), last edited first. */
 export interface MailDraft extends MailDraftInput {
   readonly id: string;
+  /** Files attached (still stored), in order. */
+  readonly attachments?: readonly MailUploadRef[];
   /** Last save, naive UTC. */
   readonly updated: string;
   /** Moved to the Trash (naive UTC), null when not deleted. */

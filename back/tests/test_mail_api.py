@@ -1,6 +1,7 @@
 from collections.abc import Callable, Iterator
 from datetime import datetime, timedelta
 from email.message import EmailMessage
+from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
@@ -10,7 +11,15 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import views.mail
-from controllers.mail import activity_flags, outbox, service, store, transport, trash
+from controllers.mail import (
+    activity_flags,
+    outbox,
+    service,
+    store,
+    transport,
+    trash,
+    uploads,
+)
 from controllers.mail.imap_client import FetchedMail, MailServerError
 from controllers.mail.parser import ParsedMail
 from controllers.mail.smtp_client import OutgoingMail
@@ -702,6 +711,7 @@ class FakeSender:
             None
         """
         self.sent: list[str] = []
+        self.mails: list[OutgoingMail] = []
         self.error: str | None = None
 
     def send(self, mail: OutgoingMail, reply_to: object) -> None:
@@ -719,6 +729,7 @@ class FakeSender:
         if self.error is not None:
             raise MailServerError(self.error)
         self.sent.append(mail.body)
+        self.mails.append(mail)
 
 
 @pytest.fixture
@@ -1170,3 +1181,208 @@ def stored_ids() -> dict[str, str]:
     with store.session_scope() as session:
         rows = session.execute(select(MailMessage.subject, MailMessage.id))
         return {subject: message_id for subject, message_id in rows}
+
+
+@pytest.fixture
+def upload_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """
+    Store uploaded attachments in a temporary folder
+
+    Args:
+        tmp_path (Path): pytest temporary folder
+        monkeypatch (pytest.MonkeyPatch): pytest monkeypatch
+    Returns:
+        Path: upload folder
+    """
+    folder = tmp_path / "uploads"
+    monkeypatch.setattr(uploads, "UPLOAD_DIR", folder)
+    return folder
+
+
+def upload(client: TestClient, name: str, data: bytes, content_type: str) -> str:
+    """
+    Upload an attachment through the API
+
+    Args:
+        client (TestClient): client
+        name (str): file name
+        data (bytes): content
+        content_type (str): MIME type
+    Returns:
+        str: upload id
+    """
+    response = client.post("/mail/uploads", files={"file": (name, data, content_type)})
+    assert response.status_code == 200, response.text
+    return str(response.json()["id"])
+
+
+def test_attachments_are_sent_then_removed(
+    client: TestClient, sender: FakeSender, upload_dir: Path
+) -> None:
+    """
+    Send uploaded files as attachments and delete them once sent
+
+    Args:
+        client (TestClient): client
+        sender (FakeSender): fake transport
+        upload_dir (Path): upload folder
+    Returns:
+        None
+    """
+    upload_id = upload(client, "../report.pdf", b"%PDF", "application/pdf")
+    payload = {"account_id": ACCOUNT_ID, "to": ["a@x.org"], "body": "See file"}
+    response = client.post("/mail/send", json={**payload, "attachment_ids": [upload_id]})
+    assert response.status_code == 200, response.text
+    assert outbox.send_next() is True
+    files = sender.mails[0].attachments
+    assert [(file.filename, file.content_type, file.data) for file in files] == [
+        ("report.pdf", "application/pdf", b"%PDF")
+    ]
+    assert not (upload_dir / upload_id).exists()
+
+
+def test_draft_keeps_its_attachments(client: TestClient, upload_dir: Path) -> None:
+    """
+    List a draft's attachments and keep them through the orphan purge
+
+    Args:
+        client (TestClient): client
+        upload_dir (Path): upload folder
+    Returns:
+        None
+    """
+    kept = upload(client, "a.txt", b"a", "text/plain; charset=utf-8")
+    orphan = upload(client, "b.txt", b"b", "bogus")
+    draft = {"account_id": ACCOUNT_ID, "attachment_ids": [kept]}
+    response = client.post("/mail/drafts", json=draft)
+    assert response.status_code == 200, response.text
+    assert response.json()["attachments"] == [
+        {"id": kept, "filename": "a.txt", "content_type": "text/plain", "size": 1}
+    ]
+    later = store.utc_now() + uploads.ORPHAN_GRACE + timedelta(minutes=1)
+    assert uploads.purge_orphans(later) == 1
+    assert (upload_dir / kept).exists()
+    assert not (upload_dir / orphan).exists()
+
+
+def test_send_rejects_unknown_attachment(client: TestClient, upload_dir: Path) -> None:
+    """
+    Refuse to queue a message whose attachment is gone
+
+    Args:
+        client (TestClient): client
+        upload_dir (Path): upload folder
+    Returns:
+        None
+    """
+    payload = {"account_id": ACCOUNT_ID, "to": ["a@x.org"], "attachment_ids": ["nope"]}
+    assert client.post("/mail/send", json=payload).status_code == 404
+
+
+def test_upload_above_limit_is_refused(
+    client: TestClient, upload_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """
+    Answer 413 to a file above the size limit
+
+    Args:
+        client (TestClient): client
+        upload_dir (Path): upload folder
+        monkeypatch (pytest.MonkeyPatch): pytest monkeypatch
+    Returns:
+        None
+    """
+    monkeypatch.setattr(uploads, "MAX_UPLOAD_BYTES", 3)
+    response = client.post("/mail/uploads", files={"file": ("x.bin", b"1234", "x/y")})
+    assert response.status_code == 413
+
+
+def test_forward_copies_original_attachments(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, upload_dir: Path
+) -> None:
+    """
+    Store every attachment of the forwarded message as an upload, in order
+
+    Args:
+        client (TestClient): client
+        monkeypatch (pytest.MonkeyPatch): pytest monkeypatch
+        upload_dir (Path): upload folder
+    Returns:
+        None
+    """
+    mail = EmailMessage()
+    mail["From"] = "a@x.org"
+    mail.set_content("Two files")
+    mail.add_attachment(b"%PDF", maintype="application", subtype="pdf", filename="a.pdf")
+    mail.add_attachment(b"big!", maintype="text", subtype="plain", filename="b.txt")
+    seed([parsed(1, "a@x.org")])
+    monkeypatch.setattr(
+        service, "transport_for", lambda link: FakeMailbox(mail.as_bytes())
+    )
+    monkeypatch.setattr(uploads, "MAX_UPLOAD_BYTES", 4)
+    url = f"/mail/messages/{stored_message_id()}/forward-attachments"
+    response = client.post(url)
+    assert response.status_code == 200, response.text
+    stored = response.json()
+    assert [(row["filename"], row["size"]) for row in stored] == [
+        ("a.pdf", 4),
+        ("b.txt", 4),
+    ]
+    assert (upload_dir / stored[0]["id"]).read_bytes() == b"%PDF"
+    assert client.post("/mail/messages/nope/forward-attachments").status_code == 404
+
+
+def test_forward_skips_attachments_above_limit(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, upload_dir: Path
+) -> None:
+    """
+    Leave out forwarded files above the upload limit instead of failing
+
+    Args:
+        client (TestClient): client
+        monkeypatch (pytest.MonkeyPatch): pytest monkeypatch
+        upload_dir (Path): upload folder
+    Returns:
+        None
+    """
+    mail = EmailMessage()
+    mail["From"] = "a@x.org"
+    mail.set_content("Big file")
+    mail.add_attachment(b"12345", maintype="text", subtype="plain", filename="big.txt")
+    seed([parsed(1, "a@x.org")])
+    monkeypatch.setattr(
+        service, "transport_for", lambda link: FakeMailbox(mail.as_bytes())
+    )
+    monkeypatch.setattr(uploads, "MAX_UPLOAD_BYTES", 4)
+    url = f"/mail/messages/{stored_message_id()}/forward-attachments"
+    assert client.post(url).json() == []
+
+
+def test_opening_old_mail_embeds_its_inline_images(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """
+    Repair a message stored with cid: images by embedding them from the original
+
+    Args:
+        client (TestClient): client
+        monkeypatch (pytest.MonkeyPatch): pytest monkeypatch
+    Returns:
+        None
+    """
+    mail = EmailMessage()
+    mail["From"] = "a@x.org"
+    mail.set_content("Look")
+    mail.add_alternative('<img src="cid:pic@x.org">', subtype="html")
+    html_part = mail.get_body(preferencelist=("html",))
+    assert html_part is not None
+    html_part.add_related(b"GIF89a", "image", "gif", cid="<pic@x.org>")
+    seed([parsed(1, "a@x.org")])
+    message_id = stored_message_id()
+    with store.session_scope() as session:
+        store.get_message(session, message_id).body_html = '<img src="cid:pic@x.org">'
+    monkeypatch.setattr(
+        service, "transport_for", lambda link: FakeMailbox(mail.as_bytes())
+    )
+    body = client.get(f"/mail/messages/{message_id}").json()["body_html"]
+    assert "data:image/gif;base64,R0lGODlh" in body

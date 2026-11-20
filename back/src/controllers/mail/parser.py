@@ -1,5 +1,6 @@
 """Turn raw RFC 822 bytes into a flat, storable message."""
 
+import base64
 import html
 import re
 from dataclasses import dataclass, field
@@ -18,6 +19,9 @@ MAX_BODY_CHARS = 200_000
 MAX_SUBJECT_CHARS = 1_000
 MAX_HEADER_CHARS = 500
 DEFAULT_ATTACHMENT_NAME = "attachment"
+# HTML body size once inline images are embedded as data URIs (column holds 16 MB).
+MAX_HTML_WITH_IMAGES_CHARS = 10_000_000
+CID_SOURCE = re.compile(r"""(src\s*=\s*["']?)cid:([^"'\s>]+)""", re.IGNORECASE)
 
 HTML_DROP = re.compile(r"<(script|style|head)[^>]*>.*?</\1>", re.DOTALL | re.IGNORECASE)
 HTML_BREAK = re.compile(r"<\s*(br|/p|/div|/tr|/h\d|/li)[^>]*>", re.IGNORECASE)
@@ -157,11 +161,66 @@ def extract_bodies(message: EmailMessage) -> tuple[str, str | None]:
     """
     plain_part = message.get_body(preferencelist=("plain",))
     html_part = message.get_body(preferencelist=("html",))
-    markup = _part_text(html_part) if html_part is not None else None
+    markup = _part_text(html_part)[:MAX_BODY_CHARS] if html_part is not None else None
     text = _part_text(plain_part) if plain_part is not None else ""
     if not text.strip() and markup:
         text = html_to_text(markup)
-    return text[:MAX_BODY_CHARS], markup[:MAX_BODY_CHARS] if markup else None
+    return text[:MAX_BODY_CHARS], embed_inline_images(message, markup) if markup else None
+
+
+def inline_images(message: EmailMessage) -> dict[str, str]:
+    """
+    Map the Content-IDs of a message's image parts to data URIs
+
+    Args:
+        message (EmailMessage): parsed message
+    Returns:
+        dict[str, str]: Content-ID (without angle brackets) → data URI
+    """
+    images: dict[str, str] = {}
+    for part in message.walk():
+        content_id = str(part.get("Content-ID", "")).strip().strip("<>")
+        if not content_id or part.get_content_maintype() != "image":
+            continue
+        payload = part.get_payload(decode=True)
+        if isinstance(payload, bytes):
+            encoded = base64.b64encode(payload).decode("ascii")
+            images[content_id] = f"data:{part.get_content_type()};base64,{encoded}"
+    return images
+
+
+def embed_inline_images(message: EmailMessage, markup: str) -> str:
+    """
+    Replace cid: image sources by data URIs, so the sandboxed viewer can show them
+
+    Args:
+        message (EmailMessage): parsed message holding the image parts
+        markup (str): HTML body
+    Returns:
+        str: HTML with the images embedded (images over the size budget left as cid:)
+    """
+    images = inline_images(message)
+    if not images:
+        return markup
+    budget = MAX_HTML_WITH_IMAGES_CHARS - len(markup)
+
+    def replace(match: re.Match[str]) -> str:
+        """
+        Swap one cid: reference for its data URI when it fits the budget
+
+        Args:
+            match (re.Match[str]): src attribute prefix and Content-ID
+        Returns:
+            str: new attribute text
+        """
+        nonlocal budget
+        data_uri = images.get(match.group(2))
+        if data_uri is None or len(data_uri) > budget:
+            return match.group(0)
+        budget -= len(data_uri)
+        return f"{match.group(1)}{data_uri}"
+
+    return CID_SOURCE.sub(replace, markup)
 
 
 def _part_text(part: MIMEPart) -> str:
@@ -225,11 +284,45 @@ def extract_attachment(raw: bytes, index: int) -> Attachment:
     Raises:
         AttachmentNotFoundError: when the message has no attachment at that position
     """
-    message = cast(EmailMessage, BytesParser(policy=policy.default).parsebytes(raw))
-    parts = attachment_parts(message)
+    parts = attachment_parts(parse_raw_message(raw))
     if not 0 <= index < len(parts):
         raise AttachmentNotFoundError(f"No attachment #{index} in this message.")
-    part = parts[index]
+    return _attachment_of(parts[index])
+
+
+def extract_attachments(raw: bytes) -> list[Attachment]:
+    """
+    Extract every attachment of a raw message, in `attachment_names` order
+
+    Args:
+        raw (bytes): RFC 822 message
+    Returns:
+        list[Attachment]: files, empty when none
+    """
+    return [_attachment_of(part) for part in attachment_parts(parse_raw_message(raw))]
+
+
+def parse_raw_message(raw: bytes) -> EmailMessage:
+    """
+    Parse a raw message
+
+    Args:
+        raw (bytes): RFC 822 message
+    Returns:
+        EmailMessage: parsed message
+    """
+    return cast(EmailMessage, BytesParser(policy=policy.default).parsebytes(raw))
+
+
+def _attachment_of(part: EmailMessage) -> Attachment:
+    """
+    Decode one attachment part
+
+    Args:
+        part (EmailMessage): attachment part
+    Returns:
+        Attachment: file name, MIME type and decoded content
+    """
     payload = part.get_payload(decode=True)
     return Attachment(
         filename=part.get_filename() or DEFAULT_ATTACHMENT_NAME,

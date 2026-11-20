@@ -30,41 +30,6 @@ CODE_FENCE = re.compile(r"^```[a-zA-Z]*\s*|\s*```$")
 Output = Literal["summary", "time"]
 OUTPUTS: tuple[Output, ...] = ("summary", "time")
 
-SUMMARY_PROMPT = """! ACTIVITY OF {day} START !
-{input}
-! ACTIVITY OF {day} END !
-
-! TASK !
-You write the end-of-day journal of the user from the activity above (local times).
-Group related items, name projects, people and outcomes, skip noise.
-Sections: a 2-3 sentence overview, then "## Highlights" (bullets), then "## Details" per theme.
-Maximum 400 words.
-
-! FORMAT !
-Respond ONLY with markdown, no title line, no code fence.
-"""
-
-TIME_PROMPT = """! ACTIVITY OF {day} START !
-{input}
-! ACTIVITY OF {day} END !
-
-! PROJECTS AND TAGS !
-{catalog}
-
-! TASK !
-Turn the activity above (local times) into the time entries of the user's day.
-Merge items of the same task into one block; blocks must not overlap;
-leave gaps where nothing happened; skip blocks shorter than 15 minutes.
-Give each block the projects and tags it belongs to, chosen ONLY from the lists above
-(exact names, several allowed, empty list when none fits).
-
-! FORMAT !
-Respond ONLY with a JSON array, no code fence, no text around it:
-[{"start": "HH:MM", "end": "HH:MM", "title": "short title", "description": "one sentence",
-  "projects": ["Project name"], "tags": ["Tag name"]}]
-"""
-
-
 class GenerationRequestError(ValueError):
     """Generation request is malformed (bad day, window, offset or outputs)."""
 
@@ -305,19 +270,6 @@ def section_text(section: SourceSection, utc_offset_minutes: int) -> str:
     if not ordered and not section.error:
         lines.append("(nothing)")
     return "\n".join(lines)
-
-
-def build_context(sections: list[SourceSection], utc_offset_minutes: int) -> str:
-    """
-    Render every source for the LLM
-
-    Args:
-        sections (list[SourceSection]): source activities
-        utc_offset_minutes (int): local time minus UTC, in minutes
-    Returns:
-        str: blocks separated by blank lines
-    """
-    return "\n\n".join(section_text(item, utc_offset_minutes) for item in sections)
 
 
 def has_activity(sections: list[SourceSection]) -> bool:

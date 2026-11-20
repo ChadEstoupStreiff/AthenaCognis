@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from controllers.mail import drafts, service, store
+from controllers.mail import drafts, service, store, uploads
 from controllers.mail.imap_client import MailServerError
 from db import MailOutgoing
 
@@ -87,12 +87,15 @@ def enqueue(request: service.SendRequest, draft_id: str | None = None) -> JsonDi
     """
     with store.session_scope() as session:
         store.get_account(session, request.account_id)
+        uploads.check_exist(session, request.attachment_ids)
         outgoing = MailOutgoing(
             account_id=request.account_id,
             recipients=json.dumps(request.to),
             cc=json.dumps(request.cc),
             subject=request.subject,
             body=request.body,
+            body_html=request.body_html,
+            attachments=uploads.encode_ids(request.attachment_ids),
             quote=request.quote,
             reply_to_id=request.reply_to_id,
             created=now(),
@@ -185,6 +188,8 @@ def claim_next() -> tuple[str, service.SendRequest] | None:
             body=outgoing.body,
             reply_to_id=outgoing.reply_to_id,
             quote=outgoing.quote,
+            body_html=outgoing.body_html,
+            attachment_ids=uploads.decode_ids(outgoing.attachments),
         )
         return outgoing.id, request
 
@@ -239,6 +244,7 @@ def send_next() -> bool:
         mark_failed(outgoing_id, f"Unexpected error: {error}")
         return True
     mark_sent(outgoing_id)
+    uploads.delete_unreferenced(request.attachment_ids)
     service.sync_account(request.account_id)
     return True
 

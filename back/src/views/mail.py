@@ -1,5 +1,6 @@
 """Mail client routes: accounts, sync, messages, senders and AI helpers."""
 
+import logging
 import re
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -7,15 +8,32 @@ from datetime import date
 from typing import Literal
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Path,
+    Query,
+    Response,
+    UploadFile,
+)
 from pydantic import BaseModel, Field, validator
 
-from controllers.mail import address_book, drafts, outbox, service, store, trash
+from controllers.mail import (
+    address_book,
+    drafts,
+    outbox,
+    service,
+    store,
+    trash,
+    uploads,
+)
 from controllers.mail.assistant import AssistantError
 from controllers.mail.imap_client import MailServerError
 from controllers.mail.llm import MailAiError, ask_mail_llm
 from controllers.mail.parser import Attachment
 from controllers.mail.providers import provider_presets
+from controllers.mail.smtp_client import MailFile
 from controllers.mail.transport import PROTOCOLS, transport_for
 from controllers.mail.triage import CATEGORIES, SENDER_FLAGS
 from controllers.MailManager import MailManager
@@ -24,6 +42,7 @@ from db import MailAccount, MailMessage
 HTTP_NOT_FOUND = 404
 HTTP_BAD_REQUEST = 400
 HTTP_CONFLICT = 409
+HTTP_TOO_LARGE = 413
 HTTP_UNPROCESSABLE = 422
 HTTP_BAD_GATEWAY = 502
 MAX_PORT = 65535
@@ -34,6 +53,7 @@ HEX_COLOR = re.compile(r"#[0-9a-fA-F]{6}")
 MAX_PAGE = store.MAX_PAGE
 
 router = APIRouter(prefix="/mail", tags=["Mail"])
+logger = logging.getLogger(__name__)
 
 
 JsonDict = dict[str, object]
@@ -384,6 +404,11 @@ def get_message(message_id: str) -> JsonDict:
     Raises:
         HTTPException: 404 unknown message
     """
+    with http_errors():
+        try:
+            service.repair_inline_images(message_id)
+        except MailServerError as error:
+            logger.warning("Inline images of %s not embedded: %s", message_id, error)
     with http_errors(), store.session_scope() as session:
         return store.message_detail(session, store.get_message(session, message_id))
 
@@ -437,6 +462,25 @@ def get_attachment(message_id: str, index: int = Path(..., ge=0)) -> Response:
     with http_errors():
         file = service.attachment(message_id, index)
     return attachment_response(file)
+
+
+@router.post("/messages/{message_id}/forward-attachments")
+def forward_attachments(message_id: str) -> list[JsonDict]:
+    """
+    Copy a message's attachments into uploads, to attach them to its forward
+
+    Args:
+        message_id (str): forwarded message id
+    Returns:
+        list[JsonDict]: stored attachments (files above the size limit skipped)
+    Raises:
+        HTTPException: 404 unknown message, 502 mail server failure
+    """
+    with http_errors():
+        files = service.all_attachments(message_id)
+    return uploads.save_forwarded(
+        [MailFile(file.filename, file.content_type, file.data) for file in files]
+    )
 
 
 class StateBody(BaseModel):
@@ -590,8 +634,12 @@ class SendBody(BaseModel):
     cc: list[str] = Field(default_factory=list)
     subject: str = Field("", max_length=1_000)
     body: str = ""
+    # Formatted body (inline images as data URIs), None = plain text only.
+    body_html: str | None = None
     quote: str = ""
     reply_to_id: str | None = None
+    # Files uploaded with POST /mail/uploads, in order.
+    attachment_ids: list[str] = Field(default_factory=list)
     # Draft the message was written in: removed once queued.
     draft_id: str | None = None
 
@@ -632,9 +680,33 @@ def send(body: SendBody) -> JsonDict:
         body.body,
         body.reply_to_id,
         body.quote,
+        body.body_html,
+        body.attachment_ids,
     )
     with http_errors():
         return outbox.enqueue(request, body.draft_id)
+
+
+# MARK: uploads
+
+
+@router.post("/uploads")
+async def upload_attachment(file: UploadFile) -> JsonDict:
+    """
+    Store a file to attach to a message being written
+
+    Args:
+        file (UploadFile): file
+    Returns:
+        JsonDict: attachment id, name, type and size
+    Raises:
+        HTTPException: 413 above the size limit
+    """
+    data = await file.read(uploads.MAX_UPLOAD_BYTES + 1)
+    try:
+        return uploads.save_upload(file.filename, file.content_type, data)
+    except uploads.UploadTooLargeError as error:
+        raise HTTPException(status_code=HTTP_TOO_LARGE, detail=str(error)) from error
 
 
 # MARK: outbox
@@ -698,8 +770,12 @@ class DraftBody(BaseModel):
     cc: list[str] = Field(default_factory=list)
     subject: str = Field("", max_length=1_000)
     body: str = ""
+    # Formatted body (inline images as data URIs), None = plain text only.
+    body_html: str | None = None
     quote: str = ""
     reply_to_id: str | None = None
+    # Files uploaded with POST /mail/uploads, in order.
+    attachment_ids: list[str] = Field(default_factory=list)
 
     def content(self) -> drafts.DraftContent:
         """
@@ -717,6 +793,8 @@ class DraftBody(BaseModel):
             body=self.body,
             quote=self.quote,
             reply_to_id=self.reply_to_id,
+            body_html=self.body_html,
+            attachment_ids=self.attachment_ids,
         )
 
 

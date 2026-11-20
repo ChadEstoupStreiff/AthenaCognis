@@ -81,14 +81,11 @@
     <small class="ac-muted">Months start on the 1st, at the day start.</small>
   }
 
-  @if (builtFrom(); as builtLabel) {
+  @if (hasContextChoice()) {
     <div class="row stacked">
       <div class="label"><strong>Context</strong></div>
       <p-selectbutton
-        [options]="[
-          { value: 'generated', label: builtLabel },
-          { value: 'sources', label: 'Select data sources' },
-        ]"
+        [options]="contextChoices()"
         optionValue="value"
         [allowEmpty]="false"
         [ngModel]="basis()"
@@ -97,6 +94,18 @@
         ariaLabel="Context"
       />
     </div>
+    @if (showsFillWithDaily()) {
+      <div class="row">
+        <div class="label">
+          <strong>{{ fillWithDailyLabel }}</strong>
+        </div>
+        <p-toggleswitch
+          [ngModel]="flag(key('fill_daily'))"
+          (ngModelChange)="saveSchedule(key('fill_daily'), $event, true)"
+          [ariaLabel]="fillWithDailyLabel"
+        />
+      </div>
+    }
   }
 
   @if (usesSources()) {

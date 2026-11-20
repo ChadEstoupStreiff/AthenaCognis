@@ -15,8 +15,14 @@ from controllers.activity.generation import (
     DailyRequest,
     GenerationRequestError,
     SourceSection,
-    build_context,
     parse_time_entries,
+)
+from controllers.activity.generation_prompt import (
+    SUMMARY_MARKER,
+    TIME_MARKER,
+    build_prompt,
+    part_stats,
+    split_answer,
 )
 from controllers.ActivityGenerationManager import ActivityGenerationManager
 from controllers.calendar_links import links_of
@@ -35,6 +41,7 @@ TIME_ANSWER = """```json
  {"start": "14:00", "end": "13:00", "title": "Backwards", "description": ""},
  {"start": "14:00", "end": "15:15", "title": "Activity page", "description": "Code"}]
 ```"""
+SUMMARY_ANSWER = "Coded the **Activity** page."
 
 
 def request(outputs: tuple[str, ...] = ("summary", "time")) -> DailyRequest:
@@ -120,7 +127,12 @@ class Llm:
             str: answer
         """
         self.prompts.append(prompt)
-        return TIME_ANSWER if "JSON array" in prompt else "Coded the **Activity** page."
+        sections = []
+        if SUMMARY_MARKER in prompt:
+            sections.append(f"{SUMMARY_MARKER}\n{SUMMARY_ANSWER}")
+        if TIME_MARKER in prompt:
+            sections.append(f"{TIME_MARKER}\n{TIME_ANSWER}")
+        return "\n".join(sections)
 
 
 @pytest.fixture
@@ -192,18 +204,51 @@ def test_request_validation() -> None:
     assert DailyRequest.from_json(stored.to_json()) == stored
 
 
-def test_context_uses_local_times_and_keeps_errors() -> None:
-    sections = [
-        SourceSection("GitHub", "Name repos.", (activity(13, "PR"), activity(8, "Push"))),
-        SourceSection("Calendars", "", (), "server down"),
-    ]
-    context = build_context(sections, OFFSET)
-    assert context.index("[09:00] push — Push") < context.index("[14:00] push — PR")
-    assert "Instruction from the user: Name repos." in context
-    assert "(could not be read: server down)" in context
-
-
 CATALOG = Catalog((("Alpha", "Main work"), ("Beta", "")), ("Deep",))
+SECTIONS = [
+    SourceSection("GitHub", "Name repos.", (activity(13, "PR"), activity(8, "Push"))),
+    SourceSection("Calendars", "", (), "server down"),
+]
+
+
+def test_prompt_uses_local_times_and_keeps_errors() -> None:
+    text = build_prompt(DAY, SECTIONS, ("summary", "time"), CATALOG, OFFSET).text()
+    assert text.index("[09:00] push — Push") < text.index("[14:00] push — PR")
+    assert "Instruction from the user: Name repos." in text
+    assert "(could not be read: server down)" in text
+    assert text.index(SUMMARY_MARKER) < text.index(TIME_MARKER)
+    assert "- Alpha: Main work" in text
+
+
+def test_summary_only_prompt_skips_catalog_and_time_task() -> None:
+    text = build_prompt(DAY, SECTIONS, ("summary",), CATALOG, OFFSET).text()
+    assert SUMMARY_MARKER in text
+    assert TIME_MARKER not in text
+    assert "PROJECTS AND TAGS" not in text
+
+
+def test_split_answer_reads_each_section() -> None:
+    answer = f"{SUMMARY_MARKER}\n# Day\n\n{TIME_MARKER}\n```json\n[]\n```"
+    assert split_answer(answer, ("summary", "time")) == {"summary": "# Day", "time": "[]"}
+    assert split_answer("== time entries ==\n[]", ("time",)) == {"time": "[]"}
+    assert split_answer("Plain journal", ("summary",)) == {"summary": "Plain journal"}
+    with pytest.raises(ValueError, match="time"):
+        split_answer(f"{SUMMARY_MARKER}\nOnly this", ("summary", "time"))
+
+
+def test_part_stats_measure_each_block() -> None:
+    prompt = build_prompt(DAY, SECTIONS, ("time",), CATALOG, OFFSET)
+    stats = part_stats(prompt)
+    assert [(item.label, item.kind) for item in stats] == [
+        ("Instructions", "instructions"),
+        ("GitHub", "source"),
+        ("Calendars", "source"),
+        ("Projects and tags", "catalog"),
+    ]
+    github = stats[1]
+    assert github.activities == 2
+    assert github.stats.characters == len(prompt.parts[1].text)
+    assert stats[2].error == "server down"
 
 
 def test_time_entries_drop_fences_overlaps_and_bad_blocks() -> None:
@@ -247,8 +292,9 @@ def test_daily_generation_writes_note_and_time_entries(
         assert links[records[0].id].projects == (ACTIVITY_PROJECT, "Alpha")
         assert links[records[0].id].tags == ("Deep",)
         assert links[records[1].id].projects == (ACTIVITY_PROJECT,)
-    assert "- Alpha" in llm.prompts[1] and "- Deep" in llm.prompts[1]
-    assert f"- {ACTIVITY_PROJECT}" not in llm.prompts[1]
+    assert len(llm.prompts) == 1
+    assert "- Alpha" in llm.prompts[0] and "- Deep" in llm.prompts[0]
+    assert f"- {ACTIVITY_PROJECT}" not in llm.prompts[0]
 
 
 def test_regeneration_replaces_time_entries(
@@ -307,3 +353,33 @@ def test_api_queues_and_reads_a_day(
     assert client.get("/activity-generation/tasks").json()[0]["label"] == f"Daily · {DAY}"
     bad = {**body, "outputs": []}
     assert client.post("/activity-generation/daily", json=bad).status_code == 400
+
+
+def test_dry_run_builds_prompts_without_llm(
+    session_factory: SessionFactory, catalog: None, source: FakeSource, llm: Llm
+) -> None:
+    app = FastAPI()
+    app.include_router(views.activity_generation.router)
+    client = TestClient(app)
+    body = {
+        "day": DAY,
+        "start": "2026-11-18T23:00:00Z",
+        "end": "2026-11-19T23:00:00Z",
+        "utc_offset_minutes": OFFSET,
+        "sources": ["github"],
+        "outputs": ["summary", "time"],
+    }
+    result = client.post("/activity-generation/daily/dry-run", json=body).json()
+    assert llm.prompts == []
+    assert ActivityGenerationManager.list_tasks() == []
+    assert "[09:00] push — Pushed 1 commit" in result["prompt"]
+    assert SUMMARY_MARKER in result["prompt"] and TIME_MARKER in result["prompt"]
+    assert "- Alpha" in result["prompt"]
+    assert result["stats"]["characters"] == len(result["prompt"])
+    assert result["stats"]["estimated_tokens"] == -(-len(result["prompt"]) // 4)
+    github = next(part for part in result["parts"] if part["label"] == "GitHub")
+    assert (github["kind"], github["activities"], github["error"]) == ("source", 2, "")
+    assert github["stats"]["characters"] > 0
+    assert result["context_tokens"] > 0
+    bad = {**body, "sources": []}
+    assert client.post("/activity-generation/daily/dry-run", json=bad).status_code == 400

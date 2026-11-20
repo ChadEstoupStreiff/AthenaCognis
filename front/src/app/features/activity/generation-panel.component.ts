@@ -9,7 +9,12 @@ import {
   signal,
 } from '@angular/core';
 import { Router } from '@angular/router';
-import type { DailyGeneration, DataSourceInfo, GenerationSpan } from '@domain/contracts';
+import type {
+  DailyGeneration,
+  DailyGenerationRequest,
+  DataSourceInfo,
+  GenerationSpan,
+} from '@domain/contracts';
 import { ButtonModule } from 'primeng/button';
 import { ProgressBarModule } from 'primeng/progressbar';
 import { ActivityGenerationApi } from '../../core/activity/activity-generation.api';
@@ -19,6 +24,7 @@ import { SettingsStore } from '../../core/settings/settings.store';
 import { DataSync } from '../../core/state/data-sync.service';
 import { MarkdownViewComponent } from '../../shared/ui/markdown-view.component';
 import { TagChipComponent } from '../../shared/ui/tag-chip.component';
+import { DryRunDialogComponent } from './dry-run-dialog.component';
 import { GenerationDialogComponent, type GenerationChoice } from './generation-dialog.component';
 import { isGenerating, noteBody, recordRange } from './generation-model';
 
@@ -34,6 +40,7 @@ const GENERATION_POLL_MS = 3000;
     MarkdownViewComponent,
     TagChipComponent,
     GenerationDialogComponent,
+    DryRunDialogComponent,
   ],
   templateUrl: './generation-panel.component.html',
   styleUrl: './generation-panel.component.scss',
@@ -62,6 +69,8 @@ export class GenerationPanelComponent {
     scheduleDefaults(this.settings.values(), this.span()),
   );
   protected readonly formOpen = signal(false);
+  /** Request previewed by the dry run popup; null when closed. */
+  protected readonly dryRunRequest = signal<DailyGenerationRequest | null>(null);
 
   /** Generation of the picked day; weekly and monthly are not generated yet. */
   protected readonly daily = resource({
@@ -105,6 +114,18 @@ export class GenerationPanelComponent {
     }
     await this.api.generateDaily(dailyRequest(this.period(), choice.sources, choice.outputs));
     this.daily.reload();
+  }
+
+  /**
+   * Preview the prompts of the generation asked by the form.
+   *
+   * @param choice - Context and outputs.
+   */
+  protected previewPrompts(choice: GenerationChoice): void {
+    if (this.span() !== 'daily') {
+      return;
+    }
+    this.dryRunRequest.set(dailyRequest(this.period(), choice.sources, choice.outputs));
   }
 
   /**

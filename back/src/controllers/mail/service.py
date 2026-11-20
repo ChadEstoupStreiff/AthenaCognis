@@ -1,13 +1,14 @@
 """Mail client use cases: sync, read state, AI triage, digest, reply and send."""
 
 import logging
+import threading
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from controllers.mail import activity_flags, store
+from controllers.mail import activity_flags, store, uploads
 from controllers.mail.assistant import (
     MAX_DIGEST_MAILS,
     LlmCall,
@@ -23,7 +24,10 @@ from controllers.mail.parser import (
     AttachmentNotFoundError,
     ParsedMail,
     extract_attachment,
+    extract_attachments,
+    extract_bodies,
     parse_message,
+    parse_raw_message,
 )
 from controllers.mail.smtp_client import OutgoingMail
 from controllers.mail.transport import (
@@ -42,6 +46,9 @@ NEW_MAIL_HOOK: NewMailHook | None = None
 MAILBOXES: tuple[MailboxKind, ...] = ("inbox", "sent")
 
 logger = logging.getLogger(__name__)
+# One lock per account: background auto fetch and manual sync never overlap.
+_SYNC_LOCKS: dict[str, threading.Lock] = {}
+_SYNC_LOCKS_GUARD = threading.Lock()
 
 
 @dataclass(frozen=True)
@@ -80,9 +87,38 @@ def _parse_all(
     return parsed
 
 
+def _account_lock(account_id: str) -> threading.Lock:
+    """
+    Get the sync lock of an account
+
+    Args:
+        account_id (str): account id
+    Returns:
+        threading.Lock: lock shared by every sync of that account
+    """
+    with _SYNC_LOCKS_GUARD:
+        return _SYNC_LOCKS.setdefault(account_id, threading.Lock())
+
+
 def sync_account(account_id: str, limit: int = SYNC_LIMIT) -> SyncResult:
     """
     Fetch the new received and sent messages of an account
+
+    Args:
+        account_id (str): account id
+        limit (int): maximum messages fetched per mailbox
+    Returns:
+        SyncResult: messages stored, or the server error
+    Raises:
+        NotFoundError: when the account does not exist
+    """
+    with _account_lock(account_id):
+        return _sync_account_locked(account_id, limit)
+
+
+def _sync_account_locked(account_id: str, limit: int) -> SyncResult:
+    """
+    Fetch the new messages of an account (caller holds its sync lock)
 
     Args:
         account_id (str): account id
@@ -244,15 +280,69 @@ def attachment(message_id: str, index: int) -> Attachment:
         NotFoundError: when the message or the attachment does not exist
         MailServerError: when the server fails
     """
-    with store.session_scope() as session:
-        message = store.get_message(session, message_id)
-        link = store.link_of(store.get_account(session, message.account_id))
-        ref = ref_of(message)
-    raw = transport_for(link).fetch_raw(ref)
+    raw = _fetch_raw(message_id)
     try:
         return extract_attachment(raw, index)
     except AttachmentNotFoundError as error:
         raise store.NotFoundError(str(error)) from error
+
+
+def repair_inline_images(message_id: str) -> bool:
+    """
+    Embed the cid: images of a message stored before they were embedded at sync
+
+    Args:
+        message_id (str): message id
+    Returns:
+        bool: True when the stored HTML body was updated
+    Raises:
+        NotFoundError: when the message does not exist
+        MailServerError: when the server fails
+    """
+    with store.session_scope() as session:
+        markup = store.get_message(session, message_id).body_html
+    if not markup or "cid:" not in markup.lower():
+        return False
+    _, repaired = extract_bodies(parse_raw_message(_fetch_raw(message_id)))
+    if repaired is None or repaired == markup:
+        return False
+    with store.session_scope() as session:
+        store.get_message(session, message_id).body_html = repaired
+    return True
+
+
+def all_attachments(message_id: str) -> list[Attachment]:
+    """
+    Download every attachment of a stored message from its server (one fetch)
+
+    Args:
+        message_id (str): message id
+    Returns:
+        list[Attachment]: files, empty when none
+    Raises:
+        NotFoundError: when the message does not exist
+        MailServerError: when the server fails
+    """
+    return extract_attachments(_fetch_raw(message_id))
+
+
+def _fetch_raw(message_id: str) -> bytes:
+    """
+    Download the raw source of a stored message from its server
+
+    Args:
+        message_id (str): message id
+    Returns:
+        bytes: RFC 822 message
+    Raises:
+        NotFoundError: when the message does not exist
+        MailServerError: when the server fails
+    """
+    with store.session_scope() as session:
+        message = store.get_message(session, message_id)
+        link = store.link_of(store.get_account(session, message.account_id))
+        ref = ref_of(message)
+    return transport_for(link).fetch_raw(ref)
 
 
 def mark_all_read(account_id: str | None, view: str) -> int:
@@ -374,6 +464,8 @@ class SendRequest:
     body: str
     reply_to_id: str | None = None
     quote: str = ""
+    body_html: str | None = None
+    attachment_ids: list[str] = field(default_factory=list)
 
 
 def send(request: SendRequest) -> None:
@@ -418,7 +510,9 @@ def _outgoing(
     if request.reply_to_id:
         original = store.get_message(session, request.reply_to_id)
         in_reply_to, thread_refs = original.message_id, original.thread_refs
-    body = compose_body(request.body, account.signature, request.quote)
+    body = compose_body(
+        request.body, account.signature, request.quote, request.body_html
+    )
     return OutgoingMail(
         sender_email=account.email,
         sender_name=account.label,
@@ -429,4 +523,5 @@ def _outgoing(
         in_reply_to=in_reply_to,
         thread_refs=thread_refs,
         html_body=body.html,
+        attachments=uploads.load_files(session, request.attachment_ids),
     )

@@ -42,6 +42,12 @@ INCOMING: tuple[SourceDescriptor, ...] = (
         "Commits, merge requests, pipelines and issues.",
     ),
     SourceDescriptor(
+        "overleaf",
+        "Overleaf",
+        "pi pi-file-edit",
+        "LaTeX projects edited, comments and tracked changes.",
+    ),
+    SourceDescriptor(
         "mlflow",
         "MLflow",
         "pi pi-chart-line",

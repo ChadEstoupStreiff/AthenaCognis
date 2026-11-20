@@ -15,6 +15,7 @@ import type {
   MailSummary,
   MailSyncResult,
   MailTrash,
+  MailUploadRef,
   MailView,
   SenderChange,
   SenderFlag,
@@ -299,6 +300,28 @@ export class MailApi {
    */
   drafts(): Promise<MailDraft[]> {
     return this.api.get<MailDraft[]>(backendUrl('/mail/drafts'), { silent: true });
+  }
+
+  /**
+   * Upload a file to attach to the message being written.
+   *
+   * @param file - File.
+   * @returns Stored attachment.
+   */
+  async uploadAttachment(file: File): Promise<MailUploadRef> {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    return this.api.post<MailUploadRef>(backendUrl('/mail/uploads'), form);
+  }
+
+  /**
+   * Copy a message's attachments into uploads, to attach them to its forward.
+   *
+   * @param id - Forwarded message id.
+   * @returns Stored attachments (files above the size limit left out).
+   */
+  async forwardAttachments(id: string): Promise<MailUploadRef[]> {
+    return this.api.post<MailUploadRef[]>(`${messageUrl(id)}/forward-attachments`);
   }
 
   /**

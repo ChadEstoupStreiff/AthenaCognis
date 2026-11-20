@@ -360,3 +360,52 @@ def test_extract_attachment_rejects_missing_position(index: int) -> None:
     """
     with pytest.raises(AttachmentNotFoundError):
         extract_attachment(raw_with_attachments(), index)
+
+
+def related_mail(
+    content_id: str = "pic@x.org", shown_id: str = "pic@x.org"
+) -> EmailMessage:
+    """
+    Build an HTML message showing one inline (cid:) GIF
+
+    Args:
+        content_id (str): Content-ID of the image part
+        shown_id (str): Content-ID referenced by the HTML
+    Returns:
+        EmailMessage: message
+    """
+    mail = EmailMessage()
+    mail["From"] = "a@x.org"
+    mail["Subject"] = "Gif"
+    mail.set_content("Look")
+    mail.add_alternative(f'<p>Look <img src="cid:{shown_id}"></p>', subtype="html")
+    html_part = mail.get_body(preferencelist=("html",))
+    assert html_part is not None
+    html_part.add_related(b"GIF89a", "image", "gif", cid=f"<{content_id}>")
+    return mail
+
+
+def test_inline_images_are_embedded_for_the_viewer() -> None:
+    """
+    Turn cid: image sources into data URIs when parsing
+
+    Returns:
+        None
+    """
+    parsed_mail = parse_message(related_mail().as_bytes(), 1, "INBOX")
+    assert parsed_mail.body_html is not None
+    assert "cid:" not in parsed_mail.body_html
+    assert 'src="data:image/gif;base64,R0lGODlh"' in parsed_mail.body_html
+
+
+def test_unknown_cid_is_left_as_is() -> None:
+    """
+    Keep a cid: reference that matches no part
+
+    Returns:
+        None
+    """
+    mail = related_mail(shown_id="other@x.org")
+    parsed_mail = parse_message(mail.as_bytes(), 1, "INBOX")
+    assert parsed_mail.body_html is not None
+    assert 'src="cid:other@x.org"' in parsed_mail.body_html

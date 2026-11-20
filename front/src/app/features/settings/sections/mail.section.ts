@@ -21,6 +21,19 @@ const PREVIEW_BOXES: ReadonlySet<MailView> = new Set([
   'others',
   'all',
 ]);
+const AUTO_FETCH = {
+  key: 'mail_auto_fetch',
+  label: 'Auto fetch',
+  hint: 'Fetch new mail of every account in the background, even with the Mail page closed.',
+};
+const FETCH_FREQUENCY = {
+  key: 'mail_auto_fetch_minutes',
+  label: 'Fetch frequency',
+  hint: 'Minutes between two background fetches.',
+  fallback: 5,
+  min: 1,
+  max: 1440,
+};
 const ACTIVITY_RESET = {
   key: 'mail_activity_reset_time',
   label: 'Activity reset time',
@@ -56,6 +69,34 @@ const DOWNLOAD_IMAGES = {
     <section class="group" id="mail">
       <h2>Mail</h2>
       <ac-mail-accounts />
+      <div class="row">
+        <div class="label">
+          <strong>{{ autoFetch.label }}</strong
+          ><small class="ac-muted">{{ autoFetch.hint }}</small>
+        </div>
+        <p-toggleswitch
+          [ngModel]="flag(autoFetch.key)"
+          (ngModelChange)="save(autoFetch.key, $event, true)"
+          [ariaLabel]="autoFetch.label"
+        />
+      </div>
+      @if (flag(autoFetch.key)) {
+        <div class="row">
+          <div class="label">
+            <strong>{{ fetchFrequency.label }}</strong
+            ><small class="ac-muted">{{ fetchFrequency.hint }}</small>
+          </div>
+          <p-inputnumber
+            [ngModel]="num(fetchFrequency.key, fetchFrequency.fallback)"
+            (ngModelChange)="save(fetchFrequency.key, $event ?? fetchFrequency.fallback)"
+            [min]="fetchFrequency.min"
+            [max]="fetchFrequency.max"
+            [showButtons]="true"
+            suffix=" min"
+            [ariaLabel]="fetchFrequency.label"
+          />
+        </div>
+      }
       <div class="row">
         <div class="label">
           <strong>Auto-generate Mail Preview</strong
@@ -138,6 +179,8 @@ export class MailSectionComponent extends SettingsSection {
   protected readonly autoPreview = AUTO_PREVIEW;
   protected readonly autoPreviewBoxes = AUTO_PREVIEW_BOXES;
   protected readonly downloadImages = DOWNLOAD_IMAGES;
+  protected readonly autoFetch = AUTO_FETCH;
+  protected readonly fetchFrequency = FETCH_FREQUENCY;
   protected readonly activityReset = ACTIVITY_RESET;
   protected readonly trashRetention = TRASH_RETENTION;
   protected readonly boxOptions = VIEW_META.filter((meta) => PREVIEW_BOXES.has(meta.view));

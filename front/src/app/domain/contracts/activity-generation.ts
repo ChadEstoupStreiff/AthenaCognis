@@ -25,6 +25,40 @@ export interface DailyGenerationRequest {
   readonly outputs: readonly GenerationOutput[];
 }
 
+/** Size of a prompt. */
+export interface PromptStats {
+  readonly characters: number;
+  readonly words: number;
+  readonly lines: number;
+  /** Characters / 4, rounded up. */
+  readonly estimated_tokens: number;
+}
+
+/** Kind of a prompt block. */
+export type PromptPartKind = 'instructions' | 'source' | 'catalog';
+
+/** Size of one block of the prompt (instructions, a data source, the catalog). */
+export interface PromptPartStat {
+  readonly label: string;
+  readonly kind: PromptPartKind;
+  /** Source blocks: activities read. */
+  readonly activities: number;
+  /** Why the source could not be read, "" when it was. */
+  readonly error: string;
+  readonly stats: PromptStats;
+}
+
+/** Dry run (`POST /activity-generation/daily/dry-run`): the single prompt, nothing asked nor written. */
+export interface GenerationDryRun {
+  readonly prompt: string;
+  readonly stats: PromptStats;
+  readonly parts: readonly PromptPartStat[];
+  /** Routed model (`type · model`), "" when unset. */
+  readonly model: string;
+  /** Context window of the routed model, in tokens. */
+  readonly context_tokens: number;
+}
+
 /** Latest generation run of a period. */
 export interface GenerationRun {
   readonly state: JobState;

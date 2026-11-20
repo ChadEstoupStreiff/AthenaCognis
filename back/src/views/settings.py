@@ -62,6 +62,8 @@ default_settings = {
     "mail_auto_preview_boxes": ["priority", "inbox"],
     "mail_auto_download_images": False,
     "mail_activity_reset_time": "04:00",
+    "mail_auto_fetch": True,  # sync every account in the background
+    "mail_auto_fetch_minutes": 5,  # minutes between two background syncs
     "mail_trash_retention_days": 30,  # deleted mail and drafts kept in the Trash  # flags before it count for the day before
     "nav_order": [],  # sidebar routes in display order (front-only)
     "nav_hidden": [],  # sidebar routes hidden from the rail (front-only)

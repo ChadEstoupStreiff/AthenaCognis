@@ -12,17 +12,24 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
-import type { MailAccount, MailDetail, MailDraft, MailDraftKind } from '@domain/contracts';
+import type {
+  MailAccount,
+  MailDetail,
+  MailDraft,
+  MailDraftKind,
+  MailUploadRef,
+} from '@domain/contracts';
 import DOMPurify from 'dompurify';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
 import { InputTextModule } from 'primeng/inputtext';
 import { SelectModule } from 'primeng/select';
-import { TextareaModule } from 'primeng/textarea';
 import { MailApi } from '../../core/mail/mail.api';
 import { NotifyService } from '../../core/notify/notify.service';
+import { formatBytes } from '../../shared/pipes/bytes.pipe';
 import { MailAddressInputComponent } from './address-input.component';
 import {
+  attachmentIds,
   type ComposeForm,
   draftInput,
   formOfDraft,
@@ -39,11 +46,32 @@ import {
   replySubject,
   splitAddresses,
 } from './mail-model';
+import { MailRichEditorComponent, type RichContent } from './rich-editor.component';
+import { textToHtml } from './rich-text';
 
-const BODY_ROWS = 14;
 /** Pause in typing after which the draft is saved. */
 const AUTOSAVE_DELAY_MS = 3_000;
+/** Largest message most mail servers accept, 25 MB (also the server's per-file limit). */
+const MAX_ATTACHMENT_BYTES = 26_214_400;
 const SIGNATURE_FORBIDDEN_TAGS = ['form', 'input', 'button', 'iframe', 'object', 'embed', 'style'];
+
+/**
+ * Remove one occurrence of each name from a list.
+ *
+ * @param names - List.
+ * @param removed - Names to remove once each.
+ * @returns Remaining names.
+ */
+function withoutNames(names: readonly string[], removed: readonly string[]): string[] {
+  const remaining = [...names];
+  for (const name of removed) {
+    const index = remaining.indexOf(name);
+    if (index !== -1) {
+      remaining.splice(index, 1);
+    }
+  }
+  return remaining;
+}
 
 /** Dialog title per kind of message. */
 const KIND_TITLE: Readonly<Record<MailDraftKind, string>> = {
@@ -61,19 +89,32 @@ const KIND_TITLE: Readonly<Record<MailDraftKind, string>> = {
     DialogModule,
     InputTextModule,
     MailAddressInputComponent,
+    MailRichEditorComponent,
     SelectModule,
-    TextareaModule,
   ],
   template: `
     <p-dialog
-      [header]="title()"
       [modal]="true"
-      [visible]="visible()"
+      [visible]="visible() && !minimized()"
       (visibleChange)="onVisibleChange($event)"
       [maximizable]="true"
       [style]="{ width: 'min(760px, 96vw)' }"
     >
-      <div class="form">
+      <ng-template #header>
+        <span class="header">
+          <span class="p-dialog-title">{{ title() }}</span>
+          <p-button
+            icon="pi pi-window-minimize"
+            severity="secondary"
+            [text]="true"
+            [rounded]="true"
+            ariaLabel="Minimize"
+            (mousedown)="$event.stopPropagation()"
+            (onClick)="minimized.set(true)"
+          />
+        </span>
+      </ng-template>
+      <div class="form" (dragover)="$event.preventDefault()" (drop)="onDropFiles($event)">
         <label class="row">
           <span>From</span>
           <p-select
@@ -128,13 +169,38 @@ const KIND_TITLE: Readonly<Record<MailDraftKind, string>> = {
             />
           </div>
         }
-        <textarea
-          pTextarea
-          [rows]="bodyRows"
-          [ngModel]="form().body"
-          (ngModelChange)="patch({ body: $event })"
-          aria-label="Message"
-        ></textarea>
+        <ac-mail-rich-editor
+          [html]="form().bodyHtml"
+          placeholder="Write your message…"
+          (contentChange)="onBody($event)"
+          (filesDropped)="attachFiles($event)"
+        />
+        @if (form().attachments.length > 0 || uploading().length > 0) {
+          <ul class="attachments" aria-label="Attachments">
+            @for (file of form().attachments; track file.id) {
+              <li>
+                <i class="pi pi-paperclip" aria-hidden="true"></i>
+                <span class="name" [title]="file.filename">{{ file.filename }}</span>
+                <span class="ac-muted">{{ sizeLabel(file.size) }}</span>
+                <p-button
+                  icon="pi pi-times"
+                  severity="secondary"
+                  [text]="true"
+                  [rounded]="true"
+                  size="small"
+                  [ariaLabel]="'Remove ' + file.filename"
+                  (onClick)="removeAttachment(file)"
+                />
+              </li>
+            }
+            @for (name of uploading(); track $index) {
+              <li class="ac-muted">
+                <i class="pi pi-spin pi-spinner" aria-hidden="true"></i>
+                <span class="name">{{ name }}</span>
+              </li>
+            }
+          </ul>
+        }
         @if (signatureHtml(); as html) {
           <div class="signature" aria-label="Signature" [innerHTML]="html"></div>
         } @else if (signatureText(); as text) {
@@ -145,9 +211,19 @@ const KIND_TITLE: Readonly<Record<MailDraftKind, string>> = {
         }
       </div>
       <ng-template #footer>
-        @if (savedAt(); as time) {
-          <span class="saved-at ac-muted">Draft saved {{ time }}</span>
-        }
+        <span class="footer-start">
+          <p-button
+            label="Attach"
+            icon="pi pi-paperclip"
+            severity="secondary"
+            [text]="true"
+            (onClick)="filePicker.click()"
+          />
+          <input #filePicker type="file" multiple hidden (change)="onPicked($event)" />
+          @if (savedAt(); as time) {
+            <span class="ac-muted">Draft saved {{ time }}</span>
+          }
+        </span>
         <p-button label="Discard" severity="secondary" [text]="true" (onClick)="discard()" />
         <p-button
           label="Save draft"
@@ -160,8 +236,81 @@ const KIND_TITLE: Readonly<Record<MailDraftKind, string>> = {
         <p-button label="Send" icon="pi pi-send" [loading]="sending()" (onClick)="send()" />
       </ng-template>
     </p-dialog>
+    @if (visible() && minimized()) {
+      <div class="minimized ac-panel" role="region" [attr.aria-label]="title() + ' (minimized)'">
+        <button type="button" class="restore" (click)="minimized.set(false)">
+          <i class="pi pi-envelope" aria-hidden="true"></i>
+          <span class="label">
+            <strong>{{ title() }}</strong>
+            <span class="ac-muted">{{ form().subject || '(no subject)' }}</span>
+          </span>
+        </button>
+        <p-button
+          icon="pi pi-window-maximize"
+          severity="secondary"
+          [text]="true"
+          [rounded]="true"
+          ariaLabel="Restore"
+          (onClick)="minimized.set(false)"
+        />
+        <p-button
+          icon="pi pi-times"
+          severity="secondary"
+          [text]="true"
+          [rounded]="true"
+          ariaLabel="Close and keep draft"
+          (onClick)="onVisibleChange(false)"
+        />
+      </div>
+    }
   `,
   styles: `
+    .header {
+      display: flex;
+      flex: 1;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .minimized {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      z-index: 1100;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      width: min(340px, calc(100vw - 32px));
+      padding: 6px 6px 6px 12px;
+      border-radius: 10px;
+      box-shadow: 0 6px 24px rgb(0 0 0 / 25%);
+    }
+    .restore {
+      display: flex;
+      flex: 1;
+      min-width: 0;
+      align-items: center;
+      gap: 10px;
+      padding: 0;
+      border: 0;
+      background: none;
+      color: inherit;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+    .label {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      font-size: 13px;
+      span {
+        overflow: hidden;
+        font-size: 12px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
     .form {
       display: flex;
       flex-direction: column;
@@ -182,13 +331,8 @@ const KIND_TITLE: Readonly<Record<MailDraftKind, string>> = {
         flex: 1;
       }
     }
-    input,
-    textarea {
+    input {
       width: 100%;
-    }
-    textarea {
-      font-family: inherit;
-      resize: vertical;
     }
     .signature,
     .quote {
@@ -210,10 +354,36 @@ const KIND_TITLE: Readonly<Record<MailDraftKind, string>> = {
     .quote {
       white-space: pre-wrap;
     }
-    .saved-at {
+    .footer-start {
+      display: flex;
+      align-items: center;
+      gap: 8px;
       margin-right: auto;
-      align-self: center;
       font-size: 12px;
+    }
+    .attachments {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      li {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        max-width: 100%;
+        padding: 2px 4px 2px 10px;
+        border: 1px solid var(--ac-panel-border);
+        border-radius: 999px;
+        font-size: 12px;
+      }
+      .name {
+        max-width: 220px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
     }
     .quote {
       max-height: 180px;
@@ -232,6 +402,8 @@ export class MailComposeDialogComponent {
 
   /** Visibility (two-way). */
   readonly visible = model(false);
+  /** Collapsed to a bar at the bottom right (two-way), so other mail stays browsable. */
+  readonly minimized = model(false);
   /** Accounts to send from. */
   readonly accounts = input.required<MailAccount[]>();
   /** Message answered (`null` writes a new message). */
@@ -285,18 +457,22 @@ export class MailComposeDialogComponent {
     isHtmlSignature(this.signature()) ? '' : this.signature(),
   );
 
-  protected readonly bodyRows = BODY_ROWS;
   protected readonly form = signal<ComposeForm>({
     accountId: '',
     to: '',
     cc: '',
     subject: '',
     body: '',
+    bodyHtml: '',
+    attachments: [],
   });
   protected instruction = '';
   protected readonly drafting = signal(false);
   protected readonly sending = signal(false);
   protected readonly saving = signal(false);
+  /** Names of files being uploaded. */
+  protected readonly uploading = signal<readonly string[]>([]);
+  protected readonly sizeLabel = formatBytes;
   /** Time of the last draft save, shown in the footer (null = not saved). */
   protected readonly savedAt = signal<string | null>(null);
   /** Saves run one at a time: the first creates the draft, later ones update it. */
@@ -326,6 +502,11 @@ export class MailComposeDialogComponent {
     });
     inject(DestroyRef).onDestroy(() => {
       clearTimeout(this.autosaveTimer);
+      void this.keepDraft().then((saved) => {
+        if (saved) {
+          this.notify.info('Saved in Drafts');
+        }
+      });
     });
   }
 
@@ -338,6 +519,109 @@ export class MailComposeDialogComponent {
     this.form.update((form) => ({ ...form, ...change }));
   }
 
+  /**
+   * Follow the editor: plain text and formatted HTML.
+   *
+   * @param content - Written content.
+   */
+  protected onBody(content: RichContent): void {
+    this.patch({ body: content.text, bodyHtml: content.html });
+  }
+
+  /**
+   * Attach files picked in the file dialog.
+   *
+   * @param event - File input change.
+   */
+  protected async onPicked(event: Event): Promise<void> {
+    const picker = event.target as HTMLInputElement;
+    const files = Array.from(picker.files ?? []);
+    picker.value = '';
+    await this.attachFiles(files);
+  }
+
+  /**
+   * Attach files dropped on the form (outside the editor).
+   *
+   * @param event - Drop event.
+   */
+  protected async onDropFiles(event: DragEvent): Promise<void> {
+    const files = Array.from(event.dataTransfer?.files ?? []);
+    if (files.length === 0) {
+      return;
+    }
+    event.preventDefault();
+    await this.attachFiles(files);
+  }
+
+  /**
+   * Upload files and attach them (files above the size limit are refused).
+   *
+   * @param files - Files.
+   */
+  protected async attachFiles(files: readonly File[]): Promise<void> {
+    const tooLarge = files.filter((file) => file.size > MAX_ATTACHMENT_BYTES);
+    if (tooLarge.length > 0) {
+      const names = tooLarge.map((file) => file.name).join(', ');
+      this.notify.warn(`Not attached (above ${formatBytes(MAX_ATTACHMENT_BYTES)}): ${names}`);
+    }
+    const accepted = files.filter((file) => file.size <= MAX_ATTACHMENT_BYTES);
+    await Promise.allSettled(accepted.map((file) => this.uploadOne(file)));
+    const total = this.form().attachments.reduce((sum, file) => sum + file.size, 0);
+    if (total > MAX_ATTACHMENT_BYTES) {
+      this.notify.warn(
+        `Attachments total ${formatBytes(total)}: many mail servers refuse messages this large.`,
+      );
+    }
+  }
+
+  /**
+   * Remove an attached file.
+   *
+   * @param file - Attachment.
+   */
+  protected removeAttachment(file: MailUploadRef): void {
+    this.patch({ attachments: this.form().attachments.filter((item) => item.id !== file.id) });
+  }
+
+  /**
+   * Attach the files of the forwarded message (copied on the server).
+   *
+   * @param forwarded - Forwarded message.
+   */
+  private async attachForwarded(forwarded: MailDetail): Promise<void> {
+    const names = forwarded.attachments;
+    this.uploading.update((current) => [...current, ...names]);
+    try {
+      const files = await this.mail.forwardAttachments(forwarded.id);
+      const untouched = sameForm(this.form(), this.savedForm);
+      this.patch({ attachments: [...files, ...this.form().attachments] });
+      if (untouched) {
+        this.savedForm = this.form();
+      }
+      if (files.length < names.length) {
+        this.notify.warn('Some attachments were too large to forward.');
+      }
+    } finally {
+      this.uploading.update((current) => withoutNames(current, names));
+    }
+  }
+
+  /**
+   * Upload one file and add it to the attachments.
+   *
+   * @param file - File.
+   */
+  private async uploadOne(file: File): Promise<void> {
+    this.uploading.update((names) => [...names, file.name]);
+    try {
+      const stored = await this.mail.uploadAttachment(file);
+      this.patch({ attachments: [...this.form().attachments, stored] });
+    } finally {
+      this.uploading.update((names) => withoutNames(names, [file.name]));
+    }
+  }
+
   /** Ask the AI for a reply text (signature and quote stay below). */
   protected async draft(): Promise<void> {
     const original = this.replyTo();
@@ -347,7 +631,7 @@ export class MailComposeDialogComponent {
     this.drafting.set(true);
     try {
       const body = await this.mail.draftReply(original.id, this.instruction);
-      this.patch({ body });
+      this.patch({ body, bodyHtml: textToHtml(body) });
     } finally {
       this.drafting.set(false);
     }
@@ -371,6 +655,10 @@ export class MailComposeDialogComponent {
       this.notify.warn('Pick an account and at least one recipient.');
       return;
     }
+    if (this.uploading().length > 0) {
+      this.notify.warn('Wait for the attachments to finish uploading.');
+      return;
+    }
     clearTimeout(this.autosaveTimer);
     this.finished = true;
     this.sending.set(true);
@@ -382,6 +670,8 @@ export class MailComposeDialogComponent {
         cc: splitAddresses(form.cc),
         subject: form.subject,
         body: form.body,
+        body_html: form.bodyHtml === '' ? null : form.bodyHtml,
+        attachment_ids: attachmentIds(form),
         quote: this.quote(),
         reply_to_id: this.replyToId(),
         draft_id: this.draftId(),
@@ -492,12 +782,17 @@ export class MailComposeDialogComponent {
   /** Fill the form from a draft, the replied or forwarded message, or a blank message. */
   private reset(): void {
     this.finished = false;
+    this.minimized.set(false);
     this.instruction = '';
     const draft = this.savedDraft();
     this.draftId.set(draft?.id ?? null);
     this.savedAt.set(draft === null ? null : mailTime(draft.updated));
     this.form.set(draft === null ? this.freshForm() : formOfDraft(draft));
     this.savedForm = this.form();
+    const forwarded = this.forwardOf();
+    if (draft === null && forwarded !== null && forwarded.attachments.length > 0) {
+      void this.attachForwarded(forwarded);
+    }
   }
 
   /**
@@ -509,18 +804,18 @@ export class MailComposeDialogComponent {
     const original = this.replyTo();
     const forwarded = this.forwardOf();
     const accountId = original?.account_id ?? forwarded?.account_id ?? this.accounts()[0]?.id ?? '';
-    const body = '';
+    const empty = { body: '', bodyHtml: '', attachments: [] };
     if (forwarded !== null) {
-      return { accountId, to: '', cc: '', subject: forwardSubject(forwarded.subject), body };
+      return { accountId, to: '', cc: '', subject: forwardSubject(forwarded.subject), ...empty };
     }
     return original === null
-      ? { accountId, to: this.recipient() ?? '', cc: '', subject: '', body }
+      ? { accountId, to: this.recipient() ?? '', cc: '', subject: '', ...empty }
       : {
           accountId,
           to: original.sender_email,
           cc: '',
           subject: replySubject(original.subject),
-          body,
+          ...empty,
         };
   }
 }
