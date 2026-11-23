@@ -3,11 +3,12 @@
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from sqlalchemy.orm import Session
 
+from controllers.activity.agenda_source import AGENDA_DESCRIPTOR, AgendaDataSource
 from controllers.activity.base import (
     MAX_LIMIT,
     InvalidRangeError,
@@ -75,6 +76,9 @@ SOURCE_ERRORS = (
     UnknownSourceError,
     IncomingSourceError,
 )
+
+# Source states of an added source (a disabled agenda still tells off days).
+ADDED_STATES = ("active", "disabled")
 
 logger = logging.getLogger(__name__)
 
@@ -428,6 +432,25 @@ def has_generated(day: str) -> bool:
     return state is not None and state != TaskStateEnum.FAILED
 
 
+def agenda_titles(day: date) -> tuple[str, ...]:
+    """
+    Titles of the all-day agenda events of a day, for off day detection
+
+    Args:
+        day (date): local day
+    Returns:
+        tuple[str, ...]: titles, empty when the agenda is not added or unreadable
+    """
+    source = get_source(AGENDA_DESCRIPTOR.key)
+    if not isinstance(source, AgendaDataSource) or source.state() not in ADDED_STATES:
+        return ()
+    try:
+        return source.all_day_titles(day)
+    except SourceUnavailableError as error:
+        logger.warning("Agenda unreadable for off day detection of %s: %s", day, error)
+        return ()
+
+
 def start_scheduler() -> None:
     """
     Start the scheduled activity generation
@@ -442,5 +465,6 @@ def start_scheduler() -> None:
             active_sources=active_source_keys,
             has_run=has_generated,
             queue=ActivityGenerationManager.request_daily,
+            agenda_titles=agenda_titles,
         )
     )

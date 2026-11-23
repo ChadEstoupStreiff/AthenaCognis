@@ -1,4 +1,5 @@
 import {
+  DAILY_WEEKDAY_OPTIONS,
   clockMinutes,
   contextOptions,
   offersFillWithDaily,
@@ -8,6 +9,18 @@ import {
 } from './generation-settings';
 
 describe('generation settings', () => {
+  it('offers daily weekdays with the backend codes, Monday first', () => {
+    expect(DAILY_WEEKDAY_OPTIONS.map((option) => option.value)).toEqual([
+      'mon',
+      'tue',
+      'wed',
+      'thu',
+      'fri',
+      'sat',
+      'sun',
+    ]);
+  });
+
   it('reads clock values', () => {
     expect(clockMinutes('04:30')).toBe(270);
     expect(clockMinutes('25:00')).toBe(0);

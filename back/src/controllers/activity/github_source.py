@@ -206,16 +206,15 @@ class GitHubDataSource(DataSource):
 
     def detail(self) -> str:
         """
-        Count the watched repositories and organisations
+        Count the watched repositories
 
         Returns:
-            str: "N repositories · M organisations" or "Nothing watched"
+            str: "N repositories" or "Nothing watched"
         """
         config = self.config()
-        repos, orgs = len(config.lines("repos")), len(config.lines("orgs"))
-        parts = [plural(repos, "repository", "repositories")] if repos else []
-        parts += [plural(orgs, "organisation", "organisations")] if orgs else []
-        return " · ".join(parts) or "Nothing watched"
+        if not config.lines("repos") and not config.lines("orgs"):
+            return "Nothing watched"
+        return plural(len(config.lines("repos")), "repository", "repositories")
 
     def org_repos(self, orgs: list[str]) -> list[str]:
         """

@@ -139,15 +139,19 @@
       @if (metrics.isLoading()) {
         <p class="ac-muted"><i class="pi pi-spin pi-spinner"></i> Counting files and disk usage…</p>
       }
-      <div class="tiles">
-        @for (tile of tiles(); track tile.label) {
-          <div class="tile ac-panel" [pTooltip]="tile.hint">
-            <i [class]="tile.icon" aria-hidden="true"></i>
-            <strong>{{ tile.value }}</strong>
-            <span class="ac-muted">{{ tile.label }}</span>
-          </div>
-        }
-      </div>
+      @for (group of groups(); track group.title) {
+        <h2 class="group-title">{{ group.title }}</h2>
+        <div class="tiles">
+          @for (tile of group.tiles; track tile.label) {
+            <div class="tile ac-panel" [pTooltip]="tile.hint">
+              <i [class]="tile.icon" aria-hidden="true"></i>
+              <strong>{{ tile.value }}</strong>
+              <span class="ac-muted">{{ tile.label }}</span>
+              <small class="ac-muted hint">{{ tile.hint }}</small>
+            </div>
+          }
+        </div>
+      }
 
       @if (disk().length > 0) {
         <section class="ac-panel block">
@@ -180,14 +184,7 @@
         </section>
       }
 
-      @for (
-        chart of [
-          { title: 'Files by type', data: types() },
-          { title: 'Files per project', data: perProject() },
-          { title: 'Files per tag', data: perTag() },
-        ];
-        track chart.title
-      ) {
+      @for (chart of charts(); track chart.title) {
         @if (chart.data.length > 0) {
           <section class="ac-panel block">
             <h2>{{ chart.title }}</h2>
@@ -197,7 +194,7 @@
                   @for (item of items; track item.label) {
                     <span
                       ><i class="dot" [style.background]="item.color"></i>{{ item.label }} ·
-                      {{ item.value }}</span
+                      {{ amount(item.value, chart.unit) }}</span
                     >
                   }
                 </div>

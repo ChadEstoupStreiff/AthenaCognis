@@ -1,20 +1,44 @@
-import { ChangeDetectionStrategy, Component, computed, input, model } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+  linkedSignal,
+  model,
+  resource,
+} from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
   GENERATION_SPANS,
   type DataSourceInfo,
+  type DayState,
   type GenerationOutput,
   type GenerationSpan,
   type SettingValue,
 } from '@domain/contracts';
 import { CheckboxModule } from 'primeng/checkbox';
-import { DatePickerModule } from 'primeng/datepicker';
+import { DatePickerModule, type DatePickerMonthChangeEvent } from 'primeng/datepicker';
 import { InputTextModule } from 'primeng/inputtext';
 import { MultiSelectModule } from 'primeng/multiselect';
 import { SelectModule } from 'primeng/select';
 import { SelectButtonModule } from 'primeng/selectbutton';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
+import { ActivityGenerationApi } from '../../core/activity/activity-generation.api';
 import {
+  HOLIDAYS_COUNTRY_SETTING,
+  HOLIDAYS_SUBDIVISION_SETTING,
+  OFF_DAYS_SETTING,
+  cellKey,
+  monthOf,
+  statusIndex,
+  statusTitle,
+  visibleSpan,
+  type CalendarCell,
+} from '../../core/activity/day-status';
+import {
+  DAILY_WEEKDAY_OPTIONS,
   DAY_START_SETTING,
   TIMEZONE_SETTING,
   FILL_WITH_DAILY_LABEL,
@@ -25,8 +49,11 @@ import {
   storedBasis,
   type GenerationBasis,
 } from '../../core/activity/generation-settings';
+import { SettingsStore } from '../../core/settings/settings.store';
+import { DataSync } from '../../core/state/data-sync.service';
 import { SettingsSection } from '../settings/sections/settings-section';
 import { SettingsWriter } from '../settings/settings-writer';
+import { OffDaysSettingsComponent } from './off-days-settings.component';
 
 const SPAN_LABELS: Readonly<Record<GenerationSpan, string>> = {
   daily: 'Daily',
@@ -50,6 +77,19 @@ const WEEKDAYS = [
   { value: 6, label: 'Saturday' },
   { value: 7, label: 'Sunday' },
 ];
+/** Saved settings deciding non working days (calendar greyed days). */
+const OFF_RULE_SETTINGS: readonly string[] = [
+  spanSetting('daily', 'weekdays'),
+  HOLIDAYS_COUNTRY_SETTING,
+  HOLIDAYS_SUBDIVISION_SETTING,
+  OFF_DAYS_SETTING,
+];
+/** Calendar dot legend. */
+const LEGEND: readonly { state: DayState; label: string }[] = [
+  { state: 'generated', label: 'Generated' },
+  { state: 'failed', label: 'Failed' },
+  { state: 'skipped', label: 'Skipped' },
+];
 /** PrimeNG first day of week: 0 = Sunday. */
 const DAYS_PER_WEEK = 7;
 
@@ -58,10 +98,12 @@ const DAYS_PER_WEEK = 7;
   selector: 'ac-generation-sidebar',
   imports: [
     FormsModule,
+    NgTemplateOutlet,
     CheckboxModule,
     DatePickerModule,
     InputTextModule,
     MultiSelectModule,
+    OffDaysSettingsComponent,
     SelectModule,
     SelectButtonModule,
     ToggleSwitchModule,
@@ -94,6 +136,54 @@ const DAYS_PER_WEEK = 7;
       display: flex;
       justify-content: center;
     }
+    .cell {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+    }
+    .cell.off {
+      color: var(--p-text-muted-color);
+      opacity: 0.6;
+    }
+    .dot {
+      position: absolute;
+      bottom: 1px;
+      left: 50%;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      transform: translateX(-50%);
+    }
+    .legend {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      font-size: 12px;
+    }
+    .legend > span {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .legend .dot {
+      position: static;
+      transform: none;
+    }
+    .dot.generated {
+      background: #f5b700;
+    }
+    .dot.running {
+      border: 1px solid #f5b700;
+    }
+    .dot.failed {
+      background: var(--p-red-500);
+    }
+    .dot.skipped {
+      background: var(--p-gray-400);
+    }
     .output {
       display: flex;
       align-items: center;
@@ -112,6 +202,10 @@ const DAYS_PER_WEEK = 7;
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class GenerationSidebarComponent extends SettingsSection {
+  private readonly api = inject(ActivityGenerationApi);
+  private readonly sync = inject(DataSync);
+  private readonly settings = inject(SettingsStore);
+
   /** Selected timeline (two-way). */
   readonly span = model.required<GenerationSpan>();
   /** Picked day (two-way); any day of the week or month for longer spans. */
@@ -126,6 +220,9 @@ export class GenerationSidebarComponent extends SettingsSection {
   protected readonly outputOptions = OUTPUT_OPTIONS;
   protected readonly fillWithDailyLabel = FILL_WITH_DAILY_LABEL;
   protected readonly weekdays = WEEKDAYS;
+  protected readonly legend = LEGEND;
+  /** Daily weekday choices as a mutable array (PrimeNG options). */
+  protected readonly dailyWeekdayOptions = [...DAILY_WEEKDAY_OPTIONS];
   protected readonly dayStartKey = DAY_START_SETTING;
   protected readonly weekStartKey = WEEK_START_SETTING;
   protected readonly today = new Date();
@@ -135,6 +232,20 @@ export class GenerationSidebarComponent extends SettingsSection {
   protected readonly hasContextChoice = computed(() => this.contextChoices().length > 0);
   protected readonly isAvailable = computed(() => AVAILABLE_SPANS.has(this.span()));
   protected readonly sourceOptions = computed(() => [...this.sources()]);
+  /** Month shown by the calendar: the picked one until the user browses. */
+  protected readonly viewMonth = linkedSignal(() => monthOf(this.picked()));
+  /** Status of the shown days; refetched after generations and settings changes. */
+  private readonly statuses = resource({
+    params: () => ({
+      span: visibleSpan(this.viewMonth()),
+      generation: this.sync.version('generation')(),
+      offRules: JSON.stringify(OFF_RULE_SETTINGS.map((key) => this.settings.values()[key])),
+    }),
+    loader: ({ params }) => this.api.dailyStatus(params.span.first, params.span.last),
+  });
+  private readonly statusByDay = computed(() =>
+    statusIndex(this.statuses.hasValue() ? this.statuses.value() : []),
+  );
   /** PrimeNG first day of week (0 = Sunday) from the week start setting. */
   protected readonly firstDayOfWeek = computed(() => this.weekStart() % DAYS_PER_WEEK);
 
@@ -212,6 +323,15 @@ export class GenerationSidebarComponent extends SettingsSection {
   }
 
   /**
+   * Weekdays the daily schedule generates.
+   *
+   * @returns Weekday codes; empty = every day.
+   */
+  protected dailyWeekdays(): readonly string[] {
+    return this.stableList(spanSetting('daily', 'weekdays'), []);
+  }
+
+  /**
    * Last day generated by the daily schedule.
    *
    * @returns Day key, "" when never.
@@ -229,6 +349,47 @@ export class GenerationSidebarComponent extends SettingsSection {
   protected toggleOutput(value: GenerationOutput, checked: boolean): void {
     const current = this.outputs().filter((item) => item !== value);
     this.saveSchedule(this.key('outputs'), checked ? [...current, value] : current);
+  }
+
+  /**
+   * Dot class of a calendar day.
+   *
+   * @param cell - Calendar cell.
+   * @returns State of the day, "" when none.
+   */
+  protected dotOf(cell: CalendarCell): string {
+    return this.statusByDay().get(cellKey(cell))?.state ?? '';
+  }
+
+  /**
+   * Whether the settings make a calendar day non working.
+   *
+   * @param cell - Calendar cell.
+   * @returns True for weekdays not picked, holidays and off days.
+   */
+  protected isOff(cell: CalendarCell): boolean {
+    return (this.statusByDay().get(cellKey(cell))?.off ?? null) !== null;
+  }
+
+  /**
+   * Tooltip of a calendar day.
+   *
+   * @param cell - Calendar cell.
+   * @returns State, reason and non working reason.
+   */
+  protected titleOf(cell: CalendarCell): string {
+    return statusTitle(this.statusByDay().get(cellKey(cell)));
+  }
+
+  /**
+   * Follow the month browsed in the calendar.
+   *
+   * @param event - New month (1-based) and year.
+   */
+  protected browse(event: DatePickerMonthChangeEvent): void {
+    if (event.month !== undefined && event.year !== undefined) {
+      this.viewMonth.set({ year: event.year, month: event.month });
+    }
   }
 
   /**

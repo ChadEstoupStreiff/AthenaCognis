@@ -18,6 +18,49 @@ export interface DiskUsage {
   readonly files: number;
 }
 
+/** Raw `/metrics` → `insights.mail` (trashed and purged messages excluded). */
+export interface BackendMailInsights {
+  readonly accounts: number;
+  readonly received: number;
+  readonly unread: number;
+  readonly needs_reply: number;
+  readonly flagged: number;
+  readonly sent: number;
+  readonly drafts: number;
+  readonly outbox: number;
+  readonly outbox_failed: number;
+  readonly previews: number;
+  readonly vip_senders: number;
+  readonly blocked_senders: number;
+  readonly per_category: readonly (readonly [string, number])[];
+}
+
+/** Raw `/metrics` → `insights` (feature counters). */
+export interface BackendInsights {
+  readonly usage: {
+    readonly nbr_notes: number;
+    readonly nbr_pinned_files: number;
+    readonly nbr_ocr: number;
+    readonly nbr_transcriptions: number;
+    readonly nbr_embeddings: number;
+    readonly nbr_chat_sessions: number;
+    readonly nbr_chat_messages: number;
+    readonly nbr_kanban_columns: number;
+    readonly nbr_task_dependencies: number;
+    readonly nbr_sota_papers: number;
+    readonly nbr_sota_with_metadata: number;
+    readonly nbr_sota_with_references: number;
+  };
+  readonly document_trees: number;
+  readonly mail: BackendMailInsights;
+  readonly activity: {
+    readonly generated_days: number;
+    readonly generated_entries: number;
+    readonly generated_hours: number;
+  };
+  readonly hours_per_project: readonly (readonly [string, number])[];
+}
+
 /** Raw `/metrics` response. */
 export interface BackendMetrics {
   readonly nbr_calendars: number;
@@ -37,6 +80,44 @@ export interface BackendMetrics {
   readonly files_without_project: number;
   readonly file_type_counts: readonly (readonly [string, number])[];
   readonly disk_usage: DiskUsage;
+  /** Missing on backends older than the front. */
+  readonly insights?: BackendInsights;
+}
+
+/** Feature counters (notes, AI coverage, chat, research, activity generation). */
+export interface FeatureCounters {
+  readonly notes: number;
+  readonly pinned: number;
+  readonly ocr: number;
+  readonly transcriptions: number;
+  readonly embeddings: number;
+  readonly documentTrees: number;
+  readonly chatSessions: number;
+  readonly chatMessages: number;
+  readonly boardColumns: number;
+  readonly taskDependencies: number;
+  readonly papers: number;
+  readonly papersWithMetadata: number;
+  readonly papersWithReferences: number;
+  readonly activityDays: number;
+  readonly activityEntries: number;
+  readonly activityHours: number;
+}
+
+/** Mail client counters. */
+export interface MailCounters {
+  readonly accounts: number;
+  readonly received: number;
+  readonly unread: number;
+  readonly needsReply: number;
+  readonly flagged: number;
+  readonly sent: number;
+  readonly drafts: number;
+  readonly outbox: number;
+  readonly outboxFailed: number;
+  readonly previews: number;
+  readonly vipSenders: number;
+  readonly blockedSenders: number;
 }
 
 /** Metrics normalized for the Insights view. */
@@ -60,6 +141,11 @@ export interface DashboardMetrics {
   readonly filesPerTag: readonly NamedCount[];
   readonly fileTypes: readonly NamedCount[];
   readonly disk: DiskUsage;
+  /** Null when the backend does not report feature counters yet. */
+  readonly features: FeatureCounters | null;
+  readonly mail: MailCounters | null;
+  readonly mailCategories: readonly NamedCount[];
+  readonly hoursPerProject: readonly NamedCount[];
 }
 
 /** Home page data for one day. */

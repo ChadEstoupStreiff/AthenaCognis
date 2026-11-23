@@ -21,7 +21,16 @@ import { DataSync } from '../../core/state/data-sync.service';
 import { FileCollectionComponent } from '../../shared/files/file-collection.component';
 import { formatBytes } from '../../shared/pipes/bytes.pipe';
 import { TagChipComponent } from '../../shared/ui/tag-chip.component';
-import { diskSegments, dueTasks, greeting, kpiTiles, topSegments, typeColor } from './home-model';
+import {
+  diskSegments,
+  dueTasks,
+  greeting,
+  kpiGroups,
+  mailCategorySegments,
+  topSegments,
+  typeColor,
+  type MeterSegment,
+} from './home-model';
 
 const WORK_DAYS = 5;
 const PERCENT = 100;
@@ -30,6 +39,13 @@ const DATE_FORMAT = new Intl.DateTimeFormat(undefined, {
   day: 'numeric',
   month: 'long',
 });
+
+/** Distribution chart of the Insights tab. */
+interface InsightChart {
+  readonly title: string;
+  readonly data: MeterSegment[];
+  readonly unit: string;
+}
 
 /** Home: today at a glance, plus an Insights tab with counters and storage. */
 @Component({
@@ -89,9 +105,9 @@ export class HomePage {
     Math.min(PERCENT, (this.weekHours() / Math.max(this.target() * WORK_DAYS, 1)) * PERCENT),
   );
   protected readonly due = computed(() => dueTasks(this.today.value()?.openTasks ?? [], this.now));
-  protected readonly tiles = computed(() => {
+  protected readonly groups = computed(() => {
     const metrics = this.metrics.value();
-    return metrics === undefined ? [] : kpiTiles(metrics);
+    return metrics === undefined ? [] : kpiGroups(metrics);
   });
   protected readonly disk = computed(() => {
     const metrics = this.metrics.value();
@@ -110,6 +126,21 @@ export class HomePage {
   protected readonly perTag = computed(() =>
     topSegments(this.metrics.value()?.filesPerTag ?? [], (name) => this.catalog.tagColor(name)),
   );
+  protected readonly hoursPerProject = computed(() =>
+    topSegments(this.metrics.value()?.hoursPerProject ?? [], (name) =>
+      this.catalog.projectColor(name),
+    ),
+  );
+  protected readonly mailCategories = computed(() =>
+    mailCategorySegments(this.metrics.value()?.mailCategories ?? []),
+  );
+  protected readonly charts = computed<readonly InsightChart[]>(() => [
+    { title: 'Hours per project', data: this.hoursPerProject(), unit: 'h' },
+    { title: 'Files by type', data: this.types(), unit: '' },
+    { title: 'Files per project', data: this.perProject(), unit: '' },
+    { title: 'Files per tag', data: this.perTag(), unit: '' },
+    { title: 'Received mail by category', data: this.mailCategories(), unit: '' },
+  ]);
 
   /**
    * Switch tab.
@@ -131,6 +162,17 @@ export class HomePage {
    */
   protected total(segments: readonly { value: number }[]): number {
     return segments.reduce((sum, segment) => sum + segment.value, 0);
+  }
+
+  /**
+   * Format a chart value (hours keep one decimal).
+   *
+   * @param value - Value.
+   * @param unit - Unit suffix ('h' for hours, '' for counts).
+   * @returns Label.
+   */
+  protected amount(value: number, unit: string): string {
+    return unit === 'h' ? `${value.toFixed(1)}h` : String(value);
   }
 
   /**

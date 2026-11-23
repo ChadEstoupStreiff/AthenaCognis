@@ -194,11 +194,20 @@ section.block.tray {
   font-size: 13px;
 }
 
+.group-title {
+  margin: 20px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--p-text-muted-color);
+}
+
 .tiles {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 12px;
-  margin: 16px 0;
+  margin: 10px 0 16px;
 }
 
 .tile {
@@ -219,6 +228,13 @@ section.block.tray {
 
   span {
     font-size: 12px;
+  }
+
+  .hint {
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 

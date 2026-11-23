@@ -1,4 +1,12 @@
-import type { BackendMetrics, DashboardMetrics, NamedCount } from '../contracts/dashboard';
+import type {
+  BackendInsights,
+  BackendMailInsights,
+  BackendMetrics,
+  DashboardMetrics,
+  FeatureCounters,
+  MailCounters,
+  NamedCount,
+} from '../contracts/dashboard';
 import type { BackendProject, BackendTodoItem, Project, TodoItem } from '../contracts/entities';
 import type { BackendLinkTuple, FileLink } from '../contracts/files';
 
@@ -86,12 +94,64 @@ function toNamedCounts(pairs: readonly (readonly [string, number])[]): NamedCoun
 }
 
 /**
+ * Normalize the feature counters of `/metrics`.
+ *
+ * @param insights - Raw feature counters.
+ * @returns Feature counters.
+ */
+function toFeatureCounters(insights: BackendInsights): FeatureCounters {
+  const { usage, activity } = insights;
+  return {
+    notes: usage.nbr_notes,
+    pinned: usage.nbr_pinned_files,
+    ocr: usage.nbr_ocr,
+    transcriptions: usage.nbr_transcriptions,
+    embeddings: usage.nbr_embeddings,
+    documentTrees: insights.document_trees,
+    chatSessions: usage.nbr_chat_sessions,
+    chatMessages: usage.nbr_chat_messages,
+    boardColumns: usage.nbr_kanban_columns,
+    taskDependencies: usage.nbr_task_dependencies,
+    papers: usage.nbr_sota_papers,
+    papersWithMetadata: usage.nbr_sota_with_metadata,
+    papersWithReferences: usage.nbr_sota_with_references,
+    activityDays: activity.generated_days,
+    activityEntries: activity.generated_entries,
+    activityHours: activity.generated_hours,
+  };
+}
+
+/**
+ * Normalize the mail counters of `/metrics`.
+ *
+ * @param mail - Raw mail counters.
+ * @returns Mail counters.
+ */
+function toMailCounters(mail: BackendMailInsights): MailCounters {
+  return {
+    accounts: mail.accounts,
+    received: mail.received,
+    unread: mail.unread,
+    needsReply: mail.needs_reply,
+    flagged: mail.flagged,
+    sent: mail.sent,
+    drafts: mail.drafts,
+    outbox: mail.outbox,
+    outboxFailed: mail.outbox_failed,
+    previews: mail.previews,
+    vipSenders: mail.vip_senders,
+    blockedSenders: mail.blocked_senders,
+  };
+}
+
+/**
  * Normalize `/metrics`.
  *
  * @param metrics - Raw metrics.
  * @returns Dashboard metrics.
  */
 export function toDashboardMetrics(metrics: BackendMetrics): DashboardMetrics {
+  const { insights } = metrics;
   return {
     counters: {
       files: metrics.nbr_files,
@@ -112,5 +172,9 @@ export function toDashboardMetrics(metrics: BackendMetrics): DashboardMetrics {
     filesPerTag: toNamedCounts(metrics.files_per_tag),
     fileTypes: toNamedCounts(metrics.file_type_counts),
     disk: metrics.disk_usage,
+    features: insights ? toFeatureCounters(insights) : null,
+    mail: insights ? toMailCounters(insights.mail) : null,
+    mailCategories: toNamedCounts(insights?.mail.per_category ?? []),
+    hoursPerProject: toNamedCounts(insights?.hours_per_project ?? []),
   };
 }

@@ -147,6 +147,34 @@
   }
 }
 
+.nav-badge {
+  margin-left: auto;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--p-primary-color);
+  color: var(--p-primary-contrast-color);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+/* Icon-only rail: the badge sits on the icon corner. */
+.shell.compact .nav-item {
+  position: relative;
+
+  .nav-badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    min-width: 16px;
+    padding: 0 4px;
+    font-size: 10px;
+    line-height: 14px;
+  }
+}
+
 .last-file {
   display: flex;
   flex-direction: column;

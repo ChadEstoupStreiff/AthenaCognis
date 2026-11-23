@@ -34,6 +34,11 @@ const FETCH_FREQUENCY = {
   min: 1,
   max: 1440,
 };
+const NAV_BADGE = {
+  key: 'mail_nav_badge',
+  label: 'Unread badge',
+  hint: 'Show the number of unread Inbox messages on Mail in the navigation rail.',
+};
 const ACTIVITY_RESET = {
   key: 'mail_activity_reset_time',
   label: 'Activity reset time',
@@ -97,6 +102,17 @@ const DOWNLOAD_IMAGES = {
           />
         </div>
       }
+      <div class="row">
+        <div class="label">
+          <strong>{{ navBadge.label }}</strong
+          ><small class="ac-muted">{{ navBadge.hint }}</small>
+        </div>
+        <p-toggleswitch
+          [ngModel]="flag(navBadge.key)"
+          (ngModelChange)="save(navBadge.key, $event, true)"
+          [ariaLabel]="navBadge.label"
+        />
+      </div>
       <div class="row">
         <div class="label">
           <strong>Auto-generate Mail Preview</strong
@@ -180,6 +196,7 @@ export class MailSectionComponent extends SettingsSection {
   protected readonly autoPreviewBoxes = AUTO_PREVIEW_BOXES;
   protected readonly downloadImages = DOWNLOAD_IMAGES;
   protected readonly autoFetch = AUTO_FETCH;
+  protected readonly navBadge = NAV_BADGE;
   protected readonly fetchFrequency = FETCH_FREQUENCY;
   protected readonly activityReset = ACTIVITY_RESET;
   protected readonly trashRetention = TRASH_RETENTION;

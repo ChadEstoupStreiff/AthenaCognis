@@ -20,6 +20,8 @@ from controllers.ActivityGenerationManager import (
     start_scheduler,
 )
 from controllers.TranscriptionManager import TranscriptionManager
+from controllers.InsightStats import collect_insights
+from dataclasses import asdict
 from db import DB, ProjectFile, TagFile, Link, create_default_values, get_db
 from db.migrate import (
     add_missing_columns,
@@ -196,6 +198,7 @@ def metrics():
         nbr_tasks = db.query(func.count(Task.id)).scalar()
         nbr_kanban_boards = db.query(func.count(KanbanBoard.id)).scalar()
         nbr_validated_tasks = db.query(func.count(Task.id)).filter(Task.completed.isnot(None)).scalar()
+        insights = asdict(collect_insights(db))
         # Count files per project
         files_per_project = dict(
             db.query(ProjectFile.project, func.count(ProjectFile.file))
@@ -272,6 +275,7 @@ def metrics():
         "files_without_tag": len(no_tag),
         "files_without_project": len(no_project),
         "file_type_counts": file_type_counts,
+        "insights": insights,
         "disk_usage": {  # bytes
             "total": total,  # total size of the /shared mount
             "available": free,  # available space in bytes

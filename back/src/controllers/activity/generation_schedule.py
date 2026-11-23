@@ -5,7 +5,7 @@ import threading
 import time as clock
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -17,6 +17,13 @@ from controllers.activity.generation import (
     GenerationRequestError,
     Output,
 )
+from controllers.activity.off_days import (
+    OffDayRules,
+    agenda_reason,
+    off_reason,
+    read_rules,
+    read_skipped,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -27,6 +34,9 @@ DEFAULT_TIMEZONE = "UTC"
 DEFAULT_DAY_START = time(0, 0)
 CHECK_INTERVAL_SECONDS = 60
 CLOCK_FORMAT = "%H:%M"
+SKIPPED_SETTING = f"{SETTING_PREFIX}daily_skipped"
+# Days kept in the skipped days setting (older ones are dropped).
+MAX_SKIPPED_DAYS = 400
 
 SettingReader = Callable[[str], object]
 SettingWriter = Callable[[str, object], None]
@@ -42,6 +52,7 @@ class DailySchedule:
     day_start: time
     sources: tuple[str, ...]
     outputs: tuple[Output, ...]
+    off: OffDayRules
     # Key of the last day queued by the scheduler, "" when never.
     last: str
 
@@ -136,6 +147,7 @@ def read_daily(read: SettingReader) -> DailySchedule:
         day_start=read_day_start(read),
         sources=read_names(read(span_key("daily", "sources"))),
         outputs=outputs,  # type: ignore[arg-type]
+        off=read_rules(read),
         last=last if isinstance(last, str) else "",
     )
 
@@ -202,6 +214,42 @@ class SchedulerHooks:
     # Tell whether a day was already generated or is generating (manual runs count).
     has_run: Callable[[str], bool]
     queue: Callable[[DailyRequest], None]
+    # Titles of the all-day agenda events of a local day (empty when unreadable).
+    agenda_titles: Callable[[date], tuple[str, ...]]
+
+
+def skip_reason(period: DuePeriod, rules: OffDayRules, hooks: SchedulerHooks) -> str | None:
+    """
+    Why a due day is not generated: non working day by settings, then by agenda
+
+    Args:
+        period (DuePeriod): due day
+        rules (OffDayRules): non working day rules
+        hooks (SchedulerHooks): agenda reader
+    Returns:
+        str | None: reason, None for a working day
+    """
+    reason = off_reason(period.start.date(), rules)
+    if reason is not None or not rules.agenda:
+        return reason
+    return agenda_reason(hooks.agenda_titles(period.start.date()), rules.keywords)
+
+
+def record_skip(hooks: SchedulerHooks, day: str, reason: str) -> None:
+    """
+    Keep why the scheduler skipped a day (latest MAX_SKIPPED_DAYS days only)
+
+    Args:
+        hooks (SchedulerHooks): settings
+        day (str): "YYYY-MM-DD"
+        reason (str): why
+    Returns:
+        None
+    """
+    skipped = read_skipped(hooks.read(SKIPPED_SETTING))
+    skipped[day] = reason
+    kept = sorted(skipped)[-MAX_SKIPPED_DAYS:]
+    hooks.write(SKIPPED_SETTING, {key: skipped[key] for key in kept})
 
 
 def run_due(now: datetime, hooks: SchedulerHooks) -> str | None:
@@ -221,6 +269,11 @@ def run_due(now: datetime, hooks: SchedulerHooks) -> str | None:
     hooks.write(span_key("daily", "last"), period.key)
     if hooks.has_run(period.key):
         LOGGER.info("Scheduled generation of %s skipped: already generated.", period.key)
+        return None
+    reason = skip_reason(period, schedule.off, hooks)
+    if reason is not None:
+        record_skip(hooks, period.key, reason)
+        LOGGER.info("Scheduled generation of %s skipped: %s.", period.key, reason)
         return None
     sources = schedule.sources or hooks.active_sources()
     try:

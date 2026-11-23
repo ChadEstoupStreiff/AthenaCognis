@@ -22,9 +22,33 @@
       [maxDate]="today"
       [ngModel]="picked()"
       (ngModelChange)="pick($event)"
+      (onMonthChange)="browse($event)"
+      (onYearChange)="browse($event)"
       ariaLabel="Period"
-    />
+    >
+      <ng-template #date let-cell>
+        <ng-container *ngTemplateOutlet="dayCell; context: { $implicit: cell }" />
+      </ng-template>
+      <ng-template #disabledDate let-cell>
+        <ng-container *ngTemplateOutlet="dayCell; context: { $implicit: cell }" />
+      </ng-template>
+    </p-datepicker>
+    <ng-template #dayCell let-cell>
+      <span class="cell" [class.off]="isOff(cell)" [title]="titleOf(cell)">
+        {{ cell.day }}
+        @if (dotOf(cell)) {
+          <span [class]="'dot ' + dotOf(cell)" aria-hidden="true"></span>
+        }
+      </span>
+    </ng-template>
   </div>
+  @if (span() !== 'monthly') {
+    <div class="legend ac-muted">
+      @for (item of legend; track item.state) {
+        <span><span [class]="'dot ' + item.state" aria-hidden="true"></span>{{ item.label }}</span>
+      }
+    </div>
+  }
 
   <h3><i class="pi pi-clock" aria-hidden="true"></i> Schedule · {{ spanLabel() }}</h3>
 
@@ -61,6 +85,27 @@
         aria-label="Day starts at"
       />
     </div>
+    <div class="row stacked">
+      <div class="label">
+        <strong>Generate on</strong>
+        <small class="ac-muted">
+          Each picked day is generated at its end (next day start). None picked: every day.
+        </small>
+      </div>
+      <p-multiselect
+        [options]="dailyWeekdayOptions"
+        optionLabel="label"
+        optionValue="value"
+        [ngModel]="dailyWeekdays()"
+        (ngModelChange)="saveSchedule(key('weekdays'), $event ?? [])"
+        display="chip"
+        placeholder="Every day"
+        [showToggleAll]="true"
+        appendTo="body"
+        ariaLabel="Generate on"
+      />
+    </div>
+    <ac-off-days-settings />
     @if (lastRun()) {
       <small class="ac-muted">Last scheduled day: {{ lastRun() }}</small>
     }

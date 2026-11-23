@@ -1,7 +1,7 @@
 """Activity generation: queue a day, read what was generated, Jobs page status."""
 
 from dataclasses import asdict
-from datetime import datetime
+from datetime import date, datetime
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -19,10 +19,19 @@ from controllers.activity.generation import (
     daily_note_path,
 )
 from controllers.activity.generation_prompt import DryRun
+from controllers.activity.generation_schedule import SKIPPED_SETTING
+from controllers.activity.generation_status import DayStatus, LatestRun, day_statuses
+from controllers.activity.off_days import (
+    days_between,
+    read_rules,
+    read_skipped,
+    supported_countries,
+)
 from controllers.ActivityGenerationManager import ActivityGenerationManager
 from controllers.calendar_links import links_of, record_ids_in_project
 from controllers.JobManager import JobAlreadyQueuedError
 from db import ActivityGenerationTask, CalendarRecord, get_db
+from views.settings import get_setting
 
 HTTP_BAD_REQUEST = 400
 HTTP_CONFLICT = 409
@@ -196,6 +205,59 @@ def request_daily(body: DailyBody) -> JsonDict:
     except JobAlreadyQueuedError as error:
         raise HTTPException(HTTP_CONFLICT, str(error)) from error
     return {"key": request.key}
+
+
+def latest_runs(days: list[date]) -> dict[str, LatestRun]:
+    """
+    Latest generation run of each day
+
+    Args:
+        days (list[date]): local days
+    Returns:
+        dict[str, LatestRun]: run per "YYYY-MM-DD", days never run left out
+    """
+    keys = {daily_key(day.strftime(DAY_FORMAT)): day.strftime(DAY_FORMAT) for day in days}
+    with get_db() as db:
+        tasks = (
+            db.query(ActivityGenerationTask)
+            .filter(ActivityGenerationTask.file.in_(keys))
+            .order_by(ActivityGenerationTask.added)
+            .all()
+        )
+        # Ordered by date: later runs replace earlier ones.
+        return {keys[task.file]: LatestRun(task.state, task.result) for task in tasks}
+
+
+@router.get("/daily-status")
+def daily_status(first: str, last: str) -> list[DayStatus]:
+    """
+    Status of each day of a span: generated, failed, running or skipped, and off reason
+
+    Args:
+        first (str): first day, "YYYY-MM-DD"
+        last (str): last day, "YYYY-MM-DD"
+    Returns:
+        list[DayStatus]: one status per day
+    Raises:
+        HTTPException: 400 malformed days or span too long
+    """
+    try:
+        days = days_between(parse_day(first).date(), parse_day(last).date())
+    except ValueError as error:
+        raise HTTPException(HTTP_BAD_REQUEST, str(error)) from error
+    skipped = read_skipped(get_setting(SKIPPED_SETTING))
+    return day_statuses(days, latest_runs(days), skipped, read_rules(get_setting))
+
+
+@router.get("/holiday-countries")
+def holiday_countries() -> dict[str, list[str]]:
+    """
+    Countries with known public holidays
+
+    Returns:
+        dict[str, list[str]]: subdivision codes per two-letter country code
+    """
+    return supported_countries()
 
 
 @router.get("/daily/{day}")

@@ -1,5 +1,11 @@
 import { inject, Injectable } from '@angular/core';
-import type { DailyGeneration, DailyGenerationRequest, GenerationDryRun } from '@domain/contracts';
+import type {
+  DailyGeneration,
+  DailyGenerationRequest,
+  DayStatus,
+  GenerationDryRun,
+  HolidayCountries,
+} from '@domain/contracts';
 import { ApiClient, backendUrl } from '../api/api-client';
 
 /** Activity generation: queue a period and read what was generated. */
@@ -40,5 +46,28 @@ export class ActivityGenerationApi {
       backendUrl('/activity-generation/daily/dry-run'),
       request,
     );
+  }
+
+  /**
+   * Status of each day of a span, for the calendar.
+   *
+   * @param first - First local day, `YYYY-MM-DD`.
+   * @param last - Last local day, `YYYY-MM-DD`.
+   * @returns One status per day.
+   */
+  dailyStatus(first: string, last: string): Promise<readonly DayStatus[]> {
+    const query = new URLSearchParams({ first, last });
+    return this.api.get<readonly DayStatus[]>(
+      backendUrl(`/activity-generation/daily-status?${query.toString()}`),
+    );
+  }
+
+  /**
+   * Countries with known public holidays.
+   *
+   * @returns Subdivision codes per country code.
+   */
+  holidayCountries(): Promise<HolidayCountries> {
+    return this.api.get<HolidayCountries>(backendUrl('/activity-generation/holiday-countries'));
   }
 }

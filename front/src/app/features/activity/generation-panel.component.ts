@@ -97,8 +97,8 @@ export class GenerationPanelComponent {
       }, GENERATION_POLL_MS);
       onCleanup(() => {
         clearInterval(timer);
-        // Finished: notes, time entries and projects changed.
-        this.sync.invalidate('notes', 'calendar', 'projects');
+        // Finished: notes, time entries, projects and the calendar dots changed.
+        this.sync.invalidate('notes', 'calendar', 'projects', 'generation');
       });
     });
   }
@@ -114,6 +114,7 @@ export class GenerationPanelComponent {
     }
     await this.api.generateDaily(dailyRequest(this.period(), choice.sources, choice.outputs));
     this.daily.reload();
+    this.sync.invalidate('generation');
   }
 
   /**

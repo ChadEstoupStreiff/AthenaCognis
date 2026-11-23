@@ -31,17 +31,24 @@ Sections: a 2-3 sentence overview, then "## Highlights" (bullets), then "## Deta
 Maximum 400 words."""
 
 TIME_TASK = """TIME ENTRIES: turn the activity above into the time entries of the user's day.
-Merge items of the same task into one block; blocks must not overlap;
-leave gaps where nothing happened; skip blocks shorter than 15 minutes.
-Give each block the projects and tags it belongs to, chosen ONLY from the lists above
-(exact names, several allowed, empty list when none fits)."""
+Be detailed: one block per distinct task (feature, bug, meeting, review, mail thread, writing),
+split a long period when the work changes; merge only items of the same task; minimum 15 minutes.
+Title names the concrete task; description gives 1-3 sentences of specifics
+(files, repos, PRs, documents, people, decisions, outcomes) taken from the activity.
+Build a complete working day from the first to the last activity:
+fill every gap between blocks by extending the neighbouring block of the most related task,
+or by a block for the likely work in between (inferred from the activity before and after).
+Never cover meal breaks 12:00-13:00 and 19:00-20:00 (shift them by up to 30 minutes
+when a meeting or activity overlaps them), unless the activity shows work there.
+Blocks must not overlap. Give each block the projects and tags it belongs to,
+chosen ONLY from the lists above (exact names, several allowed, empty list when none fits)."""
 
 SUMMARY_FORMAT = f"""{SUMMARY_MARKER}
 markdown, no title line, no code fence"""
 
 TIME_FORMAT = f"""{TIME_MARKER}
 JSON array only, no code fence:
-[{{"start": "HH:MM", "end": "HH:MM", "title": "short title", "description": "one sentence",
+[{{"start": "HH:MM", "end": "HH:MM", "title": "concrete task", "description": "1-3 sentences of specifics",
   "projects": ["Project name"], "tags": ["Tag name"]}}]"""
 
 TASKS: dict[Output, str] = {"summary": SUMMARY_TASK, "time": TIME_TASK}

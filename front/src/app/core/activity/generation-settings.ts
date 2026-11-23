@@ -46,6 +46,17 @@ const CONTEXT_OPTIONS: Readonly<Record<GenerationSpan, readonly ContextOption[]>
     SOURCES_OPTION,
   ],
 };
+/** Weekdays the daily schedule can generate (stored codes, Monday first). */
+export const DAILY_WEEKDAY_OPTIONS: readonly { readonly value: string; readonly label: string }[] =
+  [
+    { value: 'mon', label: 'Monday' },
+    { value: 'tue', label: 'Tuesday' },
+    { value: 'wed', label: 'Wednesday' },
+    { value: 'thu', label: 'Thursday' },
+    { value: 'fri', label: 'Friday' },
+    { value: 'sat', label: 'Saturday' },
+    { value: 'sun', label: 'Sunday' },
+  ];
 /** Label of the monthly fill toggle. */
 export const FILL_WITH_DAILY_LABEL = 'Use daily to fill non generated day with weekly';
 

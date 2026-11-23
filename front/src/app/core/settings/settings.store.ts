@@ -19,6 +19,7 @@ interface KnownSettings {
   readonly mail_auto_preview: boolean;
   readonly mail_auto_download_images: boolean;
   readonly mail_auto_fetch: boolean;
+  readonly mail_nav_badge: boolean;
   readonly mail_activity_reset_time: string;
 }
 
@@ -37,6 +38,7 @@ export const SETTING_DEFAULTS: KnownSettings = {
   mail_auto_preview: true,
   mail_auto_download_images: false,
   mail_auto_fetch: true,
+  mail_nav_badge: true,
   mail_activity_reset_time: '04:00',
 };
 

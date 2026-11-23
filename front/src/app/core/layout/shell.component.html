@@ -23,6 +23,9 @@
         >
           <i [class]="item.icon" aria-hidden="true"></i>
           <span class="label">{{ item.label }}</span>
+          @if (item.route === mailRoute && mailBadge.text(); as unread) {
+            <span class="nav-badge" [attr.aria-label]="unread + ' unread'">{{ unread }}</span>
+          }
         </a>
       }
     </nav>

@@ -47,3 +47,5 @@ tiktoken
 
 # SEMANTIC SEARCH
 sentence-transformers
+# ACTIVITY GENERATION
+holidays

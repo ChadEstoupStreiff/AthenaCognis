@@ -21,6 +21,7 @@ from controllers.mail.assistant import (
     parse_preview,
     write_preview,
 )
+from controllers.mail.auto_fetch import MailAutoFetcher
 from controllers.mail.imap_client import FetchedMail
 from controllers.mail.transport import FetchBatch
 from controllers.MailManager import MailManager
@@ -215,6 +216,24 @@ def test_preview_routing_falls_back_to_mail(monkeypatch: pytest.MonkeyPatch) -> 
     assert llm_module.preview_routing_prefix() == "mail_preview"
 
 
+class OneMailTransport:
+    """Transport returning one message per mailbox."""
+
+    def fetch(self, mailbox: str, cursor: object, limit: int) -> FetchBatch:
+        """
+        Return a canned batch
+
+        Args:
+            mailbox (str): inbox or sent
+            cursor (object): unused
+            limit (int): unused
+        Returns:
+            FetchBatch: batch
+        """
+        raw = b"From: b@x.org\r\nSubject: Hi\r\n\r\nbody"
+        return FetchBatch(mailbox, [FetchedMail(5, raw, False, False)])
+
+
 def test_sync_hook_receives_new_inbox_ids(
     session: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -229,26 +248,32 @@ def test_sync_hook_receives_new_inbox_ids(
     seen: list[list[str]] = []
     monkeypatch.setattr(service, "NEW_MAIL_HOOK", seen.append)
 
-    class Fake:
-        """Transport returning one message per mailbox."""
-
-        def fetch(self, mailbox: str, cursor: object, limit: int) -> FetchBatch:
-            """
-            Return a canned batch
-
-            Args:
-                mailbox (str): inbox or sent
-                cursor (object): unused
-                limit (int): unused
-            Returns:
-                FetchBatch: batch
-            """
-            raw = b"From: b@x.org\r\nSubject: Hi\r\n\r\nbody"
-            return FetchBatch(mailbox, [FetchedMail(5, raw, False, False)])
-
-    monkeypatch.setattr(service, "transport_for", lambda link: Fake())
+    monkeypatch.setattr(service, "transport_for", lambda link: OneMailTransport())
     assert service.sync_account(ACCOUNT_ID).fetched == 2
     assert len(seen) == 1 and len(seen[0]) == 1
+
+
+def test_background_fetch_queues_previews(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """
+    Queue Mail Previews of mail fetched by the background fetcher, like a manual sync
+
+    Returns:
+        None
+    """
+    monkeypatch.setattr(store, "get_db", sessionmaker(bind=session.get_bind()))
+    monkeypatch.setattr(service, "transport_for", lambda link: OneMailTransport())
+    monkeypatch.setattr(service, "NEW_MAIL_HOOK", MailManager.queue_new_mail)
+    settings = {"mail_auto_preview": True, "mail_auto_preview_boxes": ["inbox"]}
+    monkeypatch.setattr(mail_manager_module, "get_setting", settings.get)
+    queued: list[list[str]] = []
+    monkeypatch.setattr(
+        MailManager, "queue_previews", classmethod(lambda cls, ids: queued.append(ids))
+    )
+    monkeypatch.setattr(MailAutoFetcher, "last_run", None)
+    assert MailAutoFetcher.tick(lambda key, default: default, clock=lambda: 0.0)
+    assert len(queued) == 1 and len(queued[0]) == 1
 
 
 def test_jobs_endpoints_label_tasks_with_subjects(

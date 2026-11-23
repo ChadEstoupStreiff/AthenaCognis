@@ -2,7 +2,7 @@
 
 import time
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import date, datetime, timedelta
 
 from controllers.activity.agenda_ics import (
     CalendarError,
@@ -38,6 +38,7 @@ MINUTES_PER_HOUR = 60
 EVENT_KIND = "event"
 ALL_DAY_KIND = "all_day"
 TENTATIVE = "TENTATIVE"
+ONE_DAY = timedelta(days=1)
 
 AGENDA_CONTENT = [
     ContentField(SUMMARY_CONTENT, "Event description"),
@@ -126,6 +127,22 @@ def event_details(
     if share_people and event.location:
         details["location"] = event.location
     return details
+
+
+def covers_day(event: CalendarEvent, day: date) -> bool:
+    """
+    Tell whether an all-day event spans a day
+
+    Args:
+        event (CalendarEvent): occurrence
+        day (date): day
+    Returns:
+        bool: True for an all-day event whose days include the day
+    """
+    if not event.is_all_day:
+        return False
+    last = event.start.date() + max(event.duration - ONE_DAY, timedelta())
+    return event.start.date() <= day <= last
 
 
 def event_activity(
@@ -293,6 +310,30 @@ class AgendaDataSource(DataSource):
                 if not (skip_all_day and event.is_all_day)
             ]
         return activities
+
+    def all_day_titles(self, day: date) -> tuple[str, ...]:
+        """
+        Titles of the all-day events spanning a day, in every linked calendar
+
+        Args:
+            day (date): day
+        Returns:
+            tuple[str, ...]: titles
+        Raises:
+            SourceUnavailableError: a calendar could not be read (message names its host)
+        """
+        midnight = datetime(day.year, day.month, day.day)
+        window = TimeRange(midnight - ONE_DAY, midnight + 2 * ONE_DAY)
+        titles: list[str] = []
+        for provider, link in self.links(self.config()):
+            try:
+                events = calendar_events(self.download(link), window)
+            except CalendarError as error:
+                raise SourceUnavailableError(
+                    f"{provider.label} ({self._host(link)}): {error}"
+                ) from error
+            titles += [event.title for event in events if covers_day(event, day)]
+        return tuple(titles)
 
     def _host(self, link: str) -> str:
         """

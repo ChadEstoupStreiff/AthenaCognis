@@ -22,6 +22,7 @@ import { SettingsStore } from '../settings/settings.store';
 import { fileKindOf, fileNameOf, FILE_KIND_ICONS } from '@domain/files';
 import { viewerCommands } from '../../shared/files/file-row';
 import { LastOpenedService } from '../files/last-opened.service';
+import { MailBadge } from '../mail/mail-badge';
 import { PeekService } from '../files/peek.service';
 import { ShortcutService } from '../shortcuts/shortcut.service';
 import { TelemetryConsentComponent } from '../telemetry/telemetry-consent.component';
@@ -32,6 +33,7 @@ import { JobsIndicatorComponent } from './jobs-indicator.component';
 import { arrangeNav, MAIN_NAV, NAV_HIDDEN_KEY, NAV_ORDER_KEY, SETTINGS_NAV } from './nav-items';
 import { PaletteService } from './palette.service';
 
+const MAIL_ROUTE = '/mail';
 const THEME_ICONS = { light: 'pi pi-sun', dark: 'pi pi-moon', system: 'pi pi-desktop' } as const;
 const RAIL_WIDTH_KEY = 'ac.shell.railWidth';
 const RAIL_DEFAULT_WIDTH = 232;
@@ -73,6 +75,8 @@ export class ShellComponent {
   protected readonly peek = inject(PeekService);
   private readonly lastOpened = inject(LastOpenedService);
   protected readonly telemetry = inject(TelemetryService);
+  protected readonly mailBadge = inject(MailBadge);
+  protected readonly mailRoute = MAIL_ROUTE;
 
   private readonly settings = inject(SettingsStore);
 

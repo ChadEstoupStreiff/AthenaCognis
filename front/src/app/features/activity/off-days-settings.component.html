@@ -1,0 +1,93 @@
+<div class="row stacked">
+  <div class="label">
+    <strong>Public holidays</strong>
+    <small class="ac-muted">Holidays of this country are not generated.</small>
+  </div>
+  <p-select
+    [options]="countryChoices()"
+    optionLabel="label"
+    optionValue="value"
+    [ngModel]="country() || null"
+    (ngModelChange)="pickCountry($event)"
+    [filter]="true"
+    filterBy="label"
+    [showClear]="true"
+    placeholder="No holidays"
+    appendTo="body"
+    ariaLabel="Public holidays country"
+  />
+  @if (subdivisionChoices().length > 0) {
+    <p-select
+      [options]="subdivisionChoices()"
+      optionLabel="label"
+      optionValue="value"
+      [ngModel]="subdivision() || null"
+      (ngModelChange)="pickSubdivision($event)"
+      [filter]="true"
+      [showClear]="true"
+      placeholder="Whole country"
+      appendTo="body"
+      ariaLabel="Public holidays region"
+    />
+  }
+</div>
+
+<div class="row stacked">
+  <div class="label">
+    <strong>Off days</strong>
+    <small class="ac-muted">Vacation, leave: pick a day or a span.</small>
+  </div>
+  <div class="add">
+    <p-datepicker
+      selectionMode="range"
+      [ngModel]="pickedRange()"
+      (ngModelChange)="pickedRange.set($event)"
+      dateFormat="yy-mm-dd"
+      [readonlyInput]="true"
+      placeholder="Day or span"
+      appendTo="body"
+      ariaLabel="Off day or span"
+    />
+    <p-button
+      icon="pi pi-plus"
+      [text]="true"
+      [disabled]="!canAdd()"
+      (onClick)="addOffDay()"
+      ariaLabel="Add off days"
+    />
+  </div>
+  @if (offDays().length > 0) {
+    <div class="chips">
+      @for (item of offDays(); track item) {
+        <p-chip [label]="offDayLabel(item)" [removable]="true" (onRemove)="removeOffDay(item)" />
+      }
+    </div>
+  }
+</div>
+
+<div class="row">
+  <div class="label">
+    <strong>Agenda days off</strong>
+    <small class="ac-muted">Skip days with an all-day Agenda event matching a keyword.</small>
+  </div>
+  <p-toggleswitch
+    [ngModel]="flag(agendaKey)"
+    (ngModelChange)="save(agendaKey, $event, true)"
+    ariaLabel="Skip agenda days off"
+  />
+</div>
+@if (flag(agendaKey)) {
+  <div class="row stacked">
+    <div class="label">
+      <strong>Keywords</strong>
+      <small class="ac-muted">Comma separated, whole words, any case.</small>
+    </div>
+    <input
+      pInputText
+      [ngModel]="text(keywordsKey)"
+      (ngModelChange)="save(keywordsKey, $event)"
+      [placeholder]="defaultKeywords"
+      aria-label="Agenda keywords"
+    />
+  </div>
+}

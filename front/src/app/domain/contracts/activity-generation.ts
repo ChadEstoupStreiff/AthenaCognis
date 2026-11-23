@@ -88,3 +88,21 @@ export interface DailyGeneration {
   readonly note: { readonly path: string; readonly content: string } | null;
   readonly records: readonly GeneratedRecord[];
 }
+
+/** What happened to a day: generated, failed, generating, or skipped by the scheduler. */
+export type DayState = 'generated' | 'failed' | 'running' | 'skipped';
+
+/** Status of a day (`GET /activity-generation/daily-status`). */
+export interface DayStatus {
+  /** Local day, `YYYY-MM-DD`. */
+  readonly day: string;
+  /** Null when never generated nor skipped. */
+  readonly state: DayState | null;
+  /** Why it was skipped, or why the latest run failed. */
+  readonly reason: string | null;
+  /** Why the settings make it non working (agenda left out); null for a working day. */
+  readonly off: string | null;
+}
+
+/** Subdivision codes per two-letter country code (`GET /activity-generation/holiday-countries`). */
+export type HolidayCountries = Readonly<Record<string, readonly string[]>>;

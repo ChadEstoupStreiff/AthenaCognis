@@ -224,7 +224,7 @@ def test_event_activities() -> None:
 
 def test_feed_only_mine_and_dedup(settings: Settings, api: FakeGitHub) -> None:
     source = GitHubDataSource()
-    assert source.detail() == "1 repository · 1 organisation"
+    assert source.detail() == "1 repository"
     feed = source.activities(WINDOW)
     assert [item.id for item in feed] == ["github:6", "github:2", "github:1"]
     assert all(token == TOKEN for _, token in api.calls)

@@ -18,6 +18,7 @@ export type SyncTopic =
   | 'sota'
   | 'ollama'
   | 'mail'
+  | 'generation'
   | 'mail-drafts'
   | 'mail-trash';
 
