@@ -13,17 +13,9 @@ from tools.ai import (
     provider_supports_vision,
     request_chat_llm,
 )
+from tools.prompts import get_prompt
 from utils import guess_mime, read_content
 from views.settings import get_setting
-
-SYSTEM_INSTRUCTIONS = (
-    "You are given a conversation and some files and calendar events provided by the user.\n"
-    "You are an AI Chat BOT that can answer questions based on the conversation, files and calendar events.\n"
-    "Use the file contents if relevant to ANSWER the user's LATEST prompt.\n"
-    "Some files may be labeled as auto-retrieved background context rather than explicitly attached by the "
-    "user — use them only if relevant, and don't assume the user has seen them.\n"
-)
-
 
 def read_calendar(event: Dict[str, str]):
     return f"""Title: {event['title']}
@@ -91,7 +83,7 @@ class ChatManager:
         model = get_setting("chat_model")
         vision_ok = provider_supports_vision(ai_type, model)
 
-        system_text = SYSTEM_INSTRUCTIONS
+        system_text = get_prompt("chat.system")
 
         turns = []
         for msg in history:
@@ -192,7 +184,7 @@ class ChatManager:
                 if retrieved_files:
                     context_parts = [{
                         "type": "text",
-                        "text": "--- Auto-retrieved background context (not explicitly attached by the user) ---",
+                        "text": get_prompt("chat.rag_header"),
                     }]
                     context_parts += [cls._file_content_part(f, vision_ok) for f in retrieved_files]
                     messages[-1] = {

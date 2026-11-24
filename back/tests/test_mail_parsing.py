@@ -202,7 +202,7 @@ def test_reply_prompt_includes_sender_note() -> None:
         "a@x.org", "Hi", parse_message(make_raw(BASE_HEADERS, "x"), 1, "I").date, "x"
     )
     prompt = build_reply_prompt(brief, "", "My thesis supervisor")
-    assert "About the sender: My thesis supervisor" in prompt
+    assert "noted about this sender: My thesis supervisor" in prompt
     assert "Answer briefly and politely." in prompt
 
 

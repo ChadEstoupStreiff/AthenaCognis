@@ -6,6 +6,7 @@ python-multipart==0.0.*
 tqdm
 
 python-dotenv
+PyYAML
 mysqlclient
 sqlalchemy
 whoosh

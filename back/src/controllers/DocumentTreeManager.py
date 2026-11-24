@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from controllers.JobManager import JobManager
 from db import DocumentTree, DocumentTreeTask, JobTask, TaskStateEnum, get_db
 from tools.ai import request_llm
+from tools.prompts import get_prompt, render
 from utils import read_text
 from views.settings import get_setting
 
@@ -39,38 +40,6 @@ HEADING_PATTERN = re.compile(
     re.IGNORECASE,
 )
 PARAGRAPH_SPLIT = re.compile(r"\n\s*\n")
-
-SECTIONS_PROMPT = """! DOCUMENT PART START (blocks {start} to {end}) !
-{{input}}
-! DOCUMENT PART END !
-
-! TASK !
-You are an expert at analyzing scientific papers and long documents.
-Each paragraph block above starts with its number in brackets, like [12].
-{context}{count_rule} Follow its logical structure: existing headings first, otherwise clear shifts of idea.
-{stop_rule}For each section give:
-- "title": short title, maximum 10 words
-- "description": what the section says, maximum 3 short lines (50 words)
-- "start": number of the first block of the section
-- "end": number of the last block of the section
-Sections must be in document order, must not overlap and must together cover blocks {start} to {end}.
-{focus}
-! FORMAT !
-Respond ONLY with a JSON array. No code fence, no comments, no text outside the JSON.
-Example: [{{"title": "Introduction", "description": "Motivates the problem.", "start": {start}, "end": {start}}}]
-"""
-CONTEXT_LINE = 'This part is the section "{path}" of a larger document.\n'
-FOCUS_LINE = "Reader focus (use it to choose titles and descriptions): {focus}\n"
-FIXED_COUNT_RULE = "Split this document part into {min_sections} to {max_sections} consecutive sections."
-AUTO_COUNT_RULE = (
-    "Split this document part into consecutive sections, one per distinct idea, argument or "
-    "step: as many as the ideas require, never padded or merged to reach a number "
-    "(at most {max_sections})."
-)
-AUTO_STOP_RULE = (
-    "If this part develops one single idea that splitting would only fragment, "
-    "respond with an empty JSON array [].\n"
-)
 
 
 class TreeInputError(Exception):
@@ -641,16 +610,17 @@ def build_prompt(params: TreeParams, start: int, end: int, path: List[str]) -> s
     Returns:
         str: prompt
     """
-    count_rule = AUTO_COUNT_RULE if params.auto_sections else FIXED_COUNT_RULE
-    return SECTIONS_PROMPT.format(
+    count_rule_key = "tree.auto_count_rule" if params.auto_sections else "tree.fixed_count_rule"
+    return render(
+        "tree.sections",
         start=start,
         end=end,
-        count_rule=count_rule.format(
-            min_sections=MIN_BLOCKS_TO_SPLIT, max_sections=params.sections_limit
+        count_rule=render(
+            count_rule_key, min_sections=MIN_BLOCKS_TO_SPLIT, max_sections=params.sections_limit
         ),
-        stop_rule=AUTO_STOP_RULE if params.auto_depth and path else "",
-        context=CONTEXT_LINE.format(path=" > ".join(path)) if path else "",
-        focus=FOCUS_LINE.format(focus=params.focus) if params.focus else "",
+        stop_rule=get_prompt("tree.auto_stop_rule") if params.auto_depth and path else "",
+        context=render("tree.context_line", path=" > ".join(path)) if path else "",
+        focus=render("tree.focus_line", focus=params.focus) if params.focus else "",
     )
 
 

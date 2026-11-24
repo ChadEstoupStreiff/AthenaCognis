@@ -29,6 +29,14 @@ export interface UploadTarget {
   readonly name: string;
 }
 
+/** Options of a text or blob write. */
+export interface WriteOptions {
+  /** Skip error toasts. */
+  readonly silent?: boolean;
+  /** Queue the auto summary of a new file (default `true`). */
+  readonly summarize?: boolean;
+}
+
 /** Upload progress event. */
 export type UploadProgress =
   | { readonly kind: 'progress'; readonly fraction: number }
@@ -128,11 +136,11 @@ export class Uploads {
    *
    * @param path - Shared path.
    * @param content - Content.
-   * @param silent - Skip error toasts.
+   * @param options - Toasts and auto summary.
    * @returns The stored path.
    * @throws Error when the path is invalid.
    */
-  async writeText(path: string, content: string, silent = false): Promise<string> {
+  async writeText(path: string, content: string, options: WriteOptions = {}): Promise<string> {
     const parts = parseSharedPath(path);
     if (parts === null) {
       throw new Error('Not a shared file path.');
@@ -141,7 +149,7 @@ export class Uploads {
     await this.writeBlob(
       blob,
       { folder: parts.folder, date: parts.date, name: parts.name },
-      silent,
+      options,
     );
     return path;
   }
@@ -151,14 +159,18 @@ export class Uploads {
    *
    * @param blob - Content.
    * @param target - Folder, date and final name.
-   * @param silent - Skip error toasts.
+   * @param options - Toasts and auto summary.
    */
-  async writeBlob(blob: Blob, target: UploadTarget, silent = false): Promise<void> {
+  async writeBlob(blob: Blob, target: UploadTarget, options: WriteOptions = {}): Promise<void> {
     const form = new FormData();
     form.append('files', blob, target.name);
     await this.api.post(backendUrl('/files/upload'), form, {
-      params: { subdirectory: target.folder, date: target.date },
-      silent,
+      params: {
+        subdirectory: target.folder,
+        date: target.date,
+        summarize: String(options.summarize ?? true),
+      },
+      silent: options.silent ?? false,
     });
   }
 

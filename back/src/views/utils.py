@@ -3,6 +3,7 @@ import traceback
 
 from fastapi import APIRouter, HTTPException
 from tools.ai import request_llm
+from tools.prompts import get_prompt, render
 
 router = APIRouter(prefix="/utils", tags=["Utils"])
 
@@ -15,7 +16,11 @@ async def refractor_text(text: str, question: str = None):
     try:
         return request_llm(
             setting_prefix="refractor",
-            prompt=f"""Respond ONLY with the text in the LANGUAGE of the text. {question if question else "Improve this text:"}\n\n{text}""",
+            prompt=render(
+                "refractor.rewrite",
+                question=question or get_prompt("refractor.default_question"),
+                text=text,
+            ),
         )[2]  # Return only the response part
     except Exception as e:
         logging.error(f"Error refractoring text: {str(e)}")

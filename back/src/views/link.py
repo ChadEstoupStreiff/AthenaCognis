@@ -9,6 +9,7 @@ from controllers.SummarizeManager import SummarizeManager
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from tools.ai import request_llm
+from tools.prompts import render
 
 router = APIRouter(prefix="/links", tags=["Link"])
 
@@ -54,38 +55,20 @@ def auto_find_links(request: AutoFindRequest):
         summary_data = SummarizeManager.get(path)
         name = path.split("/")[-1]
         if summary_data and summary_data.get("summary"):
-            keywords = ", ".join(summary_data.get("keywords", []))
-            return f"File: {name}\nPath: {path}\nSummary: {summary_data['summary']}\nKeywords: {keywords}"
-        return f"File: {name}\nPath: {path}\n(No summary available)"
+            return render(
+                "link.file_with_summary",
+                name=name,
+                path=path,
+                summary=summary_data["summary"],
+                keywords=", ".join(summary_data.get("keywords", [])),
+            )
+        return render("link.file_without_summary", name=name, path=path)
 
     source_desc = describe_file(source)
     targets_block = "\n\n".join(f"- {describe_file(t)}" for t in targets)
-
-    prompt = f"""You are a document analysis assistant. Assess how semantically related each target file is to the source file.
-
-Source file:
-{source_desc}
-
-Target files:
-{targets_block}
-
-For each target file that has a genuine semantic relationship with the source file, output one JSON object.
-Score force based on the strength of the relationship (shared topic, methodology, data, citations, etc.).
-Include all targets, even if the relationship is weak or nonexistent (force=0). If no relationship, set force to 0 and comment to "No relation".
-
-Rules:
-- Set "force" between 0 (weak) and 3.0 (strong).
-- Write a short "comment" explaining the link (max 20 words).
-- Always use "{source}" as "fileA" and the target path as "fileB".
-- Output ONLY a valid JSON array, no explanation, no markdown, no code block.
-
-Output format:
-[
-  {{"fileA": "{source}", "fileB": "<target_path>", "force": <float>, "comment": "<short explanation>"}},
-  ...
-]
-
-If no target files are related to the source file, output an empty array: []"""
+    prompt = render(
+        "link.relations", source_description=source_desc, targets=targets_block, source=source
+    )
 
     try:
         _, _, raw = request_llm("link", prompt)

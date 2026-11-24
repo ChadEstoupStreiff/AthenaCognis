@@ -332,7 +332,7 @@ export class NotesPage {
       folder: NOTES_FOLDER,
       name: `${formatFileTime(new Date())}.md`,
     });
-    await this.files.writeText(path, NEW_NOTE);
+    await this.files.writeText(path, NEW_NOTE, { summarize: false });
     this.open(path);
   }
 
@@ -489,7 +489,7 @@ export class NotesPage {
    * @param draft - Path and content.
    */
   private async save(draft: NoteDraft): Promise<void> {
-    await this.files.writeText(draft.path, draft.content, true);
+    await this.files.writeText(draft.path, draft.content, { silent: true });
     this.history.snapshot(draft.path).catch((error: unknown) => {
       this.logger.warn('Note version not saved.', error);
     });

@@ -6,6 +6,8 @@ import re
 from collections.abc import Callable
 from typing import Literal
 
+from tools.prompts import get_prompt, render
+
 SETTING_PREFIX = "research"
 MAX_CONTEXT_CHARS = 12_000
 MAX_QUERIES = 6
@@ -15,28 +17,10 @@ JSON_ARRAY = re.compile(r"\[.*\]", re.DOTALL)
 ContextKind = Literal["description", "papers"]
 LlmCall = Callable[[str], str]
 
-CONTEXT_INTROS = {
-    "description": "The researcher describes their research as follows:",
-    "papers": "The researcher's library contains these papers (title, year):",
+CONTEXT_INTRO_KEYS: dict[ContextKind, str] = {
+    "description": "research.intro_description",
+    "papers": "research.intro_papers",
 }
-
-PROMPT = """You help a researcher find recently published scientific papers.
-{intro}
-
-<context>
-{context}
-</context>
-
-Write between 3 and {max_queries} search queries for the OpenAlex full-text search
-(it matches words in titles, abstracts and full texts). Each query covers one distinct
-angle of the research. Query syntax:
-- "exact phrase" in double quotes
-- OR between synonyms, AND between the 2-3 concepts that must all appear, NOT to exclude
-- parentheses to group, operators in UPPERCASE, no wildcards
-Keep each query focused: too broad floods the results, too many AND finds nothing.
-
-Answer ONLY with a JSON array of strings, no explanation. Example:
-["(\\"large language model\\" OR LLM) AND (retrieval OR RAG)", "\\"protein folding\\" AND \\"deep learning\\""]"""
 
 logger = logging.getLogger(__name__)
 
@@ -55,8 +39,9 @@ def build_prompt(context: str, kind: ContextKind) -> str:
     Returns:
         str: prompt
     """
-    return PROMPT.format(
-        intro=CONTEXT_INTROS[kind],
+    return render(
+        "research.queries",
+        intro=get_prompt(CONTEXT_INTRO_KEYS[kind]),
         context=context.strip()[:MAX_CONTEXT_CHARS],
         max_queries=MAX_QUERIES,
     )

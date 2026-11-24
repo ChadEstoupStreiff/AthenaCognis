@@ -9,6 +9,7 @@ from controllers.OCRManager import OCRManager
 from controllers.TranscriptionManager import TranscriptionManager
 from db import Summary, SummaryTask, TaskStateEnum, get_db
 from tools.ai import request_llm
+from tools.prompts import get_prompt
 from utils import guess_mime, read_content
 
 SETTING_PREFIX = "summarization"
@@ -19,33 +20,7 @@ MISSING_TEXT_REASONS: Dict[Optional[TaskStateEnum], str] = {
     TaskStateEnum.FAILED: "last {job} run failed",
 }
 UNFINISHED_REASON = "{job} not finished"
-KEYWORDS_PROMPT = """"! FILE CONTENT START !
-{input}
-! FILE CONTENT END !
 
-! TASK !
-You are an expert summarizer.
-
-Extract **5 to 10 relevant keywords** that capture the **main topics and themes** of the file content above.
-
-! FORMAT !
-Respond ONLY with a plain comma-separated list.  
-Do NOT use JSON, code blocks, quotes, or formatting.  
-Example: keyword1, keyword2, keyword3, ...
-"""
-SUMMARY_PROMPT = """"! FILE CONTENT START !
-{input}
-! FILE CONTENT END !
-
-! TASK !
-You are an expert summarizer.
-
-Write a **summary** from the CONTENT of the file above. Maximum of **200 WORDS**. Focus on the main ideas and key points. Use clear and concise language.
-
-! FORMAT !
-Respond ONLY with plain markdown.  
-Do NOT include explanations, notes, or any formatting outside the summary itself.
-"""
 
 
 class SummaryRecord(TypedDict):
@@ -195,10 +170,10 @@ class SummarizeManager(JobManager):
             Tuple[List[str], str]: keywords and markdown summary
         """
         _, _, keywords = request_llm(
-            setting_prefix=SETTING_PREFIX, prompt=KEYWORDS_PROMPT, input_text=content
+            setting_prefix=SETTING_PREFIX, prompt=get_prompt("summarize.keywords"), input_text=content
         )
         _, _, summary = request_llm(
-            setting_prefix=SETTING_PREFIX, prompt=SUMMARY_PROMPT, input_text=content
+            setting_prefix=SETTING_PREFIX, prompt=get_prompt("summarize.summary"), input_text=content
         )
         return parse_keywords(keywords), strip_code_fence(summary)
 

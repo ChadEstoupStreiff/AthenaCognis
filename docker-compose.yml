@@ -84,6 +84,8 @@ services:
     volumes:
       - ${DATA_PATH}/shared:/shared
       - .env:/.env
+      # LLM prompts, re-read on change.
+      - ./prompts.yaml:/prompts.yaml:ro
       - ${DATA_PATH}/whisper_cache:/root/.cache
       - ${DATA_PATH}/paddle:/root/.paddle
       - ${DATA_PATH}/paddleocr:/root/.paddleocr

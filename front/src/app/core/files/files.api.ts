@@ -19,7 +19,7 @@ import { DataSync } from '../state/data-sync.service';
 import { FileActions } from './file-actions';
 import { RelationIndex } from './relation-index';
 import { parseTable } from './table-parser';
-import { type UploadProgress, Uploads, type UploadTarget } from './uploads';
+import { type UploadProgress, Uploads, type UploadTarget, type WriteOptions } from './uploads';
 
 export type { UploadProgress, UploadTarget } from './uploads';
 
@@ -224,11 +224,11 @@ export class FilesApi {
    *
    * @param path - Shared path.
    * @param content - Content.
-   * @param silent - Skip error toasts (autosave shows its own status).
+   * @param options - Toasts (autosave shows its own status) and auto summary.
    * @returns The stored path.
    */
-  async writeText(path: string, content: string, silent = false): Promise<string> {
-    const stored = await this.uploads.writeText(path, content, silent);
+  async writeText(path: string, content: string, options: WriteOptions = {}): Promise<string> {
+    const stored = await this.uploads.writeText(path, content, options);
     this.sync.invalidate('notes');
     return stored;
   }

@@ -224,7 +224,7 @@ def test_summary_only_prompt_skips_catalog_and_time_task() -> None:
     text = build_prompt(DAY, SECTIONS, ("summary",), CATALOG, OFFSET).text()
     assert SUMMARY_MARKER in text
     assert TIME_MARKER not in text
-    assert "PROJECTS AND TAGS" not in text
+    assert "<projects_and_tags>" not in text
 
 
 def test_split_answer_reads_each_section() -> None:

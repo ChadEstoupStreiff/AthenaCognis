@@ -6,6 +6,7 @@ from typing import Any
 from db import Setting, get_db
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from tools.prompts import get_prompt
 
 router = APIRouter(tags=["Settings"])
 
@@ -52,7 +53,7 @@ default_settings = {
     "telemetry_uuid": "",
     "telemetry_last_sent": "",
     "chat_user_description": "",
-    "ai_style_instruction": "Don't be too verbose: no preamble, no filler, no repetition. Answer only what is asked.",
+    "ai_style_instruction": get_prompt("style.default_instruction"),
     "research_subject": "",
     "research_type": "llama",
     "research_model": "llama3.2:1b",

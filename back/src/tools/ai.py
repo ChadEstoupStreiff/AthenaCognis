@@ -8,8 +8,9 @@ from typing import Dict, List, Set
 import requests
 from bs4 import BeautifulSoup
 from tools.provider_errors import provider_error
+from tools.prompts import get_prompt
 from tools.style_instruction import (
-    DEFAULT_INSTRUCTION,
+    DEFAULT_PROMPT_KEY,
     SETTING_KEY,
     apply_to_messages,
     apply_to_prompt,
@@ -127,7 +128,7 @@ def style_instruction() -> str:
     Returns:
         str: instruction
     """
-    return str(get_setting(SETTING_KEY, DEFAULT_INSTRUCTION) or "")
+    return str(get_setting(SETTING_KEY, get_prompt(DEFAULT_PROMPT_KEY)) or "")
 
 
 def request_llm(

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from controllers.JobManager import JobManager, run_python_script
 from db import OCR, OCRTask, get_db
 from tools.ai import request_vision_llm
+from tools.prompts import get_prompt
 from views.settings import get_setting
 
 APP_DIR = Path("/app")
@@ -14,11 +15,6 @@ BLIP_SCRIPT = APP_DIR / "ocr_blip.py"
 PADDLE_SCRIPT = APP_DIR / "ocr_paddle.py"
 LOCAL_CAPTION_TYPES = ("local", "blip")
 LOCAL_OCR_TYPES = ("paddle", "local")
-CAPTION_PROMPT = "Describe this image in one or two concise sentences."
-OCR_PROMPT = (
-    "Extract all text visible in this image. "
-    "Return only the raw text, preserving line breaks."
-)
 
 
 class OCRRecord(TypedDict):
@@ -65,7 +61,7 @@ class OCRManager(JobManager):
         """
         if get_setting("blip_type", "local") in LOCAL_CAPTION_TYPES:
             return run_python_script(BLIP_SCRIPT, file).capitalize()
-        _, _, caption = request_vision_llm("blip", CAPTION_PROMPT, file)
+        _, _, caption = request_vision_llm("blip", get_prompt("ocr.caption"), file)
         return str(caption)
 
     @classmethod
@@ -81,7 +77,7 @@ class OCRManager(JobManager):
         if get_setting("ocr_type", "paddle") in LOCAL_OCR_TYPES:
             output = run_python_script(PADDLE_SCRIPT, file)
             return output[output.find("[") : output.rfind("]") + 1]
-        _, _, text = request_vision_llm("ocr", OCR_PROMPT, file)
+        _, _, text = request_vision_llm("ocr", get_prompt("ocr.text"), file)
         return str(text)
 
     @classmethod

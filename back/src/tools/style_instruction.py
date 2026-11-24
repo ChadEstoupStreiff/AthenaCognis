@@ -1,7 +1,7 @@
 """Answer-style instruction added to every text and chat request (Settings → AI routing)."""
 
 SETTING_KEY = "ai_style_instruction"
-DEFAULT_INSTRUCTION = "Don't be too verbose: no preamble, no filler, no repetition. Answer only what is asked."
+DEFAULT_PROMPT_KEY = "style.default_instruction"
 
 Message = dict[str, object]
 

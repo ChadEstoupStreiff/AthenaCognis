@@ -11,6 +11,7 @@ from controllers.activity.generation import (
     section_text,
     strip_fence,
 )
+from tools.prompts import get_prompt, render
 
 # Rough characters per LLM token, for dry-run estimates.
 CHARS_PER_TOKEN = 4
@@ -25,34 +26,12 @@ ANSWER_MARKER = re.compile(
 )
 MARKER_OUTPUTS: dict[str, Output] = {"SUMMARY": "summary", "TIME ENTRIES": "time"}
 
-SUMMARY_TASK = """SUMMARY: write the end-of-day journal of the user from the activity above.
-Group related items, name projects, people and outcomes, skip noise.
-Sections: a 2-3 sentence overview, then "## Highlights" (bullets), then "## Details" per theme.
-Maximum 400 words."""
-
-TIME_TASK = """TIME ENTRIES: turn the activity above into the time entries of the user's day.
-Be detailed: one block per distinct task (feature, bug, meeting, review, mail thread, writing),
-split a long period when the work changes; merge only items of the same task; minimum 15 minutes.
-Title names the concrete task; description gives 1-3 sentences of specifics
-(files, repos, PRs, documents, people, decisions, outcomes) taken from the activity.
-Build a complete working day from the first to the last activity:
-fill every gap between blocks by extending the neighbouring block of the most related task,
-or by a block for the likely work in between (inferred from the activity before and after).
-Never cover meal breaks 12:00-13:00 and 19:00-20:00 (shift them by up to 30 minutes
-when a meeting or activity overlaps them), unless the activity shows work there.
-Blocks must not overlap. Give each block the projects and tags it belongs to,
-chosen ONLY from the lists above (exact names, several allowed, empty list when none fits)."""
-
-SUMMARY_FORMAT = f"""{SUMMARY_MARKER}
-markdown, no title line, no code fence"""
-
-TIME_FORMAT = f"""{TIME_MARKER}
-JSON array only, no code fence:
-[{{"start": "HH:MM", "end": "HH:MM", "title": "concrete task", "description": "1-3 sentences of specifics",
-  "projects": ["Project name"], "tags": ["Tag name"]}}]"""
-
-TASKS: dict[Output, str] = {"summary": SUMMARY_TASK, "time": TIME_TASK}
-FORMATS: dict[Output, str] = {"summary": SUMMARY_FORMAT, "time": TIME_FORMAT}
+TASK_KEYS: dict[Output, str] = {"summary": "activity.summary_task", "time": "activity.time_task"}
+FORMAT_KEYS: dict[Output, str] = {
+    "summary": "activity.summary_format",
+    "time": "activity.time_format",
+}
+OUTPUT_MARKERS: dict[Output, str] = {"summary": SUMMARY_MARKER, "time": TIME_MARKER}
 
 PartKind = Literal["instructions", "source", "catalog"]
 
@@ -177,13 +156,11 @@ def task_text(outputs: tuple[Output, ...]) -> str:
     Returns:
         str: TASK and FORMAT blocks
     """
-    tasks = "\n\n".join(TASKS[output] for output in outputs)
-    formats = "\n".join(FORMATS[output] for output in outputs)
-    return (
-        f"! TASK !\nTimes above are local. Do every task below.\n\n{tasks}\n\n"
-        f"! FORMAT !\nRespond ONLY with these sections, in this order, "
-        f"each starting with its marker line:\n{formats}"
+    tasks = "\n\n".join(get_prompt(TASK_KEYS[output]) for output in outputs)
+    formats = "\n".join(
+        render(FORMAT_KEYS[output], marker=OUTPUT_MARKERS[output]) for output in outputs
     )
+    return render("activity.task", tasks=tasks, formats=formats)
 
 
 def build_prompt(
@@ -206,13 +183,13 @@ def build_prompt(
         Prompt: activity, catalog when needed, tasks and format
     """
     parts = [
-        instructions(f"! ACTIVITY OF {day} START !"),
+        instructions(render("activity.day_start", day=day)),
         *(source_part(section, utc_offset_minutes) for section in sections),
-        instructions(f"! ACTIVITY OF {day} END !"),
+        instructions(render("activity.day_end", day=day)),
     ]
     if "time" in outputs:
         parts.append(
-            PromptPart(CATALOG_LABEL, "catalog", f"! PROJECTS AND TAGS !\n{catalog.text()}")
+            PromptPart(CATALOG_LABEL, "catalog", render("activity.catalog", catalog=catalog.text()))
         )
     parts.append(instructions(task_text(outputs)))
     return Prompt(tuple(parts))

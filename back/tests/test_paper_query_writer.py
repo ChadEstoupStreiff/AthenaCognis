@@ -67,7 +67,7 @@ def test_build_prompt_truncates_context_and_names_kind() -> None:
         None
     """
     prompt = build_prompt("x" * (MAX_CONTEXT_CHARS + 50), "papers")
-    assert "library contains these papers" in prompt
+    assert "library holds these papers" in prompt
     assert "x" * (MAX_CONTEXT_CHARS + 1) not in prompt
 
 

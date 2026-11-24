@@ -6,6 +6,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 
+from tools.prompts import get_prompt, render
+
 SETTING_PREFIX = "mail"
 MAX_BODY_CHARS = 8_000
 MAX_DIGEST_MAILS = 30
@@ -19,57 +21,6 @@ PREVIEW_BODY_CHARS = 4_000
 JSON_OBJECT = re.compile(r"\{.*\}", re.DOTALL)
 
 LlmCall = Callable[[str], str]
-
-SUMMARY_PROMPT = """Read this email and help its recipient triage it.
-
-<email>
-From: {sender}
-Date: {date}
-Subject: {subject}
-
-{body}
-</email>
-
-Answer ONLY with a JSON object, no explanation:
-{{"summary": "2-3 sentence summary of what the email says and asks",
-  "needs_reply": true or false (does the sender expect an answer from the recipient?),
-  "action": "the one concrete next step for the recipient, or empty string"}}"""
-
-DIGEST_PROMPT = """Write a short briefing of these unread emails for their recipient.
-Group them by what to do: "Reply", "Read", "Ignore". One bullet per email:
-**sender** – subject: one-line gist. Markdown only, no preamble.
-
-<emails>
-{emails}
-</emails>"""
-
-REPLY_PROMPT = """Write a reply to this email on behalf of its recipient.
-{note}
-Instructions from the recipient: {instruction}
-Reply in the language of the email. Write ONLY the reply body (greeting to sign-off),
-no subject line, no quoted original, no placeholder in brackets unless information is missing.
-
-<email>
-From: {sender}
-Subject: {subject}
-
-{body}
-</email>"""
-
-DEFAULT_REPLY_INSTRUCTION = "Answer briefly and politely."
-
-PREVIEW_PROMPT = """Write a Mail Preview of this email for its recipient's inbox list.
-
-<email>
-From: {sender}
-Subject: {subject}
-
-{body}
-</email>
-
-Answer ONLY with a JSON object, no explanation, in the language of the email:
-{{"title": "what the email is about, at most {title_words} words",
-  "summary": "the gist and what is expected, at most {summary_words} words"}}"""
 
 
 class AssistantError(Exception):
@@ -104,7 +55,8 @@ def build_summary_prompt(mail: MailBrief) -> str:
     Returns:
         str: prompt
     """
-    return SUMMARY_PROMPT.format(
+    return render(
+        "mail.summary",
         sender=mail.sender,
         date=mail.date.isoformat(timespec="minutes"),
         subject=mail.subject,
@@ -185,11 +137,15 @@ def build_digest_prompt(mails: list[MailBrief]) -> str:
         str: prompt
     """
     entries = [
-        f"- From: {mail.sender} | Subject: {mail.subject}\n"
-        f"  {' '.join(mail.body.split())[:MAX_DIGEST_BODY_CHARS]}"
+        render(
+            "mail.digest_entry",
+            sender=mail.sender,
+            subject=mail.subject,
+            body=" ".join(mail.body.split())[:MAX_DIGEST_BODY_CHARS],
+        )
         for mail in mails[:MAX_DIGEST_MAILS]
     ]
-    return DIGEST_PROMPT.format(emails="\n".join(entries))
+    return render("mail.digest", emails="\n".join(entries))
 
 
 def write_digest(mails: list[MailBrief], llm: LlmCall) -> str:
@@ -226,13 +182,14 @@ def build_reply_prompt(
         str: prompt
     """
     note = (
-        f"About the sender: {sender_note.strip()}\n"
+        render("mail.reply_sender_note", note=sender_note.strip())
         if sender_note and sender_note.strip()
         else ""
     )
-    return REPLY_PROMPT.format(
+    return render(
+        "mail.reply",
         note=note,
-        instruction=instruction.strip() or DEFAULT_REPLY_INSTRUCTION,
+        instruction=instruction.strip() or get_prompt("mail.reply_default_instruction"),
         sender=mail.sender,
         subject=mail.subject,
         body=mail.body.strip()[:MAX_BODY_CHARS],
@@ -294,7 +251,8 @@ def build_preview_prompt(mail: MailBrief) -> str:
     Returns:
         str: prompt
     """
-    return PREVIEW_PROMPT.format(
+    return render(
+        "mail.preview",
         sender=mail.sender,
         subject=mail.subject,
         body=mail.body.strip()[:PREVIEW_BODY_CHARS],

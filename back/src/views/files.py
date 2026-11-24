@@ -56,6 +56,30 @@ def follow_note_move(old_path: Path, new_path: Path) -> None:
         logging.error(f"Could not move assets or history of {old_path}: {error}")
 
 
+def queue_new_file_jobs(file_path: str, summarize: bool = True) -> None:
+    """
+    Queue the auto OCR, transcription, summary and preview jobs of a new file
+
+    Args:
+        file_path (str): path of the new file
+        summarize (bool): queue the summary when auto summary is enabled
+    Returns:
+        None
+    """
+    auto_summary = summarize and get_setting("enable_auto_summary")
+    mime = guess_mime(file_path) or ""
+    if mime.startswith("image/") and get_setting("enable_auto_ocr"):
+        OCRManager.add_file_to_queue(file_path)
+    elif mime.startswith(("audio/", "video/")) and get_setting(
+        "enable_auto_transcription"
+    ):
+        TranscriptionManager.add_file_to_queue(file_path)
+    if auto_summary:
+        SummarizeManager.add_file_to_queue(file_path)
+    if get_setting("enable_auto_preview"):
+        PreviewManager.add_file_to_queue(file_path)
+
+
 def add_recent_added_file(file: str):
     try:
         recent_added_files = get_recent_added()
@@ -101,9 +125,10 @@ async def upload_files(
     tags: str = None,
     contacts: str = None,
     file_edit_info: str = None,
+    summarize: bool = True,
 ):
     """
-    Upload a file to the system.
+    Upload a file to the system (`summarize=false` skips the auto summary, e.g. blank notes).
     """
     file_edit_info = json.loads(file_edit_info) if file_edit_info else {}
     date = date or datetime.now().strftime("%Y-%m-%d")
@@ -201,30 +226,7 @@ async def upload_files(
             if file_exists:
                 os.utime(file_path, None)
             else:
-                auto_summary = get_setting("enable_auto_summary")
-                mime = guess_mime(file_path)
-
-                if (
-                    mime
-                    and mime.startswith("image/")
-                    and get_setting("enable_auto_ocr")
-                ):
-                    OCRManager.add_file_to_queue(file_path)
-                    if auto_summary:
-                        SummarizeManager.add_file_to_queue(file_path)
-
-                elif (
-                    mime and (mime.startswith("audio/") or mime.startswith("video/"))
-                ) and get_setting("enable_auto_transcription"):
-                    TranscriptionManager.add_file_to_queue(file_path)
-                    if auto_summary:
-                        SummarizeManager.add_file_to_queue(file_path)
-
-                elif auto_summary:
-                    SummarizeManager.add_file_to_queue(file_path)
-
-                if get_setting("enable_auto_preview"):
-                    PreviewManager.add_file_to_queue(file_path)
+                queue_new_file_jobs(file_path, summarize)
 
         return {"message": f"{len(files)} files uploaded successfully."}
     except Exception as e:
