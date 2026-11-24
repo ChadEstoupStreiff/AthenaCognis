@@ -11,7 +11,20 @@ function hasFiles(event: DragEvent): boolean {
   return [...(event.dataTransfer?.types ?? [])].includes('Files');
 }
 
-/** Full-window drop target: dropping files anywhere opens the upload dialog. */
+/** Attribute marking an element that handles file drops itself (e.g. the notes editor). */
+export const OWN_DROP_ATTRIBUTE = 'data-own-drop';
+
+/**
+ * Check whether a drag happens over an element that handles file drops itself.
+ *
+ * @param target - Event target.
+ * @returns `true` inside an own drop zone.
+ */
+export function isOwnDropZone(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest(`[${OWN_DROP_ATTRIBUTE}]`) !== null;
+}
+
+/** Full-window drop target: dropping files anywhere (except own drop zones) opens the upload dialog. */
 @Component({
   selector: 'ac-drop-overlay',
   template: `
@@ -60,41 +73,91 @@ export class DropOverlayComponent {
 
   /** Listen to window drag events. */
   constructor() {
-    const onEnter = (event: DragEvent): void => {
-      if (hasFiles(event) && !this.capture.uploadOpen()) {
-        this.depth += 1;
-        this.active.set(true);
-      }
-    };
-    const onLeave = (): void => {
-      this.depth = Math.max(0, this.depth - 1);
-      if (this.depth === 0) {
-        this.active.set(false);
-      }
-    };
-    const onOver = (event: DragEvent): void => {
-      if (this.active()) {
-        event.preventDefault();
-      }
-    };
-    const onDrop = (event: DragEvent): void => {
-      if (!this.active()) {
-        return;
-      }
-      event.preventDefault();
-      this.depth = 0;
-      this.active.set(false);
-      this.capture.openUpload([...(event.dataTransfer?.files ?? [])]);
-    };
-    window.addEventListener('dragenter', onEnter);
-    window.addEventListener('dragleave', onLeave);
-    window.addEventListener('dragover', onOver);
-    window.addEventListener('drop', onDrop);
+    const listeners: [keyof WindowEventMap, (event: DragEvent) => void][] = [
+      [
+        'dragenter',
+        (event) => {
+          this.onEnter(event);
+        },
+      ],
+      [
+        'dragleave',
+        () => {
+          this.onLeave();
+        },
+      ],
+      [
+        'dragover',
+        (event) => {
+          this.onOver(event);
+        },
+      ],
+      [
+        'drop',
+        (event) => {
+          this.onDrop(event);
+        },
+      ],
+    ];
+    for (const [type, listener] of listeners) {
+      window.addEventListener(type, listener as EventListener);
+    }
     inject(DestroyRef).onDestroy(() => {
-      window.removeEventListener('dragenter', onEnter);
-      window.removeEventListener('dragleave', onLeave);
-      window.removeEventListener('dragover', onOver);
-      window.removeEventListener('drop', onDrop);
+      for (const [type, listener] of listeners) {
+        window.removeEventListener(type, listener as EventListener);
+      }
     });
+  }
+
+  /**
+   * Show the overlay when files start being dragged over the window.
+   *
+   * @param event - Drag event.
+   */
+  private onEnter(event: DragEvent): void {
+    if (hasFiles(event) && !this.capture.uploadOpen()) {
+      this.depth += 1;
+      this.active.set(true);
+    }
+  }
+
+  /** Hide the overlay once the drag left the window. */
+  private onLeave(): void {
+    this.depth = Math.max(0, this.depth - 1);
+    if (this.depth === 0) {
+      this.active.set(false);
+    }
+  }
+
+  /**
+   * Accept the drop, except over elements handling files themselves.
+   *
+   * @param event - Drag event.
+   */
+  private onOver(event: DragEvent): void {
+    if (this.depth === 0) {
+      return;
+    }
+    const isOwn = isOwnDropZone(event.target);
+    this.active.set(!isOwn);
+    if (!isOwn) {
+      event.preventDefault();
+    }
+  }
+
+  /**
+   * Open the upload dialog with the dropped files (own drop zones keep theirs).
+   *
+   * @param event - Drag event.
+   */
+  private onDrop(event: DragEvent): void {
+    const wasActive = this.active();
+    this.depth = 0;
+    this.active.set(false);
+    if (!wasActive || isOwnDropZone(event.target)) {
+      return;
+    }
+    event.preventDefault();
+    this.capture.openUpload([...(event.dataTransfer?.files ?? [])]);
   }
 }

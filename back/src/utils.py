@@ -16,6 +16,7 @@ from db import (
     Transcription,
     get_db,
 )
+from controllers.note_assets import is_note_asset
 from PyPDF2 import PdfReader
 from sqlalchemy.orm import Session
 
@@ -197,10 +198,20 @@ Content:
 """
 
 
-def walk_files():
+NOTE_HISTORY_ROOT = "/shared/.history"
+
+
+def walk_files() -> list[str]:
+    """
+    List every user file under /shared (note history and note assets excluded)
+
+    Returns:
+        list[str]: absolute file paths
+    """
     return [
         os.path.join(dp, filename)
         for dp, _, filenames in os.walk("/shared")
+        if not (dp + "/").startswith(NOTE_HISTORY_ROOT + "/")
         for filename in filenames
-        if filename != ".DS_Store"
+        if filename != ".DS_Store" and not is_note_asset(os.path.join(dp, filename))
     ]

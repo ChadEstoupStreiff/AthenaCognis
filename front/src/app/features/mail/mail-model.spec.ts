@@ -12,6 +12,7 @@ import {
   formatEmailName,
   joinRecipients,
   recipientLabel,
+  mailDateTime,
   mailTime,
   quoteBody,
   replySubject,
@@ -57,6 +58,12 @@ describe('mail model', () => {
     const now = new Date('2026-11-17T12:00:00Z');
     expect(mailTime('2026-11-17T11:00:00', now)).toMatch(/\d{1,2}:\d{2}/);
     expect(mailTime('2025-01-02T11:00:00', now)).toContain('2025');
+  });
+
+  it('shows the full date and time of an opened mail', () => {
+    const label = mailDateTime('2026-11-17T11:00:00');
+    expect(label).toContain('2026');
+    expect(label).toMatch(/\d{1,2}:\d{2}/);
   });
 
   it('detects HTML signatures', () => {

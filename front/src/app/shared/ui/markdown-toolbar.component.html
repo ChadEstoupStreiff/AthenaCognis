@@ -1,0 +1,281 @@
+<div class="toolbar" role="toolbar" aria-label="Formatting">
+  @for (tool of historyTools; track tool.tooltip) {
+    <button
+      type="button"
+      class="tool"
+      [pTooltip]="tool.tooltip"
+      [attr.aria-label]="tool.tooltip"
+      (click)="run(tool)"
+    >
+      <i [class]="tool.icon" aria-hidden="true"></i>
+    </button>
+  }
+  <button
+    type="button"
+    class="tool"
+    pTooltip="Find & replace (⌘F)"
+    aria-label="Find and replace"
+    (click)="editor()?.command('search')"
+  >
+    <i class="pi pi-search" aria-hidden="true"></i>
+  </button>
+
+  <span class="separator" aria-hidden="true"></span>
+
+  <button
+    type="button"
+    class="tool wide"
+    pTooltip="Heading"
+    aria-label="Heading"
+    (click)="headingMenu.toggle($event)"
+  >
+    <i class="pi pi-hashtag" aria-hidden="true"></i><i class="pi pi-angle-down caret"></i>
+  </button>
+  <p-menu #headingMenu [model]="headingItems" [popup]="true" appendTo="body" />
+
+  <button
+    type="button"
+    class="tool wide"
+    pTooltip="Font size"
+    aria-label="Font size"
+    (click)="sizeMenu.toggle($event)"
+  >
+    <span class="size-glyph">A<small>A</small></span
+    ><i class="pi pi-angle-down caret"></i>
+  </button>
+  <p-menu #sizeMenu [model]="sizeItems" [popup]="true" appendTo="body" />
+
+  <span class="separator" aria-hidden="true"></span>
+
+  @for (tool of inlineTools; track tool.label) {
+    <button
+      type="button"
+      class="tool"
+      [class]="tool.className"
+      [pTooltip]="tool.tooltip"
+      [attr.aria-label]="tool.tooltip"
+      (click)="inline(tool)"
+    >
+      {{ tool.label }}
+    </button>
+  }
+
+  <button
+    type="button"
+    class="tool"
+    pTooltip="Color and highlight"
+    aria-label="Color and highlight"
+    (click)="colorPanel.toggle($event)"
+  >
+    <i class="pi pi-palette" aria-hidden="true"></i>
+  </button>
+  <p-popover #colorPanel appendTo="body">
+    <div class="panel">
+      <span class="panel-label">Text color</span>
+      <div class="swatches">
+        @for (color of textColors; track color) {
+          <button
+            type="button"
+            class="swatch"
+            [style.background]="color"
+            [attr.aria-label]="'Text color ' + color"
+            (click)="style('color', color); colorPanel.hide()"
+          ></button>
+        }
+      </div>
+      <div class="custom">
+        <input
+          type="color"
+          [value]="customColor()"
+          (input)="pickCustomColor($event)"
+          aria-label="Custom color"
+        />
+        <button
+          type="button"
+          class="tool small"
+          (click)="style('color', customColor()); colorPanel.hide()"
+        >
+          Apply custom
+        </button>
+      </div>
+      <span class="panel-label">Highlight</span>
+      <div class="swatches">
+        @for (color of highlightColors; track color) {
+          <button
+            type="button"
+            class="swatch"
+            [style.background]="color"
+            [attr.aria-label]="'Highlight ' + color"
+            (click)="style('background-color', color); colorPanel.hide()"
+          ></button>
+        }
+      </div>
+    </div>
+  </p-popover>
+
+  <button
+    type="button"
+    class="tool"
+    pTooltip="Emoji (or type :name)"
+    aria-label="Emoji"
+    (click)="emojiPanel.toggle($event)"
+  >
+    <i class="pi pi-face-smile" aria-hidden="true"></i>
+  </button>
+  <p-popover #emojiPanel appendTo="body">
+    <div class="emoji-grid">
+      @for (item of emojis; track item.name) {
+        <button
+          type="button"
+          class="emoji"
+          [title]="':' + item.name + ':'"
+          [attr.aria-label]="item.name"
+          (click)="emoji(item.char)"
+        >
+          {{ item.char }}
+        </button>
+      }
+    </div>
+  </p-popover>
+
+  <span class="separator" aria-hidden="true"></span>
+
+  @for (tool of blockTools; track tool.tooltip) {
+    <button
+      type="button"
+      class="tool"
+      [pTooltip]="tool.tooltip"
+      [attr.aria-label]="tool.tooltip"
+      (click)="run(tool)"
+    >
+      <i [class]="tool.icon" aria-hidden="true"></i>
+    </button>
+  }
+
+  <button
+    type="button"
+    class="tool"
+    pTooltip="Table"
+    aria-label="Table"
+    (click)="tablePanel.toggle($event)"
+  >
+    <i class="pi pi-table" aria-hidden="true"></i>
+  </button>
+  <p-popover #tablePanel appendTo="body" (onHide)="tableHover.set({ rows: 0, columns: 0 })">
+    <div class="panel">
+      <span class="panel-label">New table</span>
+      <div class="grid" role="grid" aria-label="Table size">
+        @for (row of tableCells; track $index) {
+          <div class="grid-row" role="row">
+            @for (cell of row; track cell.columns) {
+              <button
+                type="button"
+                role="gridcell"
+                class="cell"
+                [class.active]="
+                  cell.rows <= tableHover().rows && cell.columns <= tableHover().columns
+                "
+                [attr.aria-label]="cell.columns + ' by ' + cell.rows"
+                (mouseenter)="tableHover.set(cell)"
+                (focus)="tableHover.set(cell)"
+                (click)="insertTable(cell); tablePanel.hide()"
+              ></button>
+            }
+          </div>
+        }
+      </div>
+      <span class="panel-label">
+        @if (tableHover().rows > 0) {
+          {{ tableHover().columns }} × {{ tableHover().rows }} (+ header)
+        } @else {
+          Pick a size
+        }
+      </span>
+      <span class="panel-label">Table at cursor</span>
+      <div class="table-tools">
+        @for (tool of tableTools; track tool.label) {
+          <button
+            type="button"
+            class="tool"
+            [pTooltip]="tool.label"
+            [attr.aria-label]="tool.label"
+            (click)="editTable(tool)"
+          >
+            <i [class]="tool.icon" aria-hidden="true"></i>
+          </button>
+        }
+      </div>
+    </div>
+  </p-popover>
+
+  <button
+    type="button"
+    class="tool wide"
+    pTooltip="Insert callout, collapsible, math, diagram, date"
+    aria-label="Insert block"
+    (click)="insertMenu.toggle($event)"
+  >
+    <i class="pi pi-plus-circle" aria-hidden="true"></i><i class="pi pi-angle-down caret"></i>
+  </button>
+  <p-menu #insertMenu [model]="insertItems" [popup]="true" appendTo="body" />
+
+  @if (files()) {
+    <span class="separator" aria-hidden="true"></span>
+    <button
+      type="button"
+      class="tool wide"
+      pTooltip="Image: upload, size, caption (or paste / drop one)"
+      aria-label="Image"
+      (click)="imageMenu.toggle($event)"
+    >
+      <i class="pi pi-image" aria-hidden="true"></i><i class="pi pi-angle-down caret"></i>
+    </button>
+    <p-menu #imageMenu [model]="imageItems" [popup]="true" appendTo="body" />
+    <button
+      type="button"
+      class="tool"
+      pTooltip="Attach a file (or drop one)"
+      aria-label="Attach file"
+      (click)="pickFiles()"
+    >
+      <i class="pi pi-paperclip" aria-hidden="true"></i>
+    </button>
+    <input #fileInput type="file" multiple hidden (change)="filesPicked($event)" />
+  }
+
+  @if (appLinks()) {
+    <button
+      type="button"
+      class="tool wide"
+      pTooltip="Link a person, tag, project, file or agenda"
+      aria-label="Link into the app"
+      (click)="linkMenu.toggle($event)"
+    >
+      <i class="pi pi-at" aria-hidden="true"></i><i class="pi pi-angle-down caret"></i>
+    </button>
+    <p-menu #linkMenu [model]="linkItems" [popup]="true" appendTo="body" />
+  }
+
+  <span class="spacer"></span>
+  <button
+    type="button"
+    class="tool"
+    pTooltip="Markdown cheatsheet"
+    aria-label="Markdown cheatsheet"
+    (click)="helpPanel.toggle($event)"
+  >
+    <i class="pi pi-question-circle" aria-hidden="true"></i>
+  </button>
+  <p-popover #helpPanel appendTo="body">
+    <table class="cheatsheet">
+      @for (row of cheatsheet; track row.syntax) {
+        <tr>
+          <td>
+            <code>{{ row.syntax }}</code>
+          </td>
+          <td>{{ row.result }}</td>
+        </tr>
+      }
+    </table>
+  </p-popover>
+</div>

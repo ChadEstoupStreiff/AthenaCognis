@@ -12,7 +12,7 @@ import type {
   UploadPlanItem,
   UploadRelations,
 } from '@domain/contracts';
-import { encodeFileSegment, parseSharedPath } from '@domain/files';
+import { encodeFileSegment, noteAssetName, parseSharedPath } from '@domain/files';
 import { ApiClient, backendUrl } from '../api/api-client';
 import { hasStatus } from '../api/api-error';
 import { DataSync } from '../state/data-sync.service';
@@ -150,6 +150,15 @@ export class FilesApi {
   }
 
   /**
+   * Every file, every day (quick listing, no text search).
+   *
+   * @returns Paths, newest first.
+   */
+  allFiles(): Promise<string[]> {
+    return this.api.get<string[]>(backendUrl('/files/search'), { params: { search_mode: 0 } });
+  }
+
+  /**
    * Files dated within a range, every folder (quick search, no text).
    *
    * @param start - First day.
@@ -222,6 +231,24 @@ export class FilesApi {
     const stored = await this.uploads.writeText(path, content, silent);
     this.sync.invalidate('notes');
     return stored;
+  }
+
+  /**
+   * Store a file (pasted image, attachment) in a note's `assets` folder. Assets stay out of the
+   * library: no recent entry, OCR, summary, transcription or preview.
+   *
+   * @param notePath - Note the file belongs to.
+   * @param file - File.
+   * @returns Inline URL of the stored file.
+   */
+  async uploadNoteAsset(notePath: string, file: File): Promise<string> {
+    const form = new FormData();
+    form.append('file', file, noteAssetName(file.name, file.type, new Date()));
+    const result = await this.api.post<{ url: string }>(
+      backendUrl(`/note-assets/${encodeFileSegment(notePath)}`),
+      form,
+    );
+    return result.url;
   }
 
   /**

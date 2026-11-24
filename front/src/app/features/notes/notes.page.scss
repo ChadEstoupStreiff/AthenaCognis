@@ -67,6 +67,44 @@
   font-size: 13px;
 }
 
+.outline {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-top: 8px;
+  border-top: 1px solid var(--ac-panel-border);
+
+  h3 {
+    margin: 0 0 4px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--ac-muted);
+  }
+}
+
+.outline-link {
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--p-text-color);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--p-content-hover-background);
+  }
+}
+
+.stats {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .workspace {
   display: flex;
   flex-direction: column;
@@ -108,7 +146,17 @@
 }
 
 .editor-pane {
-  padding: 0 4px;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+
+  .editor {
+    flex: 1;
+    min-height: 0;
+    padding: 0 4px;
+    overflow: auto;
+  }
 }
 
 .preview-pane {

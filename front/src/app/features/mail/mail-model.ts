@@ -115,7 +115,7 @@ export function senderLabel(mail: Pick<MailSummary, 'sender_name' | 'sender_emai
  * @returns Quoted text.
  */
 export function quoteBody(mail: MailDetail): string {
-  const date = utcDate(mail.date).toLocaleString(undefined, QUOTE_DATE_OPTIONS);
+  const date = mailDateTime(mail.date);
   const quoted = mail.body_text
     .split('\n')
     .map((line) => `> ${line}`)
@@ -183,6 +183,16 @@ export function mailTime(value: string, now: Date = new Date()): string {
   return date.getFullYear() === now.getFullYear()
     ? DAY_FORMAT.format(date)
     : YEAR_FORMAT.format(date);
+}
+
+/**
+ * Full date and time of an opened mail.
+ *
+ * @param value - Backend date (naive UTC).
+ * @returns Label.
+ */
+export function mailDateTime(value: string): string {
+  return utcDate(value).toLocaleString(undefined, QUOTE_DATE_OPTIONS);
 }
 
 const DAY_MS = 86_400_000;
@@ -384,7 +394,7 @@ export function forwardSubject(subject: string): string {
  * @returns Block placed below the new text.
  */
 export function forwardBody(mail: MailDetail): string {
-  const date = utcDate(mail.date).toLocaleString(undefined, QUOTE_DATE_OPTIONS);
+  const date = mailDateTime(mail.date);
   const from =
     mail.sender_name === '' ? mail.sender_email : `${mail.sender_name} <${mail.sender_email}>`;
   const headers = [

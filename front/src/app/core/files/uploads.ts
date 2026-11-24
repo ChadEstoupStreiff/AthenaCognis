@@ -137,13 +137,29 @@ export class Uploads {
     if (parts === null) {
       throw new Error('Not a shared file path.');
     }
+    const blob = new Blob([content], { type: guessMime(path) });
+    await this.writeBlob(
+      blob,
+      { folder: parts.folder, date: parts.date, name: parts.name },
+      silent,
+    );
+    return path;
+  }
+
+  /**
+   * Create or overwrite a file without relations (folder may be nested, e.g. `notes/x/assets`).
+   *
+   * @param blob - Content.
+   * @param target - Folder, date and final name.
+   * @param silent - Skip error toasts.
+   */
+  async writeBlob(blob: Blob, target: UploadTarget, silent = false): Promise<void> {
     const form = new FormData();
-    form.append('files', new Blob([content], { type: guessMime(path) }), parts.name);
+    form.append('files', blob, target.name);
     await this.api.post(backendUrl('/files/upload'), form, {
-      params: { subdirectory: parts.folder, date: parts.date },
+      params: { subdirectory: target.folder, date: target.date },
       silent,
     });
-    return path;
   }
 
   /**

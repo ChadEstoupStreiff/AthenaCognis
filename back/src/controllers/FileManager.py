@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Dict, Iterator, List, Literal, Optional, Tuple, Union
 
 from controllers.NoteManager import NoteManager
+from controllers.note_assets import is_note_asset
 from controllers.SummarizeManager import SummarizeManager
 from db import get_db
 from db.models import ProjectFile, TagFile
@@ -225,6 +226,8 @@ class FileManager:
                         continue
 
                     file = os.path.join(dp, filename)
+                    if is_note_asset(file):
+                        continue
                     mime_file = guess_mime(file) or "application/octet-stream"
 
                     try:

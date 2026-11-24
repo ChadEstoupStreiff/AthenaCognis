@@ -31,6 +31,21 @@
         <p class="ac-muted empty">No notes on {{ day() }}.</p>
       }
     </nav>
+    @if (notePath() && headings().length > 0) {
+      <nav class="outline" aria-label="Outline">
+        <h3>Outline</h3>
+        @for (heading of headings(); track heading.line) {
+          <a
+            class="outline-link"
+            [style.padding-left.px]="(heading.level - 1) * outlineIndent + 8"
+            (click)="goToHeading(heading, $index)"
+            (keydown.enter)="goToHeading(heading, $index)"
+            tabindex="0"
+            >{{ heading.text || '(untitled)' }}</a
+          >
+        }
+      </nav>
+    }
   </aside>
 
   <section class="workspace">
@@ -46,7 +61,38 @@
           aria-label="Note name"
         />
         <ac-save-status [status]="autosave.status()" />
+        <span class="stats ac-muted" [pTooltip]="stats().characters + ' characters'">
+          {{ stats().words }} words · {{ stats().readingMinutes }} min read
+        </span>
         <span class="spacer"></span>
+        @if (layout() === 'split') {
+          <p-button
+            icon="pi pi-arrows-v"
+            [text]="!syncScroll()"
+            [outlined]="syncScroll()"
+            severity="secondary"
+            pTooltip="Sync editor and preview scrolling"
+            ariaLabel="Sync scrolling"
+            (onClick)="toggleSyncScroll()"
+          />
+        }
+        <p-button
+          icon="pi pi-history"
+          [text]="true"
+          severity="secondary"
+          pTooltip="Version history"
+          ariaLabel="Version history"
+          (onClick)="showHistory.set(true)"
+        />
+        <p-button
+          icon="pi pi-download"
+          [text]="true"
+          severity="secondary"
+          pTooltip="Export"
+          ariaLabel="Export"
+          (onClick)="exportMenu.toggle($event)"
+        />
+        <p-menu #exportMenu [model]="exportItems" [popup]="true" appendTo="body" />
         <p-selectbutton
           [options]="layouts"
           optionValue="value"
@@ -85,7 +131,22 @@
       >
         @if (layout() !== 'preview') {
           <div class="pane ac-panel editor-pane">
-            <ac-markdown-editor [value]="content()" (valueChange)="onEdit($event)" />
+            @if (isMarkdown()) {
+              <ac-markdown-toolbar
+                [editor]="editor()"
+                [files]="true"
+                [appLinks]="true"
+                (embedFile)="showEmbedPicker.set(true)"
+                (insertAgenda)="insertAgenda()"
+              />
+            }
+            <ac-markdown-editor
+              class="editor"
+              [value]="content()"
+              [fileUploader]="isMarkdown() ? uploadFile : null"
+              [completionSources]="isMarkdown() ? completions.sources : []"
+              (valueChange)="onEdit($event)"
+            />
           </div>
         }
         @if (layout() === 'split') {
@@ -99,15 +160,34 @@
           />
         }
         @if (layout() !== 'edit') {
-          <div class="pane ac-panel preview-pane">
+          <div #previewPane class="pane ac-panel preview-pane">
             @if (isMarkdown()) {
-              <ac-markdown-view [source]="content()" />
+              <ac-markdown-view
+                [source]="content()"
+                [interactiveTasks]="true"
+                (taskToggle)="toggleTask($event)"
+                (rendered)="refreshScrollSync()"
+              />
             } @else {
               <pre>{{ content() }}</pre>
             }
           </div>
         }
       </div>
+
+      <ac-note-history-dialog
+        [(visible)]="showHistory"
+        [path]="path"
+        [current]="content()"
+        (restore)="restoreVersion($event)"
+      />
+      <ac-file-picker-dialog
+        [(visible)]="showEmbedPicker"
+        title="Embed files"
+        confirmLabel="Embed"
+        [exclude]="[path]"
+        (picked)="embedFiles($event)"
+      />
     } @else {
       <div class="ac-panel intro">
         <i class="pi pi-pen-to-square" aria-hidden="true"></i>

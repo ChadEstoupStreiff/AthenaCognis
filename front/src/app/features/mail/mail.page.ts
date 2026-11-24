@@ -58,6 +58,7 @@ import {
   FLAG_META,
   isActivityToday,
   listName,
+  mailDateTime,
   mailTime,
   PRIORITY_VIEW,
   senderLabel,
@@ -202,6 +203,7 @@ export class MailPage {
   protected readonly avatarSize = AVATAR_SIZE;
   protected readonly largeAvatarSize = LARGE_AVATAR_SIZE;
   protected readonly mailTime = mailTime;
+  protected readonly mailDateTime = mailDateTime;
 
   protected readonly mode = signal<'mail' | 'senders' | 'drafts' | 'outbox' | 'trash'>('mail');
   protected readonly view = signal<MailView>('priority');

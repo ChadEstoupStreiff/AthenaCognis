@@ -487,7 +487,7 @@
                     <ac-mail-addresses label="Cc" [value]="mail.cc" />
                   }
                 </div>
-                <time class="ac-muted">{{ mailTime(mail.date) }}</time>
+                <time class="ac-muted">{{ mailDateTime(mail.date) }}</time>
               </div>
               @if (mail.mailbox === 'inbox') {
                 <ac-resize-handle

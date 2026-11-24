@@ -6,6 +6,7 @@ import traceback
 import zipfile
 from datetime import datetime
 from io import BytesIO
+from pathlib import Path
 from typing import List
 
 from controllers.FileManager import (
@@ -15,6 +16,8 @@ from controllers.FileManager import (
     SearchEngine,
 )
 from controllers.NoteManager import NoteManager
+from controllers.note_assets import move_note_assets
+from controllers.note_history import NoteHistory, NoteHistoryError
 from controllers.OCRManager import OCRManager
 from controllers.PreviewManager import PreviewManager
 from controllers.SummarizeManager import SummarizeManager
@@ -34,6 +37,23 @@ from pydub import AudioSegment
 router = APIRouter(prefix="/files", tags=["Files"])
 
 register_heif_opener()
+
+
+def follow_note_move(old_path: Path, new_path: Path) -> None:
+    """
+    Move the asset folder and version history of a moved note (errors are logged only)
+
+    Args:
+        old_path (Path): previous path
+        new_path (Path): new path (already moved)
+    Returns:
+        None
+    """
+    try:
+        move_note_assets(old_path, new_path)
+        NoteHistory().move(old_path, new_path)
+    except (OSError, NoteHistoryError) as error:
+        logging.error(f"Could not move assets or history of {old_path}: {error}")
 
 
 def add_recent_added_file(file: str):
@@ -351,6 +371,7 @@ async def move_file(
         finally:
             db.close()
         os.rename(file, new_file_path)
+        follow_note_move(Path(file), Path(new_file_path))
 
         return new_file_path
     except FileNotFoundError as e:

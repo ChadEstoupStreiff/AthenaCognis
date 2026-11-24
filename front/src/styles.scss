@@ -257,6 +257,110 @@
       border: none;
       border-top: 1px solid var(--ac-panel-border);
     }
+    details {
+      margin: 0 0 0.9em;
+      padding: 6px 12px;
+      border: 1px solid var(--ac-panel-border);
+      border-radius: 8px;
+    }
+    summary {
+      font-weight: 600;
+      cursor: pointer;
+    }
+    figure {
+      margin: 0 0 0.9em;
+    }
+    figcaption {
+      color: var(--ac-muted);
+      font-size: 0.9em;
+      text-align: center;
+    }
+    .callout {
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--ac-callout, var(--p-primary-color)) 8%, transparent);
+      border-left-color: var(--ac-callout, var(--p-primary-color));
+      color: inherit;
+    }
+    .callout-title {
+      margin-bottom: 0.2em;
+      font-weight: 600;
+      color: var(--ac-callout, var(--p-primary-color));
+    }
+    .callout-note {
+      --ac-callout: #2563eb;
+    }
+    .callout-tip {
+      --ac-callout: #16a34a;
+    }
+    .callout-important {
+      --ac-callout: #7c3aed;
+    }
+    .callout-warning {
+      --ac-callout: #ca8a04;
+    }
+    .callout-caution {
+      --ac-callout: #dc2626;
+    }
+    .math-block {
+      margin: 0 0 0.9em;
+      overflow-x: auto;
+    }
+    .mermaid-diagram {
+      margin: 0 0 0.9em;
+      text-align: center;
+
+      svg {
+        max-width: 100%;
+        height: auto;
+      }
+    }
+    .mermaid-error {
+      border-left: 3px solid var(--p-red-500, #dc2626);
+    }
+    .file-embed {
+      display: inline-flex;
+      flex-direction: column;
+      gap: 6px;
+      max-width: 260px;
+      margin: 0 8px 8px 0;
+      padding: 6px;
+      border: 1px solid var(--ac-panel-border);
+      border-radius: 10px;
+      color: inherit;
+      text-decoration: none;
+      vertical-align: top;
+
+      &:hover {
+        border-color: var(--p-primary-color);
+      }
+    }
+    .file-embed-thumb {
+      max-height: 160px;
+      border-radius: 6px;
+      object-fit: cover;
+
+      &.broken {
+        display: none;
+      }
+    }
+    .file-embed-name {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.9em;
+      overflow-wrap: anywhere;
+    }
+    a[href^='/people/'],
+    a[href^='/projects/'],
+    a[href^='/library?tags='] {
+      padding: 0 0.3em;
+      border-radius: 5px;
+      background: color-mix(in srgb, var(--p-primary-color) 12%, transparent);
+      text-decoration: none;
+    }
+    &.interactive input[type='checkbox'] {
+      cursor: pointer;
+    }
   }
 
   /* Clamped preview: blocks flattened to plain lines, faded when cut. */

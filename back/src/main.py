@@ -81,6 +81,14 @@ import views.notes
 
 app.include_router(views.notes.router)
 
+import views.note_history
+
+app.include_router(views.note_history.router)
+
+import views.note_assets
+
+app.include_router(views.note_assets.router)
+
 import views.ollama
 
 app.include_router(views.ollama.router)

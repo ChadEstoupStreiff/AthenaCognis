@@ -1,9 +1,11 @@
 import {
+  afterRenderEffect,
   ChangeDetectionStrategy,
   Component,
   computed,
   DestroyRef,
   effect,
+  type ElementRef,
   inject,
   input,
   resource,
@@ -13,9 +15,11 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import type { MenuItem } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { DatePickerModule } from 'primeng/datepicker';
 import { InputTextModule } from 'primeng/inputtext';
+import { MenuModule } from 'primeng/menu';
 import { SelectButtonModule } from 'primeng/selectbutton';
 import { TooltipModule } from 'primeng/tooltip';
 import {
@@ -24,31 +28,63 @@ import {
   fileNameOf,
   isSharedFilePath,
   parseSharedPath,
+  splitExtension,
 } from '@domain/files';
 import { formatFileTime, formatLocalDate, parseLocalDate } from '@domain/time';
 import { ACTIVITY_PROJECT } from '@domain/contracts';
+import { ActivityApi } from '../../core/activity/activity.api';
 import { FilesApi } from '../../core/files/files.api';
+import { NoteHistoryApi } from '../../core/files/note-history.api';
+import { Logger } from '../../core/logging/logger.service';
 import { ProjectsApi } from '../../core/projects/projects.api';
 import { NotifyService } from '../../core/notify/notify.service';
 import { AutosaveController } from '../../core/state/autosave';
 import { DataSync } from '../../core/state/data-sync.service';
+import { FilePickerDialogComponent } from '../../shared/files/file-picker-dialog.component';
 import { viewerCommands } from '../../shared/files/file-row';
+import {
+  extractHeadings,
+  type Heading,
+  textStats,
+  toggleTask,
+} from '../../shared/text/markdown-structure';
 import { AiAssistComponent } from '../../shared/ui/ai-assist.component';
-import { MarkdownEditorComponent } from '../../shared/ui/markdown-editor.component';
+import {
+  type FileUploader,
+  MarkdownEditorComponent,
+} from '../../shared/ui/markdown-editor.component';
+import { MarkdownToolbarComponent } from '../../shared/ui/markdown-toolbar.component';
 import { MarkdownViewComponent } from '../../shared/ui/markdown-view.component';
 import { persistedWidth } from '../../shared/ui/persisted-width';
 import { ResizeHandleComponent } from '../../shared/ui/resize-handle.component';
 import { SaveStatusComponent } from '../../shared/ui/save-status.component';
+import { AGENDA_SOURCE, agendaMarkdown } from './note-agenda';
+import { NoteCompletions } from './note-completions';
+import { type ExportFormat, NoteExport } from './note-export';
+import { NoteHistoryDialogComponent } from './note-history-dialog.component';
+import { fileMarkdown } from './note-references';
+import { NoteRelations } from './note-relations';
+import { NoteScrollSync } from './note-scroll-sync';
 
 /** Editor layouts. */
 type NotesLayout = 'split' | 'edit' | 'preview';
 
+/** Pending autosave. */
+interface NoteDraft {
+  readonly path: string;
+  readonly content: string;
+}
+
 const NOTES_FOLDER = 'notes';
 const PREVIEW_WIDTH_KEY = 'ac.notes.previewWidth';
+const SYNC_SCROLL_KEY = 'ac.notes.syncScroll';
 /** No stored width: editor and preview split the space evenly. */
 const EVEN_SPLIT = 0;
 const NEW_NOTE = '# New note\n\n';
 const MAX_NOTE_BYTES = 5_242_880;
+const DAY_MS = 86_400_000;
+const HEADING_SELECTOR = 'h1, h2, h3, h4, h5, h6';
+const OUTLINE_INDENT_PX = 12;
 const AI_CONTEXT =
   'This is a markdown note: keep markdown formatting, use bullet points and emojis when useful.';
 const LAYOUTS = [
@@ -57,7 +93,30 @@ const LAYOUTS = [
   { value: 'preview', icon: 'pi pi-eye', label: 'Preview' },
 ];
 
-/** Daily Markdown notes with live preview, AI help and autosave. */
+/**
+ * Read the persisted scroll-sync preference.
+ *
+ * @returns `true` unless turned off.
+ */
+function storedSyncScroll(): boolean {
+  try {
+    return localStorage.getItem(SYNC_SCROLL_KEY) !== '0';
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Message of an unknown error.
+ *
+ * @param error - Error.
+ * @returns Message, if any.
+ */
+function messageOf(error: unknown): string | undefined {
+  return error instanceof Error ? error.message : undefined;
+}
+
+/** Daily Markdown notes with live preview, AI help, app links, history and autosave. */
 @Component({
   selector: 'ac-notes-page',
   imports: [
@@ -65,14 +124,19 @@ const LAYOUTS = [
     ButtonModule,
     DatePickerModule,
     InputTextModule,
+    MenuModule,
     SelectButtonModule,
     TooltipModule,
     AiAssistComponent,
+    FilePickerDialogComponent,
     MarkdownEditorComponent,
+    MarkdownToolbarComponent,
     MarkdownViewComponent,
+    NoteHistoryDialogComponent,
     ResizeHandleComponent,
     SaveStatusComponent,
   ],
+  providers: [NoteCompletions, NoteRelations],
   templateUrl: './notes.page.html',
   styleUrl: './notes.page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -83,7 +147,15 @@ export class NotesPage {
   private readonly notify = inject(NotifyService);
   private readonly sync = inject(DataSync);
   private readonly router = inject(Router);
-  private readonly editor = viewChild(MarkdownEditorComponent);
+  private readonly logger = inject(Logger);
+  private readonly history = inject(NoteHistoryApi);
+  private readonly relations = inject(NoteRelations);
+  private readonly exporter = inject(NoteExport);
+  private readonly activity = inject(ActivityApi);
+  private readonly scrollSync = new NoteScrollSync();
+  protected readonly completions = inject(NoteCompletions);
+  protected readonly editor = viewChild(MarkdownEditorComponent);
+  private readonly previewPane = viewChild<ElementRef<HTMLElement>>('previewPane');
 
   /** Query parameter: note being edited. */
   readonly path = input<string | undefined>(undefined);
@@ -93,10 +165,14 @@ export class NotesPage {
   readonly create = input<string | undefined>(undefined);
 
   protected readonly layouts = LAYOUTS;
+  protected readonly outlineIndent = OUTLINE_INDENT_PX;
   protected readonly layout = signal<NotesLayout>('split');
   protected readonly content = signal('');
   protected readonly loaded = signal(false);
   protected readonly renaming = signal('');
+  protected readonly syncScroll = signal(storedSyncScroll());
+  protected readonly showHistory = signal(false);
+  protected readonly showEmbedPicker = signal(false);
   protected readonly aiContext = AI_CONTEXT;
   protected readonly aiSource = (): string => this.editor()?.selectedText() ?? this.content();
   protected readonly notePath = computed(() => {
@@ -111,11 +187,41 @@ export class NotesPage {
   protected readonly isMarkdown = computed(() =>
     ['md', 'markdown', 'txt'].includes(extensionOf(this.notePath() ?? '')),
   );
+  protected readonly headings = computed(() => extractHeadings(this.content()));
+  protected readonly stats = computed(() => textStats(this.content()));
+  protected readonly exportItems: MenuItem[] = [
+    { label: 'HTML', icon: 'pi pi-code', command: () => void this.exportNote('html') },
+    { label: 'PDF (print)', icon: 'pi pi-file-pdf', command: () => void this.exportNote('pdf') },
+    { label: 'Word (.doc)', icon: 'pi pi-file-word', command: () => void this.exportNote('word') },
+  ];
 
+  /** Notes of the day (assets in `notes/<note>/assets` are skipped). */
   protected readonly notes = resource({
     params: () => ({ day: this.day(), version: this.sync.version('notes')() }),
-    loader: ({ params }) => this.files.listFolder(NOTES_FOLDER, params.day, params.day),
+    loader: async ({ params }) =>
+      (await this.files.listFolder(NOTES_FOLDER, params.day, params.day)).filter((path) =>
+        isSharedFilePath(path),
+      ),
   });
+
+  /**
+   * Store a pasted, dropped or picked file in `notes/<note name>/assets` of the current note.
+   *
+   * @param file - File.
+   * @returns Inline URL of the stored file.
+   */
+  protected readonly uploadFile: FileUploader = async (file) => {
+    const path = this.notePath();
+    if (path === null) {
+      throw new Error('No note is open.');
+    }
+    try {
+      return await this.files.uploadNoteAsset(path, file);
+    } catch (error) {
+      this.notify.error(`${file.name} not added.`, messageOf(error));
+      throw error;
+    }
+  };
 
   /** Notes written by Activity generation (marked with a bolt). */
   private readonly generatedResource = resource({
@@ -130,17 +236,12 @@ export class NotesPage {
   );
 
   protected readonly previewWidth = persistedWidth(PREVIEW_WIDTH_KEY, EVEN_SPLIT);
-  protected readonly autosave = new AutosaveController<{ path: string; content: string }>(
-    (value) => this.files.writeText(value.path, value.content, true).then(() => undefined),
+  protected readonly autosave = new AutosaveController<NoteDraft>(
+    (draft) => this.save(draft),
     inject(DestroyRef),
   );
 
-  /** Restore the even editor / preview split. */
-  protected resetPreviewWidth(): void {
-    this.previewWidth.set(EVEN_SPLIT);
-  }
-
-  /** Load the note whenever the path changes. */
+  /** Load the note whenever the path changes; keep the scroll sync attached. */
   constructor() {
     effect(() => {
       const path = this.notePath();
@@ -151,6 +252,19 @@ export class NotesPage {
         untracked(() => void this.createNote());
       }
     });
+    afterRenderEffect(() => {
+      this.layout();
+      this.syncScroll();
+      this.refreshScrollSync();
+    });
+    inject(DestroyRef).onDestroy(() => {
+      this.scrollSync.detach();
+    });
+  }
+
+  /** Restore the even editor / preview split. */
+  protected resetPreviewWidth(): void {
+    this.previewWidth.set(EVEN_SPLIT);
   }
 
   /**
@@ -202,6 +316,15 @@ export class NotesPage {
     }
   }
 
+  /**
+   * Tick or untick a task clicked in the preview.
+   *
+   * @param index - Task index.
+   */
+  protected toggleTask(index: number): void {
+    this.onEdit(toggleTask(this.content(), index));
+  }
+
   /** Create a note for the selected day and open it. */
   protected async createNote(): Promise<void> {
     const path = buildSharedPath({
@@ -213,7 +336,7 @@ export class NotesPage {
     this.open(path);
   }
 
-  /** Rename the current note. */
+  /** Rename the current note (its assets and history follow on the backend). */
   protected async rename(): Promise<void> {
     const path = this.notePath();
     const name = this.renaming().trim();
@@ -223,6 +346,7 @@ export class NotesPage {
     await this.autosave.flush();
     const target = extensionOf(name) === '' ? `${name}.md` : name;
     const newPath = await this.files.move({ path, name: target });
+    this.relations.forget(path);
     this.notify.success('Note renamed.');
     this.open(newPath);
   }
@@ -250,6 +374,131 @@ export class NotesPage {
   }
 
   /**
+   * Smoothly scroll to a heading (the preview follows the editor when scroll sync is on).
+   *
+   * @param heading - Heading.
+   * @param index - Heading index.
+   */
+  protected goToHeading(heading: Heading, index: number): void {
+    const layout = this.layout();
+    if (layout !== 'preview') {
+      this.editor()?.revealLine(heading.line);
+    }
+    const followsEditor = layout === 'split' && this.syncScroll();
+    if (layout !== 'edit' && !followsEditor) {
+      const target = this.previewPane()?.nativeElement.querySelectorAll(HEADING_SELECTOR)[index];
+      target?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+  }
+
+  /** Turn editor / preview scroll sync on or off. */
+  protected toggleSyncScroll(): void {
+    const enabled = !this.syncScroll();
+    this.syncScroll.set(enabled);
+    try {
+      localStorage.setItem(SYNC_SCROLL_KEY, enabled ? '1' : '0');
+    } catch {
+      // Preference only: storage may be unavailable.
+    }
+  }
+
+  /** Recompute scroll anchors (after each preview render or layout change). */
+  protected refreshScrollSync(): void {
+    const scroller = this.editor()?.scroller() ?? null;
+    const preview = this.previewPane()?.nativeElement;
+    if (
+      !this.syncScroll() ||
+      this.layout() !== 'split' ||
+      scroller === null ||
+      preview === undefined
+    ) {
+      this.scrollSync.detach();
+      return;
+    }
+    const tops = this.editor()?.lineTops(this.headings().map((heading) => heading.line)) ?? [];
+    this.scrollSync.attach({ editor: scroller, preview, editorHeadingTops: tops });
+  }
+
+  /**
+   * Restore a previous version (the current text is saved as a version first).
+   *
+   * @param content - Version content.
+   */
+  protected async restoreVersion(content: string): Promise<void> {
+    const path = this.notePath();
+    if (path === null) {
+      return;
+    }
+    await this.autosave.flush();
+    await this.history.snapshot(path, true).catch((error: unknown) => {
+      this.logger.warn('Could not save the current version before restoring.', error);
+    });
+    this.onEdit(content);
+    this.notify.success('Version restored.');
+  }
+
+  /**
+   * Embed picked files as preview cards.
+   *
+   * @param paths - Picked files.
+   */
+  protected embedFiles(paths: readonly string[]): void {
+    const cards = paths.flatMap((path) => {
+      const markdown = fileMarkdown(path, splitExtension(fileNameOf(path)).stem, true);
+      return markdown === null ? [] : [markdown];
+    });
+    if (cards.length > 0) {
+      this.editor()?.block(cards.join('\n'));
+    }
+  }
+
+  /** Insert the agenda of the note's day. */
+  protected async insertAgenda(): Promise<void> {
+    const day = parseLocalDate(this.day()) ?? new Date();
+    try {
+      const items = await this.activity.feed(AGENDA_SOURCE, {
+        start: day,
+        end: new Date(day.getTime() + DAY_MS),
+      });
+      this.editor()?.block(agendaMarkdown(items, this.day()));
+    } catch (error) {
+      this.notify.warn(
+        'Agenda unavailable.',
+        messageOf(error) ?? 'Add the Agenda source on the Activity page.',
+      );
+    }
+  }
+
+  /**
+   * Export the note with its images.
+   *
+   * @param format - Format.
+   */
+  protected async exportNote(format: ExportFormat): Promise<void> {
+    const title = splitExtension(fileNameOf(this.notePath() ?? 'note')).stem;
+    try {
+      await this.exporter.export(this.content(), title, format);
+    } catch (error) {
+      this.notify.error('Export failed.', messageOf(error));
+    }
+  }
+
+  /**
+   * Write a draft, then keep a version and link mentioned entities (best effort).
+   *
+   * @param draft - Path and content.
+   */
+  private async save(draft: NoteDraft): Promise<void> {
+    await this.files.writeText(draft.path, draft.content, true);
+    this.history.snapshot(draft.path).catch((error: unknown) => {
+      this.logger.warn('Note version not saved.', error);
+    });
+    this.relations.sync(draft.path, draft.content).catch((error: unknown) => {
+      this.logger.warn('Note links not synced.', error);
+    });
+  }
+
+  /**
    * Load a note (pending edits of the previous note are saved first).
    *
    * @param path - Note path, or `null`.
@@ -268,6 +517,10 @@ export class NotesPage {
     this.loaded.set(!head.truncated);
     if (head.truncated) {
       this.notify.warn('This note is too large to edit here.');
+      return;
     }
+    this.history.snapshot(path, true).catch((error: unknown) => {
+      this.logger.warn('Opening version not saved.', error);
+    });
   }
 }
