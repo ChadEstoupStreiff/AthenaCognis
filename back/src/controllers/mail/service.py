@@ -2,7 +2,7 @@
 
 import logging
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
 from sqlalchemy import select
@@ -345,12 +345,12 @@ def _fetch_raw(message_id: str) -> bytes:
     return transport_for(link).fetch_raw(ref)
 
 
-def mark_all_read(account_id: str | None, view: str) -> int:
+def mark_all_read(account_ids: Sequence[str], view: str) -> int:
     """
     Mark every unread message of a view read (locally only)
 
     Args:
-        account_id (str | None): only this account
+        account_ids (Sequence[str]): only these accounts, empty for all
         view (str): mailbox view
     Returns:
         int: messages marked
@@ -362,8 +362,8 @@ def mark_all_read(account_id: str | None, view: str) -> int:
             .outerjoin(MailSender, MailSender.email == MailMessage.sender_email)
             .where(store.view_filter(view, priority), MailMessage.is_read.is_(False))
         )
-        if account_id:
-            statement = statement.where(MailMessage.account_id == account_id)
+        if account_ids:
+            statement = statement.where(store.account_filter(account_ids))
         messages = list(session.scalars(statement))
         for message in messages:
             message.is_read = True
@@ -410,12 +410,12 @@ def summarize_message(message_id: str, llm: LlmCall) -> str:
     return message_id
 
 
-def digest(account_id: str | None, llm: LlmCall) -> str:
+def digest(account_ids: Sequence[str], llm: LlmCall) -> str:
     """
     Brief the unread inbox (priority first) with the AI
 
     Args:
-        account_id (str | None): only this account
+        account_ids (Sequence[str]): only these accounts, empty for all
         llm (LlmCall): prompt → answer
     Returns:
         str: markdown briefing
@@ -424,7 +424,7 @@ def digest(account_id: str | None, llm: LlmCall) -> str:
     """
     with store.session_scope() as session:
         query = store.MessageQuery(
-            view="unread", account_id=account_id, limit=MAX_DIGEST_MAILS
+            view="unread", account_ids=tuple(account_ids), limit=MAX_DIGEST_MAILS
         )
         ids = [str(row["id"]) for row in store.list_messages(session, query)]
         briefs = [

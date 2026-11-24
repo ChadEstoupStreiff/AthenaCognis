@@ -27,7 +27,8 @@ import { DataSync } from '../state/data-sync.service';
 /** Filters of the message list. */
 export interface MailListQuery {
   readonly view: MailView;
-  readonly accountId: string | null;
+  /** Only these accounts, empty for all. */
+  readonly accountIds: readonly string[];
   readonly search: string;
   readonly sender: string | null;
   readonly limit: number;
@@ -55,6 +56,16 @@ function senderUrl(email: string): string {
  */
 function messageUrl(id: string): string {
   return backendUrl(`/mail/messages/${encodeURIComponent(id)}`);
+}
+
+/**
+ * Account filter as a query parameter.
+ *
+ * @param accountIds - Account ids, empty for all.
+ * @returns Comma-separated ids, null (dropped) for all.
+ */
+function idsParam(accountIds: readonly string[]): string | null {
+  return accountIds.length === 0 ? null : accountIds.join(',');
 }
 
 /** Mail client: accounts, sync, messages, senders, AI helpers. */
@@ -139,12 +150,12 @@ export class MailApi {
   /**
    * Fetch new messages.
    *
-   * @param accountId - Only this account, null for all.
+   * @param accountIds - Only these accounts, empty for all.
    * @returns Results per account.
    */
-  async syncNow(accountId: string | null): Promise<MailSyncResult[]> {
+  async syncNow(accountIds: readonly string[]): Promise<MailSyncResult[]> {
     const results = await this.api.post<MailSyncResult[]>(backendUrl('/mail/sync'), undefined, {
-      params: { account_id: accountId },
+      params: { account_ids: idsParam(accountIds) },
     });
     this.sync.invalidate('mail');
     return results;
@@ -160,7 +171,7 @@ export class MailApi {
     return this.api.get<MailSummary[]>(backendUrl('/mail/messages'), {
       params: {
         view: query.view,
-        account_id: query.accountId,
+        account_ids: idsParam(query.accountIds),
         search: query.search.trim() === '' ? null : query.search,
         sender: query.sender,
         contact_id: query.contactId ?? null,
@@ -173,11 +184,13 @@ export class MailApi {
   /**
    * Unread count per view.
    *
-   * @param accountId - Only this account.
+   * @param accountIds - Only these accounts, empty for all.
    * @returns View → count.
    */
-  counts(accountId: string | null): Promise<Partial<Record<MailView, number>>> {
-    return this.api.get(backendUrl('/mail/counts'), { params: { account_id: accountId } });
+  counts(accountIds: readonly string[]): Promise<Partial<Record<MailView, number>>> {
+    return this.api.get(backendUrl('/mail/counts'), {
+      params: { account_ids: idsParam(accountIds) },
+    });
   }
 
   /**
@@ -207,13 +220,13 @@ export class MailApi {
    * Mark a whole view read.
    *
    * @param view - View.
-   * @param accountId - Only this account.
+   * @param accountIds - Only these accounts, empty for all.
    * @returns Messages marked.
    */
-  async markAllRead(view: MailView, accountId: string | null): Promise<number> {
+  async markAllRead(view: MailView, accountIds: readonly string[]): Promise<number> {
     const result = await this.api.post<{ marked: number }>(backendUrl('/mail/messages/read-all'), {
       view,
-      account_id: accountId,
+      account_ids: accountIds,
     });
     this.sync.invalidate('mail');
     return result.marked;
@@ -271,12 +284,12 @@ export class MailApi {
   /**
    * AI briefing of unread mail.
    *
-   * @param accountId - Only this account.
+   * @param accountIds - Only these accounts, empty for all.
    * @returns Markdown.
    */
-  async digest(accountId: string | null): Promise<string> {
+  async digest(accountIds: readonly string[]): Promise<string> {
     const result = await this.api.post<{ markdown: string }>(backendUrl('/mail/digest'), {
-      account_id: accountId,
+      account_ids: accountIds,
     });
     return result.markdown;
   }

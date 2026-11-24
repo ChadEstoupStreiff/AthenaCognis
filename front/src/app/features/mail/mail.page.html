@@ -8,16 +8,43 @@
         (onClick)="compose.set({ replyTo: null, to: null })"
       />
       @if (accountList().length > 1) {
-        <p-select
-          [options]="accountOptions()"
+        <p-multiselect
+          [options]="accountList()"
           optionLabel="email"
           optionValue="id"
-          [ngModel]="accountId()"
-          (ngModelChange)="accountId.set($event)"
+          [ngModel]="accountIds()"
+          (ngModelChange)="accountIds.set($event ?? [])"
+          placeholder="All accounts"
+          [showToggleAll]="true"
+          [filter]="false"
           [fluid]="true"
           size="small"
-          aria-label="Account"
-        />
+          appendTo="body"
+          ariaLabel="Accounts"
+        >
+          <ng-template #item let-account>
+            <span class="account-option">
+              <span
+                class="account-bar"
+                [style.background]="account.color"
+                aria-hidden="true"
+              ></span>
+              <span class="account-email">{{ account.email }}</span>
+            </span>
+          </ng-template>
+        </p-multiselect>
+        <ul class="account-legend" aria-label="Account colors">
+          @for (account of legendAccounts(); track account.id) {
+            <li>
+              <span
+                class="legend-swatch"
+                [style.background]="account.color"
+                aria-hidden="true"
+              ></span>
+              <span class="account-email">{{ account.email }}</span>
+            </li>
+          }
+        </ul>
       }
       <nav class="views" aria-label="Mailbox views">
         @for (meta of views; track meta.view) {

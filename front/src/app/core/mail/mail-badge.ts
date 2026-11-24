@@ -38,7 +38,7 @@ export class MailBadge {
       this.settings.get('mail_nav_badge')
         ? { tick: this.tick(), version: this.sync.version('mail')() }
         : undefined,
-    loader: () => this.mail.counts(null),
+    loader: () => this.mail.counts([]),
   });
   private readonly latest = latestValue(this.counts, {});
 

@@ -134,7 +134,7 @@ export class ContactMailsComponent {
     loader: ({ params }) =>
       this.mail.messages({
         view: 'all',
-        accountId: null,
+        accountIds: [],
         search: '',
         sender: null,
         contactId: params.contactId,

@@ -55,6 +55,13 @@ services:
     ulimits:
       core: 0
     hostname: grobid
+    environment:
+      # No -Xmx = JVM takes 25% of host RAM. Cap heap; SerialGC hands freed heap back to OS.
+      JAVA_OPTS: "-Xms256m -Xmx2g -XX:+UseSerialGC -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=30"
+    deploy:
+      resources:
+        limits:
+          memory: 3g
     networks:
       - appnet
 

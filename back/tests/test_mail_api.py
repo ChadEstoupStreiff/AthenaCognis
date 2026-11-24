@@ -173,6 +173,56 @@ def test_views_follow_sender_flags_and_contacts(client: TestClient) -> None:
     assert client.get("/mail/counts").json()["priority"] == 2
 
 
+def add_account(account_id: str, mails: list[ParsedMail]) -> None:
+    """
+    Store an extra account and its messages
+
+    Args:
+        account_id (str): account id (also the address local part)
+        mails (list[ParsedMail]): messages
+    """
+    with store.session_scope() as session:
+        session.add(
+            MailAccount(
+                id=account_id,
+                label=account_id,
+                email=f"{account_id}@x.org",
+                username=f"{account_id}@x.org",
+                password="secret",
+                imap_host="imap.x.org",
+                imap_port=993,
+                smtp_host="smtp.x.org",
+                smtp_port=465,
+            )
+        )
+    with store.session_scope() as session:
+        store.save_messages(session, account_id, mails)
+
+
+def test_views_filter_on_several_accounts(client: TestClient) -> None:
+    """
+    List, counts and mark-all-read keep only the selected accounts
+
+    Returns:
+        None
+    """
+    seed([parsed(1, "a@x.org")])
+    add_account("acc-2", [parsed(2, "b@x.org")])
+    add_account("acc-3", [parsed(3, "c@x.org")])
+    selected = {"view": "inbox", "account_ids": f"{ACCOUNT_ID},acc-2"}
+
+    listed = client.get("/mail/messages", params=selected).json()
+    counts = client.get("/mail/counts", params={"account_ids": "acc-2,acc-3"}).json()
+    marked = client.post(
+        "/mail/messages/read-all", json={"view": "inbox", "account_ids": ["acc-3"]}
+    ).json()
+
+    assert [row["subject"] for row in listed] == ["Mail 2", "Mail 1"]
+    assert counts["inbox"] == 2
+    assert marked == {"marked": 1}
+    assert len(client.get("/mail/messages", params={"view": "unread"}).json()) == 2
+
+
 def test_muted_sender_mail_arrives_read(client: TestClient) -> None:
     """
     New messages of a muted sender are stored read and land in "others"
@@ -277,7 +327,7 @@ def test_last_uid_and_mark_all_read(factory: SessionFactory) -> None:
     seed([parsed(3, "a@x.org"), parsed(8, "b@x.org", is_read=True)])
     with store.session_scope() as session:
         assert store.last_uid(session, ACCOUNT_ID, "inbox") == 8
-    assert service.mark_all_read(None, "inbox") == 1
+    assert service.mark_all_read((), "inbox") == 1
 
 
 def test_create_account_rejects_email_with_spaces(client: TestClient) -> None:

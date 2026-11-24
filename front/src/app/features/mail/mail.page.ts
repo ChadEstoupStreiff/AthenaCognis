@@ -27,8 +27,8 @@ import { ButtonModule } from 'primeng/button';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
 import { InputTextModule } from 'primeng/inputtext';
+import { MultiSelectModule } from 'primeng/multiselect';
 import { PopoverModule } from 'primeng/popover';
-import { SelectModule } from 'primeng/select';
 import { SelectButtonModule } from 'primeng/selectbutton';
 import { TextareaModule } from 'primeng/textarea';
 import { TooltipModule } from 'primeng/tooltip';
@@ -138,7 +138,7 @@ function toggled(set: ReadonlySet<string>, id: string): ReadonlySet<string> {
     IconFieldModule,
     InputIconModule,
     InputTextModule,
-    SelectModule,
+    MultiSelectModule,
     SelectButtonModule,
     TextareaModule,
     TooltipModule,
@@ -207,7 +207,8 @@ export class MailPage {
 
   protected readonly mode = signal<'mail' | 'senders' | 'drafts' | 'outbox' | 'trash'>('mail');
   protected readonly view = signal<MailView>('priority');
-  protected readonly accountId = signal<string | null>(null);
+  /** Shown accounts, empty for all. */
+  protected readonly accountIds = signal<readonly string[]>([]);
   protected readonly query = signal('');
   /** Search filters (Filters panel next to the search). */
   protected readonly filters = signal<MailFilters>(EMPTY_FILTERS);
@@ -268,16 +269,16 @@ export class MailPage {
   protected readonly counts = resource({
     params: () =>
       this.hasAccounts()
-        ? { account: this.accountId(), version: this.sync.version('mail')() }
+        ? { accounts: this.accountIds(), version: this.sync.version('mail')() }
         : undefined,
-    loader: ({ params }) => this.mail.counts(params.account),
+    loader: ({ params }) => this.mail.counts(params.accounts),
   });
   protected readonly list = resource({
     params: () =>
       this.hasAccounts()
         ? {
             view: this.view(),
-            accountId: this.accountId(),
+            accountIds: this.accountIds(),
             search: this.debouncedQuery(),
             sender: this.senderFilter(),
             filters: filterParams(this.filters()),
@@ -307,10 +308,12 @@ export class MailPage {
   private readonly accountColors = computed(
     () => new Map(this.accountList().map((account) => [account.id, account.color])),
   );
-  protected readonly accountOptions = computed(() => [
-    { id: null, email: 'All accounts' },
-    ...this.accountList(),
-  ]);
+  /** Legend: selected accounts, all of them when none is picked. */
+  protected readonly legendAccounts = computed(() => {
+    const picked = new Set(this.accountIds());
+    const accounts = this.accountList();
+    return picked.size === 0 ? accounts : accounts.filter((account) => picked.has(account.id));
+  });
   protected readonly currentView = computed(
     () => VIEW_META.find((meta) => meta.view === this.view()) ?? PRIORITY_VIEW,
   );
@@ -477,7 +480,7 @@ export class MailPage {
     }
     this.syncing.set(true);
     try {
-      const results = await this.mail.syncNow(this.accountId());
+      const results = await this.mail.syncNow(this.accountIds());
       const fetched = results.reduce((total, result) => total + result.fetched, 0);
       const failed = results.filter((result) => result.error !== null);
       if (failed.length > 0) {
@@ -559,7 +562,7 @@ export class MailPage {
   protected async digest(): Promise<void> {
     this.digesting.set(true);
     try {
-      this.digestText.set(await this.mail.digest(this.accountId()));
+      this.digestText.set(await this.mail.digest(this.accountIds()));
     } finally {
       this.digesting.set(false);
     }
@@ -567,7 +570,7 @@ export class MailPage {
 
   /** Mark the whole view read. */
   protected async markAllRead(): Promise<void> {
-    const marked = await this.mail.markAllRead(this.view(), this.accountId());
+    const marked = await this.mail.markAllRead(this.view(), this.accountIds());
     this.notify.info(`${String(marked)} marked read`);
   }
 

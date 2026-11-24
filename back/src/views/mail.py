@@ -264,21 +264,38 @@ def delete_account(account_id: str) -> JsonDict:
     return {"deleted": account_id}
 
 
-@router.post("/sync")
-def sync(account_id: str | None = None) -> list[JsonDict]:
+def split_ids(raw: str | None) -> tuple[str, ...]:
     """
-    Fetch new messages of one account or of all of them
+    Split a comma-separated id list (query parameter)
 
     Args:
-        account_id (str | None): only this account
+        raw (str | None): ids joined by commas
+    Returns:
+        tuple[str, ...]: non-empty ids, empty when unset
+    """
+    if raw is None:
+        return ()
+    return tuple(part.strip() for part in raw.split(",") if part.strip())
+
+
+@router.post("/sync")
+def sync(account_ids: str | None = None) -> list[JsonDict]:
+    """
+    Fetch new messages of some accounts or of all of them
+
+    Args:
+        account_ids (str | None): only these accounts (comma-separated)
     Returns:
         list[JsonDict]: per account: fetched count and error
     Raises:
         HTTPException: 404 unknown account
     """
+    ids = split_ids(account_ids)
     with http_errors():
         results = (
-            [service.sync_account(account_id)] if account_id else service.sync_all()
+            [service.sync_account(account_id) for account_id in ids]
+            if ids
+            else service.sync_all()
         )
     trash.purge_expired(trash.retention_days())
     return [
@@ -339,7 +356,7 @@ MESSAGE_FILTERS = Depends(message_filters)
 @router.get("/messages")
 def list_messages(
     view: str = "inbox",
-    account_id: str | None = None,
+    account_ids: str | None = None,
     search: str | None = None,
     sender: str | None = None,
     contact_id: str | None = None,
@@ -353,7 +370,7 @@ def list_messages(
     Args:
         view (str): inbox, priority, others, unread, flagged, needs_reply, blocked,
             all, sent, pinned
-        account_id (str | None): only this account
+        account_ids (str | None): only these accounts (comma-separated)
         search (str | None): text in subject, sender or preview
         sender (str | None): only this sender address
         contact_id (str | None): only mail from this People contact
@@ -372,24 +389,31 @@ def list_messages(
     if not 1 <= limit <= MAX_PAGE or offset < 0:
         raise HTTPException(status_code=HTTP_BAD_REQUEST, detail="Bad paging.")
     query = store.MessageQuery(
-        view, account_id, search, sender, limit, offset, contact_id, filters
+        view,
+        split_ids(account_ids),
+        search,
+        sender,
+        limit,
+        offset,
+        contact_id,
+        filters,
     )
     with store.session_scope() as session:
         return store.list_messages(session, query)
 
 
 @router.get("/counts")
-def counts(account_id: str | None = None) -> dict[str, int]:
+def counts(account_ids: str | None = None) -> dict[str, int]:
     """
     Count unread messages per view
 
     Args:
-        account_id (str | None): only this account
+        account_ids (str | None): only these accounts (comma-separated)
     Returns:
         dict[str, int]: view → count
     """
     with store.session_scope() as session:
-        return store.view_counts(session, account_id)
+        return store.view_counts(session, split_ids(account_ids))
 
 
 @router.get("/messages/{message_id}")
@@ -518,7 +542,7 @@ class MarkAllBody(BaseModel):
     """View to mark read."""
 
     view: str = "inbox"
-    account_id: str | None = None
+    account_ids: list[str] = Field(default_factory=list)
 
 
 @router.post("/messages/read-all")
@@ -527,11 +551,11 @@ def mark_all_read(body: MarkAllBody) -> JsonDict:
     Mark every unread message of a view read (local only)
 
     Args:
-        body (MarkAllBody): view and account
+        body (MarkAllBody): view and accounts
     Returns:
         JsonDict: messages marked
     """
-    return {"marked": service.mark_all_read(body.account_id, body.view)}
+    return {"marked": service.mark_all_read(body.account_ids, body.view)}
 
 
 @router.post("/messages/{message_id}/summarize")
@@ -605,9 +629,9 @@ def draft_reply(message_id: str, body: ReplyDraftBody) -> JsonDict:
 
 
 class DigestBody(BaseModel):
-    """Account to brief."""
+    """Accounts to brief (empty = all)."""
 
-    account_id: str | None = None
+    account_ids: list[str] = Field(default_factory=list)
 
 
 @router.post("/digest")
@@ -616,14 +640,14 @@ def digest(body: DigestBody) -> JsonDict:
     Brief the unread messages with the AI
 
     Args:
-        body (DigestBody): account
+        body (DigestBody): accounts
     Returns:
         JsonDict: markdown briefing
     Raises:
         HTTPException: 422/502 AI failure
     """
     with http_errors():
-        return {"markdown": service.digest(body.account_id, LLM)}
+        return {"markdown": service.digest(body.account_ids, LLM)}
 
 
 class SendBody(BaseModel):

@@ -1,7 +1,7 @@
 """Database access of the mail client: accounts, messages, senders, priorities."""
 
 import json
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
@@ -634,13 +634,25 @@ class MessageQuery:
     """Filters of the message list."""
 
     view: str = "inbox"
-    account_id: str | None = None
+    account_ids: tuple[str, ...] = ()
     search: str | None = None
     sender: str | None = None
     limit: int = 50
     offset: int = 0
     contact_id: str | None = None
     filters: MessageFilters = field(default_factory=MessageFilters)
+
+
+def account_filter(account_ids: Sequence[str]) -> ColumnElement[bool]:
+    """
+    Condition matching mail of the given accounts
+
+    Args:
+        account_ids (Sequence[str]): account ids
+    Returns:
+        ColumnElement[bool]: condition
+    """
+    return MailMessage.account_id.in_(account_ids)
 
 
 def _contact_filter(contact_id: str) -> ColumnElement[bool]:
@@ -704,8 +716,8 @@ def list_messages(session: Session, query: MessageQuery) -> list[JsonDict]:
         .limit(min(query.limit, MAX_PAGE))
         .offset(query.offset)
     )
-    if query.account_id:
-        statement = statement.where(MailMessage.account_id == query.account_id)
+    if query.account_ids:
+        statement = statement.where(account_filter(query.account_ids))
     if query.sender:
         statement = statement.where(MailMessage.sender_email == query.sender.lower())
     if query.contact_id:
@@ -842,13 +854,13 @@ def _optional_str(value: object) -> str | None:
     return value if isinstance(value, str) else None
 
 
-def view_counts(session: Session, account_id: str | None) -> dict[str, int]:
+def view_counts(session: Session, account_ids: Sequence[str]) -> dict[str, int]:
     """
     Count unread messages per view (flagged, needs_reply, blocked, pinned count all)
 
     Args:
         session (Session): session
-        account_id (str | None): only this account
+        account_ids (Sequence[str]): only these accounts, empty for all
     Returns:
         dict[str, int]: view → count
     """
@@ -862,7 +874,7 @@ def view_counts(session: Session, account_id: str | None) -> dict[str, int]:
         )
         if view not in ("flagged", "needs_reply", "blocked", "pinned"):
             statement = statement.where(MailMessage.is_read.is_(False))
-        if account_id:
-            statement = statement.where(MailMessage.account_id == account_id)
+        if account_ids:
+            statement = statement.where(account_filter(account_ids))
         counts[view] = int(session.scalar(statement) or 0)
     return counts

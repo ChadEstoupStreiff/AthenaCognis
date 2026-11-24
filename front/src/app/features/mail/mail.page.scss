@@ -272,6 +272,48 @@
   border-radius: 2px;
 }
 
+.account-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.account-option .account-bar {
+  height: 18px;
+}
+
+.account-email {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8rem;
+  color: var(--p-text-muted-color);
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+}
+
+.legend-swatch {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
 .avatar {
   display: inline-flex;
   flex: none;

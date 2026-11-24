@@ -118,7 +118,7 @@ export class MailAccountsComponent {
    * @param account - Saved account.
    */
   protected async fetch(account: MailAccount): Promise<void> {
-    const results = await this.mail.syncNow(account.id);
+    const results = await this.mail.syncNow([account.id]);
     const failed = results.filter((result) => result.error !== null);
     if (failed.length > 0) {
       this.notify.error('Mail sync failed', failed.map((result) => result.error).join('\n'));
