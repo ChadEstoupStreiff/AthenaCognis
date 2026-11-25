@@ -619,6 +619,8 @@ class MailOutgoing(Base):
     # JSON lists of bare addresses.
     recipients: Mapped[str] = mapped_column(TEXT, nullable=False, default="[]")
     cc: Mapped[str] = mapped_column(TEXT, nullable=False, default="[]")
+    # Blind copies (JSON list, never in the message headers), None = none.
+    bcc: Mapped[str | None] = mapped_column(TEXT, nullable=True)
     subject: Mapped[str] = mapped_column(TEXT, nullable=False, default="")
     # Written text only; signature and quote are added when sending.
     body: Mapped[str] = mapped_column(LONG_TEXT, nullable=False, default="")
@@ -653,6 +655,8 @@ class MailDraft(Base):
     # JSON lists of addresses as typed (may still be incomplete).
     recipients: Mapped[str] = mapped_column(TEXT, nullable=False, default="[]")
     cc: Mapped[str] = mapped_column(TEXT, nullable=False, default="[]")
+    # Blind copies (JSON list, never in the message headers), None = none.
+    bcc: Mapped[str | None] = mapped_column(TEXT, nullable=True)
     subject: Mapped[str] = mapped_column(TEXT, nullable=False, default="")
     # Written text only; signature and quote are added when sending.
     body: Mapped[str] = mapped_column(LONG_TEXT, nullable=False, default="")

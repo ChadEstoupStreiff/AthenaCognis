@@ -16,6 +16,9 @@ export const FONT_SIZE_PX: Readonly<Record<string, string>> = {
   '6': '28px',
   '7': '40px',
 };
+/** Look of citations in the sent mail (inline: mail clients ignore stylesheets). */
+export const QUOTE_STYLE =
+  'margin:0 0 0 0.8ex;padding-left:1ex;border-left:2px solid #ccc;color:#555';
 /** Class marking the image selected in the editor (never sent). */
 export const SELECTED_IMAGE_CLASS = 'selected';
 
@@ -97,6 +100,52 @@ export function fontsToSpans(root: ParentNode): void {
 }
 
 /**
+ * Tell whether a citation has no style of its own (none, or the bare indent browsers add).
+ *
+ * @param quote - `<blockquote>` element.
+ * @returns True when the citation look should be applied.
+ */
+function isUnstyledQuote(quote: HTMLElement): boolean {
+  const style = quote.getAttribute('style');
+  return style === null || quote.style.borderStyle === 'none' || quote.style.border === 'none';
+}
+
+/**
+ * Give citations without their own style the mail citation look.
+ *
+ * @param root - Element whose `<blockquote>` descendants are styled.
+ */
+export function styleQuotes(root: ParentNode): void {
+  for (const quote of Array.from(root.querySelectorAll<HTMLElement>('blockquote'))) {
+    if (isUnstyledQuote(quote)) {
+      quote.setAttribute('style', QUOTE_STYLE);
+    }
+  }
+}
+
+/**
+ * Citation holding a node, inside an editor.
+ *
+ * @param node - Node (caret position).
+ * @param editor - Editor element (search stops there).
+ * @returns Closest `<blockquote>`, null when none.
+ */
+export function quoteAround(node: Node | null, editor: HTMLElement): HTMLElement | null {
+  const element = node instanceof HTMLElement ? node : (node?.parentElement ?? null);
+  const quote = element?.closest('blockquote') ?? null;
+  return quote !== null && editor.contains(quote) && quote !== editor ? quote : null;
+}
+
+/**
+ * Replace an element by its children.
+ *
+ * @param element - Element removed, content kept.
+ */
+export function unwrap(element: HTMLElement): void {
+  element.replaceWith(...Array.from(element.childNodes));
+}
+
+/**
  * HTML of the editor as sent: inline CSS instead of `<font>`, no selection marker.
  *
  * @param editor - Editor element (left untouched).
@@ -105,6 +154,7 @@ export function fontsToSpans(root: ParentNode): void {
 export function mailReadyHtml(editor: HTMLElement): string {
   const copy = editor.cloneNode(true) as HTMLElement;
   fontsToSpans(copy);
+  styleQuotes(copy);
   for (const image of Array.from(copy.querySelectorAll(`img.${SELECTED_IMAGE_CLASS}`))) {
     image.classList.remove(SELECTED_IMAGE_CLASS);
     if (image.classList.length === 0) {

@@ -13,6 +13,7 @@ const EMPTY: ComposeForm = {
   accountId: 'acc',
   to: '',
   cc: '',
+  bcc: '',
   subject: '',
   body: '',
   bodyHtml: '',
@@ -25,6 +26,7 @@ describe('compose drafts', () => {
     expect(hasContent({ ...EMPTY, body: '   ' })).toBe(false);
     expect(hasContent({ ...EMPTY, subject: 'Plan' })).toBe(true);
     expect(hasContent({ ...EMPTY, to: 'a@x.org' })).toBe(true);
+    expect(hasContent({ ...EMPTY, bcc: 'b@x.org' })).toBe(true);
     expect(hasContent({ ...EMPTY, attachments: [FILE] })).toBe(true);
     expect(hasContent({ ...EMPTY, bodyHtml: '<img src="data:image/png;base64,AA">' })).toBe(true);
   });
@@ -33,6 +35,7 @@ describe('compose drafts', () => {
     expect(sameForm(EMPTY, { ...EMPTY })).toBe(true);
     expect(sameForm(EMPTY, { ...EMPTY, accountId: 'other' })).toBe(false);
     expect(sameForm(EMPTY, { ...EMPTY, body: 'x' })).toBe(false);
+    expect(sameForm(EMPTY, { ...EMPTY, bcc: 'b@x.org' })).toBe(false);
     expect(sameForm(EMPTY, { ...EMPTY, bodyHtml: '<b>x</b>' })).toBe(false);
     expect(sameForm(EMPTY, { ...EMPTY, attachments: [FILE] })).toBe(false);
   });
@@ -42,6 +45,7 @@ describe('compose drafts', () => {
       accountId: 'acc',
       to: 'a@x.org, b@x.org',
       cc: 'c@x.org',
+      bcc: 'hidden@x.org',
       subject: 'Re: Plan',
       body: 'Ok',
       bodyHtml: '<b>Ok</b>',
@@ -53,6 +57,7 @@ describe('compose drafts', () => {
       kind: 'reply',
       to: ['a@x.org', 'b@x.org'],
       cc: ['c@x.org'],
+      bcc: ['hidden@x.org'],
       subject: 'Re: Plan',
       body: 'Ok',
       body_html: '<b>Ok</b>',

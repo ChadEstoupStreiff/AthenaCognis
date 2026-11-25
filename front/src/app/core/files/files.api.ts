@@ -136,16 +136,14 @@ export class FilesApi {
   }
 
   /**
-   * Files of a folder within a date range (quick search, no text).
+   * Files of a folder, every day (quick search, no text).
    *
    * @param folder - Subfolder.
-   * @param start - First day `YYYY-MM-DD`.
-   * @param end - Last day `YYYY-MM-DD`.
    * @returns Paths, newest first.
    */
-  listFolder(folder: string, start: string, end: string): Promise<string[]> {
+  folderFiles(folder: string): Promise<string[]> {
     return this.api.get<string[]>(backendUrl('/files/search'), {
-      params: { subfolder: folder, start_date: start, end_date: end, search_mode: 0 },
+      params: { subfolder: folder, search_mode: 0 },
     });
   }
 

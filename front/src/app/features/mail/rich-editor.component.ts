@@ -18,8 +18,11 @@ import {
   fitWithin,
   isBlankContent,
   mailReadyHtml,
+  quoteAround,
   sanitizeMailHtml,
   SELECTED_IMAGE_CLASS,
+  styleQuotes,
+  unwrap,
 } from './rich-text';
 
 /** Text sizes offered (values of the `fontSize` command, 3 = default). */
@@ -42,6 +45,8 @@ const TOGGLE_COMMANDS = [
   'insertOrderedList',
 ] as const;
 type ToggleCommand = (typeof TOGGLE_COMMANDS)[number];
+/** Toolbar state key of the citation button. */
+const QUOTE_COMMAND = 'quote';
 const JPEG_QUALITY = 0.9;
 /** Narrowest width an image can be dragged to (px). */
 const MIN_IMAGE_WIDTH = 24;
@@ -88,6 +93,7 @@ const BLOCK_BUTTONS: readonly ToolButton[] = [
   { command: 'justifyLeft', icon: 'pi pi-align-left', label: 'Align left' },
   { command: 'justifyCenter', icon: 'pi pi-align-center', label: 'Center' },
   { command: 'justifyRight', icon: 'pi pi-align-right', label: 'Align right' },
+  { command: QUOTE_COMMAND, icon: '', glyph: '\u201C', label: 'Citation' },
 ];
 
 /** Content written in the editor. */
@@ -314,7 +320,7 @@ function imageFiles(data: DataTransfer | null): File[] {
         [ariaLabel]="tool.label"
         [pTooltip]="tool.label"
         tooltipPosition="top"
-        (onClick)="run(tool.command)"
+        (onClick)="onTool(tool.command)"
       >
         @if (tool.glyph) {
           <span class="glyph" [class]="'glyph glyph-' + tool.command" aria-hidden="true">{{
@@ -368,6 +374,11 @@ function imageFiles(data: DataTransfer | null): File[] {
       font-size: 15px;
       line-height: 1;
       text-align: center;
+    }
+    .glyph-quote {
+      font-size: 22px;
+      line-height: 0.6;
+      transform: translateY(4px);
     }
     .glyph-bold {
       font-weight: 700;
@@ -433,6 +444,10 @@ function imageFiles(data: DataTransfer | null): File[] {
       content: attr(data-placeholder);
       color: var(--ac-muted);
       pointer-events: none;
+    }
+    .editor :is(blockquote) {
+      border-left-color: var(--ac-panel-border) !important;
+      color: var(--ac-muted) !important;
     }
     .editor :is(img) {
       max-width: 100%;
@@ -522,6 +537,34 @@ export class MailRichEditorComponent {
     this.restoreSelection();
     execute('styleWithCSS', 'false');
     execute(command, value);
+    this.emit();
+    this.refreshState();
+  }
+
+  /**
+   * Run a toolbar button (the citation button has its own toggle).
+   *
+   * @param command - Button command.
+   */
+  protected onTool(command: string): void {
+    if (command === QUOTE_COMMAND) {
+      this.toggleQuote();
+      return;
+    }
+    this.run(command);
+  }
+
+  /** Format the selected lines as a citation, or remove the citation around the caret. */
+  protected toggleQuote(): void {
+    this.restoreSelection();
+    const editor = this.editor().nativeElement;
+    const quote = quoteAround(document.getSelection()?.anchorNode ?? null, editor);
+    if (quote === null) {
+      execute('formatBlock', '<blockquote>');
+      styleQuotes(editor);
+    } else {
+      unwrap(quote);
+    }
     this.emit();
     this.refreshState();
   }
@@ -707,7 +750,12 @@ export class MailRichEditorComponent {
 
   /** Show which formats are on at the caret. */
   protected refreshState(): void {
-    this.active.set(new Set(TOGGLE_COMMANDS.filter((command) => isOn(command))));
+    const active = new Set<string>(TOGGLE_COMMANDS.filter((command) => isOn(command)));
+    const anchor = document.getSelection()?.anchorNode ?? null;
+    if (quoteAround(anchor, this.editor().nativeElement) !== null) {
+      active.add(QUOTE_COMMAND);
+    }
+    this.active.set(active);
   }
 
   /**

@@ -363,6 +363,7 @@ def list_messages(
     limit: int = 50,
     offset: int = 0,
     filters: store.MessageFilters = MESSAGE_FILTERS,
+    pinned_first: bool = True,
 ) -> list[JsonDict]:
     """
     List the messages of a mailbox view, newest first
@@ -377,6 +378,7 @@ def list_messages(
         limit (int): page size (max 200)
         offset (int): page start
         filters (store.MessageFilters): search filters (see message_filters)
+        pinned_first (bool): list pinned mail before the others
     Returns:
         list[JsonDict]: message summaries
     Raises:
@@ -397,6 +399,7 @@ def list_messages(
         offset,
         contact_id,
         filters,
+        pinned_first,
     )
     with store.session_scope() as session:
         return store.list_messages(session, query)
@@ -656,6 +659,7 @@ class SendBody(BaseModel):
     account_id: str
     to: list[str] = Field(..., min_items=1)
     cc: list[str] = Field(default_factory=list)
+    bcc: list[str] = Field(default_factory=list)
     subject: str = Field("", max_length=1_000)
     body: str = ""
     # Formatted body (inline images as data URIs), None = plain text only.
@@ -667,7 +671,7 @@ class SendBody(BaseModel):
     # Draft the message was written in: removed once queued.
     draft_id: str | None = None
 
-    @validator("to", "cc", each_item=True)
+    @validator("to", "cc", "bcc", each_item=True)
     def check_address(cls, value: str) -> str:
         """
         Reject values that are not email addresses
@@ -706,6 +710,7 @@ def send(body: SendBody) -> JsonDict:
         body.quote,
         body.body_html,
         body.attachment_ids,
+        body.bcc,
     )
     with http_errors():
         return outbox.enqueue(request, body.draft_id)
@@ -792,6 +797,7 @@ class DraftBody(BaseModel):
     kind: Literal["new", "reply", "forward"] = "new"
     to: list[str] = Field(default_factory=list)
     cc: list[str] = Field(default_factory=list)
+    bcc: list[str] = Field(default_factory=list)
     subject: str = Field("", max_length=1_000)
     body: str = ""
     # Formatted body (inline images as data URIs), None = plain text only.
@@ -813,6 +819,7 @@ class DraftBody(BaseModel):
             kind=self.kind,
             to=self.to,
             cc=self.cc,
+            bcc=self.bcc,
             subject=self.subject,
             body=self.body,
             quote=self.quote,

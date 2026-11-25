@@ -261,6 +261,7 @@ class EwsTransport:
                     body=ews_body(mail),
                     to_recipients=mail.to,
                     cc_recipients=mail.cc or None,
+                    bcc_recipients=mail.bcc or None,
                 )
                 return
             Message(
@@ -270,4 +271,5 @@ class EwsTransport:
                 body=ews_body(mail),
                 to_recipients=[Mailbox(email_address=address) for address in mail.to],
                 cc_recipients=[Mailbox(email_address=address) for address in mail.cc],
+                bcc_recipients=[Mailbox(email_address=address) for address in mail.bcc],
             ).send_and_save()

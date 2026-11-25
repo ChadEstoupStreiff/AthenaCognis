@@ -1,8 +1,21 @@
 import base64
+import smtplib
+from collections.abc import Sequence
+from types import TracebackType
+from typing import TYPE_CHECKING, ClassVar
 
+import pytest
+
+from controllers.mail import smtp_client
 from controllers.mail.compose import compose_body, html_to_text
+from controllers.mail.imap_client import ServerLogin
 from controllers.mail.inline_images import extract_inline_images
 from controllers.mail.smtp_client import MailFile, OutgoingMail, build_message
+
+if TYPE_CHECKING:
+    from _typeshed import SizedBuffer
+
+STARTTLS_PORT = 587
 
 
 def test_plain_signature_goes_between_text_and_quote() -> None:
@@ -127,7 +140,9 @@ def test_invalid_data_uri_is_left_untouched() -> None:
     Returns:
         None
     """
-    html, images = extract_inline_images('<img src="data:image/png;base64,abc">', "x.org")
+    html, images = extract_inline_images(
+        '<img src="data:image/png;base64,abc">', "x.org"
+    )
     assert images == []
     assert "data:image/png;base64,abc" in html
 
@@ -146,3 +161,123 @@ def test_smtp_message_carries_attachments() -> None:
     parts = list(message.iter_attachments())
     assert [part.get_filename() for part in parts] == ["report.pdf"]
     assert parts[0].get_content() == b"%PDF"
+
+
+class RecordingSMTP(smtplib.SMTP):
+    """SMTP connection recording what would go on the wire (no network)."""
+
+    delivered: ClassVar[list[tuple[list[str], bytes]]] = []
+
+    def __init__(self, host: str, port: int, timeout: float) -> None:
+        """
+        Skip connecting
+
+        Args:
+            host (str): ignored
+            port (int): ignored
+            timeout (float): ignored
+        """
+        super().__init__()
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        """
+        Close nothing
+
+        Args:
+            exc_type (type[BaseException] | None): ignored
+            exc_value (BaseException | None): ignored
+            traceback (TracebackType | None): ignored
+        """
+
+    def ehlo_or_helo_if_needed(self) -> None:
+        """
+        Skip the greeting (no server)
+        """
+
+    def starttls(self, *args: object, **kwargs: object) -> tuple[int, bytes]:
+        """
+        Pretend TLS is on
+
+        Args:
+            args (object): ignored
+            kwargs (object): ignored
+        Returns:
+            tuple[int, bytes]: success reply
+        """
+        return 220, b""
+
+    def login(
+        self, user: str, password: str, *, initial_response_ok: bool = True
+    ) -> tuple[int, bytes]:
+        """
+        Pretend the login succeeded
+
+        Args:
+            user (str): ignored
+            password (str): ignored
+            initial_response_ok (bool): ignored
+        Returns:
+            tuple[int, bytes]: success reply
+        """
+        return 235, b""
+
+    def sendmail(
+        self,
+        from_addr: str,
+        to_addrs: str | Sequence[str],
+        msg: "SizedBuffer | str",
+        mail_options: Sequence[str] = (),
+        rcpt_options: Sequence[str] = (),
+    ) -> dict[str, tuple[int, bytes]]:
+        """
+        Record envelope recipients and message bytes
+
+        Args:
+            from_addr (str): ignored
+            to_addrs (str | Sequence[str]): envelope recipients
+            msg (SizedBuffer | str): message as sent
+            mail_options (Sequence[str]): ignored
+            rcpt_options (Sequence[str]): ignored
+        Returns:
+            dict[str, tuple[int, bytes]]: no refused recipient
+        """
+        recipients = [to_addrs] if isinstance(to_addrs, str) else list(to_addrs)
+        raw = msg.encode() if isinstance(msg, str) else bytes(msg)
+        RecordingSMTP.delivered.append((recipients, raw))
+        return {}
+
+
+def test_bcc_is_delivered_but_hidden_from_recipients(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """
+    Deliver to Bcc addresses without putting them in the bytes sent
+
+    Args:
+        monkeypatch (pytest.MonkeyPatch): pytest monkeypatch
+    Returns:
+        None
+    """
+    RecordingSMTP.delivered = []
+    monkeypatch.setattr(smtplib, "SMTP", RecordingSMTP)
+    mail = OutgoingMail(
+        "me@x.org",
+        "Me",
+        ["a@x.org"],
+        "Hi",
+        "text",
+        cc=["c@x.org"],
+        bcc=["hidden@x.org"],
+    )
+    message = build_message(mail)
+    login = ServerLogin("smtp.x.org", STARTTLS_PORT, "me", "secret")
+    smtp_client.send_message(login, message)
+    [(recipients, raw)] = RecordingSMTP.delivered
+    assert sorted(recipients) == ["a@x.org", "c@x.org", "hidden@x.org"]
+    assert b"hidden@x.org" not in raw
+    assert message["Bcc"] == "hidden@x.org"

@@ -135,14 +135,34 @@ const KIND_TITLE: Readonly<Record<MailDraftKind, string>> = {
             (valueChange)="patch({ to: $event })"
           />
         </div>
-        <div class="row">
+        <div class="row" [class.with-action]="!bccShown()">
           <span>Cc</span>
           <ac-mail-address-input
             label="Cc"
             [value]="form().cc"
             (valueChange)="patch({ cc: $event })"
           />
+          @if (!bccShown()) {
+            <p-button
+              label="Bcc"
+              severity="secondary"
+              [text]="true"
+              size="small"
+              ariaLabel="Add blind copy recipients"
+              (onClick)="bccOpened.set(true)"
+            />
+          }
         </div>
+        @if (bccShown()) {
+          <div class="row">
+            <span title="Blind copy: hidden from the other recipients">Bcc</span>
+            <ac-mail-address-input
+              label="Bcc"
+              [value]="form().bcc"
+              (valueChange)="patch({ bcc: $event })"
+            />
+          </div>
+        }
         <label class="row">
           <span>Subject</span>
           <input
@@ -324,6 +344,9 @@ const KIND_TITLE: Readonly<Record<MailDraftKind, string>> = {
       font-size: 12px;
       color: var(--ac-muted);
     }
+    .row.with-action {
+      grid-template-columns: 64px minmax(0, 1fr) auto;
+    }
     .ai {
       display: flex;
       gap: 8px;
@@ -461,11 +484,15 @@ export class MailComposeDialogComponent {
     accountId: '',
     to: '',
     cc: '',
+    bcc: '',
     subject: '',
     body: '',
     bodyHtml: '',
     attachments: [],
   });
+  /** Bcc row opened by its button (it also shows whenever Bcc holds addresses). */
+  protected readonly bccOpened = signal(false);
+  protected readonly bccShown = computed(() => this.bccOpened() || this.form().bcc !== '');
   protected instruction = '';
   protected readonly drafting = signal(false);
   protected readonly sending = signal(false);
@@ -668,6 +695,7 @@ export class MailComposeDialogComponent {
         account_id: form.accountId,
         to,
         cc: splitAddresses(form.cc),
+        bcc: splitAddresses(form.bcc),
         subject: form.subject,
         body: form.body,
         body_html: form.bodyHtml === '' ? null : form.bodyHtml,
@@ -784,6 +812,7 @@ export class MailComposeDialogComponent {
     this.finished = false;
     this.minimized.set(false);
     this.instruction = '';
+    this.bccOpened.set(false);
     const draft = this.savedDraft();
     this.draftId.set(draft?.id ?? null);
     this.savedAt.set(draft === null ? null : mailTime(draft.updated));
@@ -804,7 +833,7 @@ export class MailComposeDialogComponent {
     const original = this.replyTo();
     const forwarded = this.forwardOf();
     const accountId = original?.account_id ?? forwarded?.account_id ?? this.accounts()[0]?.id ?? '';
-    const empty = { body: '', bodyHtml: '', attachments: [] };
+    const empty = { bcc: '', body: '', bodyHtml: '', attachments: [] };
     if (forwarded !== null) {
       return { accountId, to: '', cc: '', subject: forwardSubject(forwarded.subject), ...empty };
     }

@@ -33,6 +33,7 @@ class OutgoingMail:
     subject: str
     body: str
     cc: list[str] = field(default_factory=list)
+    bcc: list[str] = field(default_factory=list)
     in_reply_to: str | None = None
     thread_refs: str | None = None
     html_body: str | None = None
@@ -68,6 +69,10 @@ def build_message(mail: OutgoingMail) -> EmailMessage:
     message["To"] = ", ".join(mail.to)
     if mail.cc:
         message["Cc"] = ", ".join(mail.cc)
+    if mail.bcc:
+        # smtplib delivers to Bcc and strips the header from the sent bytes;
+        # the copy filed in Sent keeps it, as mail clients do.
+        message["Bcc"] = ", ".join(mail.bcc)
     message["Subject"] = mail.subject
     message["Date"] = formatdate(localtime=True)
     message["Message-ID"] = make_msgid(domain=mail.sender_email.split("@")[-1])

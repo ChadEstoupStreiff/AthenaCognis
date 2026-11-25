@@ -15,6 +15,7 @@ function item(id: string, state: OutboxState): MailOutboxItem {
     account_id: 'acc',
     to: ['a@x.org'],
     cc: [],
+    bcc: [],
     subject: 'Hi',
     body: 'Hello',
     created: '2026-11-19T10:00:00',

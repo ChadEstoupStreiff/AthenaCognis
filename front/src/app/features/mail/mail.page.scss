@@ -196,6 +196,14 @@
   }
 }
 
+.pin-divider {
+  flex: none;
+  height: 2px;
+  margin: 4px 8px;
+  border-radius: 1px;
+  background: var(--p-content-border-color);
+}
+
 .avatar-column {
   display: flex;
   flex: none;

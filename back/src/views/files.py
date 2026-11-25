@@ -24,7 +24,7 @@ from controllers.SummarizeManager import SummarizeManager
 from controllers.DocumentTreeManager import DocumentTreeManager
 from controllers.TranscriptionManager import TranscriptionManager
 from db import get_db
-from db.models import Note, ProjectFile, TagFile, Link, StockPile, Contact, ContactFile
+from db.models import Note, ProjectFile, TagFile, Link, StockPile, Contact, ContactFile, PinnedFile
 from fastapi import APIRouter, Body, HTTPException, UploadFile
 from PIL import Image
 from pillow_heif import register_heif_opener
@@ -342,6 +342,11 @@ async def move_file(
             tag_files = db.query(TagFile).filter(TagFile.file == file).all()
             for tag_file in tag_files:
                 tag_file.file = new_file_path
+
+            # Keep the pin on the moved file
+            pinned = db.query(PinnedFile).filter(PinnedFile.file == file).first()
+            if pinned:
+                pinned.file = new_file_path
 
             # Update links entries
             links_a = db.query(Link).filter(Link.fileA == file).all()

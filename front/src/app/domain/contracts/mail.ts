@@ -152,6 +152,8 @@ export interface MailOutgoing {
   readonly account_id: string;
   readonly to: readonly string[];
   readonly cc: readonly string[];
+  /** Blind copies: delivered, never shown to the other recipients. */
+  readonly bcc: readonly string[];
   readonly subject: string;
   /** Written text only: the server adds the account signature, then the quote. */
   readonly body: string;
@@ -175,6 +177,8 @@ export interface MailDraftInput {
   readonly kind: MailDraftKind;
   readonly to: readonly string[];
   readonly cc: readonly string[];
+  /** Blind copies: delivered, never shown to the other recipients. */
+  readonly bcc: readonly string[];
   readonly subject: string;
   /** Written text only (signature and quote added when sending). */
   readonly body: string;
@@ -217,6 +221,7 @@ export interface MailOutboxItem {
   readonly account_id: string;
   readonly to: readonly string[];
   readonly cc: readonly string[];
+  readonly bcc: readonly string[];
   readonly subject: string;
   /** Written text (signature and quote added when sending). */
   readonly body: string;

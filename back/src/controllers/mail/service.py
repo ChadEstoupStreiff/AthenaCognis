@@ -466,6 +466,7 @@ class SendRequest:
     quote: str = ""
     body_html: str | None = None
     attachment_ids: list[str] = field(default_factory=list)
+    bcc: list[str] = field(default_factory=list)
 
 
 def send(request: SendRequest) -> None:
@@ -518,6 +519,7 @@ def _outgoing(
         sender_name=account.label,
         to=request.to,
         cc=request.cc,
+        bcc=request.bcc,
         subject=request.subject,
         body=body.text,
         in_reply_to=in_reply_to,

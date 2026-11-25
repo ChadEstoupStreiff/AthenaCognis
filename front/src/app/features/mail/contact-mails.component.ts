@@ -8,6 +8,7 @@ import {
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { MailApi } from '../../core/mail/mail.api';
+import { SettingsStore } from '../../core/settings/settings.store';
 import { DataSync } from '../../core/state/data-sync.service';
 import { latestValue } from '../../core/state/latest-value';
 import { EmptyStateComponent } from '../../shared/ui/empty-state.component';
@@ -124,13 +125,18 @@ const CONTACT_MAIL_LIMIT = 100;
 export class ContactMailsComponent {
   private readonly mail = inject(MailApi);
   private readonly sync = inject(DataSync);
+  private readonly settings = inject(SettingsStore);
 
   /** People contact id. */
   readonly contactId = input.required<string>();
 
   protected readonly mailTime = mailTime;
   protected readonly mails = resource({
-    params: () => ({ contactId: this.contactId(), version: this.sync.version('mail')() }),
+    params: () => ({
+      contactId: this.contactId(),
+      pinnedFirst: this.settings.get('mail_pinned_first'),
+      version: this.sync.version('mail')(),
+    }),
     loader: ({ params }) =>
       this.mail.messages({
         view: 'all',
@@ -138,6 +144,7 @@ export class ContactMailsComponent {
         search: '',
         sender: null,
         contactId: params.contactId,
+        pinnedFirst: params.pinnedFirst,
         limit: CONTACT_MAIL_LIMIT,
       }),
   });

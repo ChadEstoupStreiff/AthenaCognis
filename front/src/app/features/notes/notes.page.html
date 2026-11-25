@@ -1,14 +1,73 @@
-<div class="notes">
-  <aside class="sidebar ac-panel">
-    <p-datepicker
-      [inline]="true"
-      [ngModel]="dayDate()"
-      (ngModelChange)="pickDay($event)"
-      styleClass="day-picker"
-    />
-    <p-button label="New note" icon="pi pi-plus" [fluid]="true" (onClick)="createNote()" />
-    <nav class="list" aria-label="Notes of the day">
-      @for (note of notes.value() ?? []; track note) {
+<div class="notes" [class.collapsed]="sidebarCollapsed()">
+  @if (sidebarCollapsed()) {
+    <aside class="rail ac-panel">
+      <p-button
+        icon="pi pi-angle-double-right"
+        [text]="true"
+        severity="secondary"
+        pTooltip="Show notes"
+        ariaLabel="Expand notes sidebar"
+        (onClick)="toggleSidebar()"
+      />
+      <p-button
+        icon="pi pi-plus"
+        [text]="true"
+        pTooltip="New note"
+        ariaLabel="New note"
+        (onClick)="createNote()"
+      />
+    </aside>
+  } @else {
+    <aside class="sidebar ac-panel">
+      <div class="sidebar-head">
+        <p-iconfield class="search-field">
+          <p-inputicon styleClass="pi pi-search" />
+          <input
+            pInputText
+            type="search"
+            class="search"
+            placeholder="Search notes…"
+            [ngModel]="query()"
+            (ngModelChange)="query.set($event)"
+            aria-label="Search notes"
+          />
+        </p-iconfield>
+        <p-button
+          icon="pi pi-angle-double-left"
+          [text]="true"
+          severity="secondary"
+          pTooltip="Hide notes"
+          ariaLabel="Collapse notes sidebar"
+          (onClick)="toggleSidebar()"
+        />
+      </div>
+      <p-button label="New note" icon="pi pi-plus" [fluid]="true" (onClick)="createNote()" />
+      <nav class="list" aria-label="Notes">
+        @if (pinnedNotes().length > 0) {
+          <h3 class="day pinned-head"><i class="pi pi-thumbtack" aria-hidden="true"></i>Pinned</h3>
+          @for (note of pinnedNotes(); track note) {
+            <ng-container *ngTemplateOutlet="noteRow; context: { $implicit: note }" />
+          }
+          @if (noteDays().length > 0) {
+            <hr class="pinned-divider" />
+          }
+        }
+        @for (group of noteDays(); track group.day) {
+          <h3 class="day">{{ group.day }}</h3>
+          @for (note of group.paths; track note) {
+            <ng-container *ngTemplateOutlet="noteRow; context: { $implicit: note }" />
+          }
+        } @empty {
+          @if (pinnedNotes().length === 0) {
+            <p class="ac-muted empty">
+              {{
+                notes.isLoading() ? 'Loading…' : query() ? 'No matching notes.' : 'No notes yet.'
+              }}
+            </p>
+          }
+        }
+      </nav>
+      <ng-template #noteRow let-note>
         <a
           class="note-link"
           [class.active]="note === notePath()"
@@ -25,28 +84,37 @@
           } @else {
             <i class="pi pi-file-edit" aria-hidden="true"></i>
           }
-          {{ nameOf(note) }}
-        </a>
-      } @empty {
-        <p class="ac-muted empty">No notes on {{ day() }}.</p>
-      }
-    </nav>
-    @if (notePath() && headings().length > 0) {
-      <nav class="outline" aria-label="Outline">
-        <h3>Outline</h3>
-        @for (heading of headings(); track heading.line) {
-          <a
-            class="outline-link"
-            [style.padding-left.px]="(heading.level - 1) * outlineIndent + 8"
-            (click)="goToHeading(heading, $index)"
-            (keydown.enter)="goToHeading(heading, $index)"
-            tabindex="0"
-            >{{ heading.text || '(untitled)' }}</a
+          <span class="note-name">{{ nameOf(note) }}</span>
+          <button
+            type="button"
+            class="pin-toggle"
+            [class.pinned]="pinnedSet().has(note)"
+            [attr.aria-label]="pinnedSet().has(note) ? 'Unpin note' : 'Pin note'"
+            [title]="pinnedSet().has(note) ? 'Unpin' : 'Pin to top'"
+            (click)="togglePin(note, $event)"
+            (keydown.enter)="$event.stopPropagation()"
           >
-        }
-      </nav>
-    }
-  </aside>
+            <i class="pi pi-thumbtack" aria-hidden="true"></i>
+          </button>
+        </a>
+      </ng-template>
+      @if (notePath() && headings().length > 0) {
+        <nav class="outline" aria-label="Outline">
+          <h3>Outline</h3>
+          @for (heading of headings(); track heading.line) {
+            <a
+              class="outline-link"
+              [style.padding-left.px]="(heading.level - 1) * outlineIndent + 8"
+              (click)="goToHeading(heading, $index)"
+              (keydown.enter)="goToHeading(heading, $index)"
+              tabindex="0"
+              >{{ heading.text || '(untitled)' }}</a
+            >
+          }
+        </nav>
+      }
+    </aside>
+  }
 
   <section class="workspace">
     @if (notePath(); as path) {
@@ -193,8 +261,8 @@
         <i class="pi pi-pen-to-square" aria-hidden="true"></i>
         <h2>Pick a note or start a new one</h2>
         <p class="ac-muted">
-          Notes are Markdown files stored in the <code>notes</code> folder of each day. They save
-          automatically.
+          Notes are Markdown files stored in the <code>notes</code> folder, listed newest first.
+          They save automatically.
         </p>
         <p-button label="New note" icon="pi pi-plus" (onClick)="createNote()" />
       </div>

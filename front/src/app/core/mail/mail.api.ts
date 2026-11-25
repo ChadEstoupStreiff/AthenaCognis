@@ -36,6 +36,8 @@ export interface MailListQuery {
   readonly contactId?: string | null;
   /** Search filters (`/mail/messages` parameters, null = unset). */
   readonly filters?: Readonly<Record<string, string | boolean | null>>;
+  /** List pinned mail before the others (backend default: true). */
+  readonly pinnedFirst?: boolean;
 }
 
 /**
@@ -176,6 +178,7 @@ export class MailApi {
         sender: query.sender,
         contact_id: query.contactId ?? null,
         ...query.filters,
+        pinned_first: query.pinnedFirst ?? null,
         limit: query.limit,
       },
     });

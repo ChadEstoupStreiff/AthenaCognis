@@ -39,6 +39,11 @@ const NAV_BADGE = {
   label: 'Unread badge',
   hint: 'Show the number of unread Inbox messages on Mail in the navigation rail.',
 };
+const PINNED_FIRST = {
+  key: 'mail_pinned_first',
+  label: 'Show pinned mail on top',
+  hint: 'Keep pinned mail at the top of every mailbox. Off: pinned mail stays in date order and is only grouped in the Pinned box.',
+};
 const ACTIVITY_RESET = {
   key: 'mail_activity_reset_time',
   label: 'Activity reset time',
@@ -111,6 +116,17 @@ const DOWNLOAD_IMAGES = {
           [ngModel]="flag(navBadge.key)"
           (ngModelChange)="save(navBadge.key, $event, true)"
           [ariaLabel]="navBadge.label"
+        />
+      </div>
+      <div class="row">
+        <div class="label">
+          <strong>{{ pinnedFirst.label }}</strong
+          ><small class="ac-muted">{{ pinnedFirst.hint }}</small>
+        </div>
+        <p-toggleswitch
+          [ngModel]="flag(pinnedFirst.key)"
+          (ngModelChange)="save(pinnedFirst.key, $event, true)"
+          [ariaLabel]="pinnedFirst.label"
         />
       </div>
       <div class="row">
@@ -197,6 +213,7 @@ export class MailSectionComponent extends SettingsSection {
   protected readonly downloadImages = DOWNLOAD_IMAGES;
   protected readonly autoFetch = AUTO_FETCH;
   protected readonly navBadge = NAV_BADGE;
+  protected readonly pinnedFirst = PINNED_FIRST;
   protected readonly fetchFrequency = FETCH_FREQUENCY;
   protected readonly activityReset = ACTIVITY_RESET;
   protected readonly trashRetention = TRASH_RETENTION;

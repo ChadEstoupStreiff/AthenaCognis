@@ -76,6 +76,15 @@ export class FileDetailsApi {
   }
 
   /**
+   * Every pinned file.
+   *
+   * @returns Pinned shared paths.
+   */
+  pinnedFiles(): Promise<string[]> {
+    return this.api.get<string[]>(backendUrl('/pinned'), { silent: true });
+  }
+
+  /**
    * Whether a file is pinned.
    *
    * @param path - Shared path.

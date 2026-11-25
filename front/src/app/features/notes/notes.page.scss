@@ -3,6 +3,29 @@
   grid-template-columns: 300px minmax(0, 1fr);
   gap: 16px;
   height: calc(100vh - 52px);
+
+  &.collapsed {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px;
+}
+
+.sidebar-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.search-field {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .sidebar {
@@ -12,23 +35,8 @@
   padding: 12px;
   overflow-y: auto;
 
-  ::ng-deep .day-picker {
+  .search {
     width: 100%;
-    min-width: 0;
-    padding: 4px;
-
-    .p-datepicker-panel {
-      min-width: 0;
-    }
-
-    .p-datepicker-day {
-      width: 2rem;
-      height: 2rem;
-    }
-
-    .p-datepicker-day-cell {
-      padding: 1px;
-    }
   }
 }
 
@@ -36,6 +44,71 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.day {
+  margin: 10px 10px 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ac-muted);
+
+  &:first-child {
+    margin-top: 0;
+  }
+}
+
+.pinned-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  i {
+    font-size: 11px;
+  }
+}
+
+.pinned-divider {
+  width: 100%;
+  margin: 8px 0 2px;
+  border: 0;
+  border-top: 1px solid var(--ac-panel-border);
+}
+
+.pin-toggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0;
+
+  i {
+    font-size: 12px;
+  }
+
+  &.pinned i {
+    color: var(--p-primary-color);
+  }
+
+  &:focus-visible,
+  &:hover {
+    opacity: 1;
+    background: var(--p-content-hover-background);
+  }
+}
+
+.note-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .note-link {
@@ -54,6 +127,10 @@
 
   &:hover {
     background: var(--p-content-hover-background);
+
+    .pin-toggle {
+      opacity: 1;
+    }
   }
 
   &.active {
@@ -71,6 +148,9 @@
   display: flex;
   flex-direction: column;
   gap: 1px;
+  flex: 0 0 auto;
+  max-height: 40%;
+  overflow-y: auto;
   padding-top: 8px;
   border-top: 1px solid var(--ac-panel-border);
 
@@ -196,6 +276,14 @@
   .notes {
     grid-template-columns: minmax(0, 1fr);
     height: auto;
+
+    &.collapsed {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  .rail {
+    flex-direction: row;
   }
 
   .splitter {

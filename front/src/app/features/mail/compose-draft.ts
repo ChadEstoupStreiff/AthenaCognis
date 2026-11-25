@@ -7,6 +7,8 @@ export interface ComposeForm {
   readonly accountId: string;
   readonly to: string;
   readonly cc: string;
+  /** Blind copies (hidden from the other recipients). */
+  readonly bcc: string;
   readonly subject: string;
   /** Written text as plain text (previews, plain part). */
   readonly body: string;
@@ -30,7 +32,7 @@ export interface DraftContext {
  * @returns True when a recipient, the subject, the text, an image or a file is filled.
  */
 export function hasContent(form: ComposeForm): boolean {
-  const fields = [form.to, form.cc, form.subject, form.body, form.bodyHtml];
+  const fields = [form.to, form.cc, form.bcc, form.subject, form.body, form.bodyHtml];
   return form.attachments.length > 0 || fields.some((value) => value.trim() !== '');
 }
 
@@ -56,6 +58,7 @@ export function sameForm(left: ComposeForm, right: ComposeForm): boolean {
     left.accountId === right.accountId &&
     left.to === right.to &&
     left.cc === right.cc &&
+    left.bcc === right.bcc &&
     left.subject === right.subject &&
     left.body === right.body &&
     left.bodyHtml === right.bodyHtml &&
@@ -76,6 +79,7 @@ export function draftInput(form: ComposeForm, context: DraftContext): MailDraftI
     kind: context.kind,
     to: splitAddresses(form.to),
     cc: splitAddresses(form.cc),
+    bcc: splitAddresses(form.bcc),
     subject: form.subject,
     body: form.body,
     body_html: form.bodyHtml === '' ? null : form.bodyHtml,
@@ -96,6 +100,7 @@ export function formOfDraft(draft: MailDraft): ComposeForm {
     accountId: draft.account_id,
     to: joinRecipients(draft.to),
     cc: joinRecipients(draft.cc),
+    bcc: joinRecipients(draft.bcc),
     subject: draft.subject,
     body: draft.body,
     bodyHtml: draft.body_html ?? textToHtml(draft.body),

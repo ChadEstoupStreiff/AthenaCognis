@@ -9,7 +9,7 @@ from typing import Literal, get_args
 
 from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
-from sqlalchemy.sql.elements import ColumnElement
+from sqlalchemy.sql.elements import ColumnElement, UnaryExpression
 
 from controllers.mail.imap_client import ServerLogin
 from controllers.mail.parser import ParsedMail
@@ -34,10 +34,35 @@ MailView = Literal[
 ]
 MAIL_VIEWS: tuple[str, ...] = get_args(MailView)
 JsonDict = dict[str, object]
+OrderKey = UnaryExpression[bool] | UnaryExpression[datetime]
 
 
 class NotFoundError(Exception):
     """Requested row does not exist."""
+
+
+def encode_list(values: list[str]) -> str | None:
+    """
+    Store a list of strings in a nullable text column
+
+    Args:
+        values (list[str]): values (ids, addresses)
+    Returns:
+        str | None: JSON list, None when empty
+    """
+    return json.dumps(values) if values else None
+
+
+def decode_list(raw: str | None) -> list[str]:
+    """
+    Read a list of strings from a nullable text column
+
+    Args:
+        raw (str | None): JSON list or None
+    Returns:
+        list[str]: values
+    """
+    return [str(value) for value in json.loads(raw)] if raw else []
 
 
 @contextmanager
@@ -641,6 +666,7 @@ class MessageQuery:
     offset: int = 0
     contact_id: str | None = None
     filters: MessageFilters = field(default_factory=MessageFilters)
+    pinned_first: bool = True
 
 
 def account_filter(account_ids: Sequence[str]) -> ColumnElement[bool]:
@@ -712,7 +738,7 @@ def list_messages(session: Session, query: MessageQuery) -> list[JsonDict]:
         )
         .outerjoin(MailSender, MailSender.email == MailMessage.sender_email)
         .where(view_filter(query.view, priority))
-        .order_by(MailMessage.is_pinned.desc(), MailMessage.date.desc())
+        .order_by(*_list_order(query.pinned_first))
         .limit(min(query.limit, MAX_PAGE))
         .offset(query.offset)
     )
@@ -729,6 +755,21 @@ def list_messages(session: Session, query: MessageQuery) -> list[JsonDict]:
         message_summary(message, flag, level, contact_id)
         for message, flag, level, contact_id in session.execute(statement)
     ]
+
+
+def _list_order(pinned_first: bool) -> list[OrderKey]:
+    """
+    Sort keys of the message list: newest first, optionally pinned mail on top
+
+    Args:
+        pinned_first (bool): list pinned mail before the others
+    Returns:
+        list[OrderKey]: ORDER BY clauses
+    """
+    newest_first = MailMessage.date.desc()
+    if not pinned_first:
+        return [newest_first]
+    return [MailMessage.is_pinned.desc(), newest_first]
 
 
 def contact_column() -> ColumnElement[str | None]:

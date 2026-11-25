@@ -343,6 +343,9 @@
                 </span>
               </div>
             </li>
+            @if (endsPinnedGroup($index)) {
+              <li class="pin-divider" role="separator" aria-hidden="true"></li>
+            }
           } @empty {
             <li class="ac-muted empty">
               {{ list.isLoading() ? 'Loading…' : 'Nothing here. ' + currentView().hint + '.' }}
@@ -411,7 +414,7 @@
                 size="small"
                 [severity]="mail.is_pinned ? 'primary' : 'secondary'"
                 [text]="!mail.is_pinned"
-                [pTooltip]="mail.is_pinned ? 'Unpin' : 'Pin (keeps it on top)'"
+                [pTooltip]="mail.is_pinned ? 'Unpin' : pinTooltip()"
                 [ariaLabel]="mail.is_pinned ? 'Unpin' : 'Pin'"
                 (onClick)="setState(mail, { is_pinned: !mail.is_pinned })"
               />

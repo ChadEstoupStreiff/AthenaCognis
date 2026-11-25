@@ -282,6 +282,7 @@ export class MailPage {
             search: this.debouncedQuery(),
             sender: this.senderFilter(),
             filters: filterParams(this.filters()),
+            pinnedFirst: this.settings.get('mail_pinned_first'),
             limit: this.limit(),
             version: this.sync.version('mail')(),
           }
@@ -386,6 +387,30 @@ export class MailPage {
    */
   protected isActivity(mail: MailSummary): boolean {
     return isActivityToday(mail, this.settings.get('mail_activity_reset_time'));
+  }
+
+  /**
+   * Tooltip of the Pin button (mentions the top position only when pinned mail heads lists).
+   *
+   * @returns Tooltip text.
+   */
+  protected pinTooltip(): string {
+    return this.settings.get('mail_pinned_first') ? 'Pin (keeps it on top)' : 'Pin';
+  }
+
+  /**
+   * Whether the row at this index is the last pinned one, followed by unpinned mail.
+   *
+   * @param index - Row index in the list.
+   * @returns True when a divider belongs below this row.
+   */
+  protected endsPinnedGroup(index: number): boolean {
+    if (!this.settings.get('mail_pinned_first')) {
+      return false;
+    }
+    const list = this.rows();
+    const next = list[index + 1];
+    return !!list[index]?.is_pinned && !!next && !next.is_pinned;
   }
 
   /**

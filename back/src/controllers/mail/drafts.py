@@ -22,6 +22,7 @@ class DraftContent:
     kind: str = "new"
     to: list[str] = field(default_factory=list)
     cc: list[str] = field(default_factory=list)
+    bcc: list[str] = field(default_factory=list)
     subject: str = ""
     body: str = ""
     quote: str = ""
@@ -45,6 +46,7 @@ def draft_view(draft: MailDraft) -> JsonDict:
         "kind": draft.kind,
         "to": json.loads(draft.recipients),
         "cc": json.loads(draft.cc),
+        "bcc": store.decode_list(draft.bcc),
         "subject": draft.subject,
         "body": draft.body,
         "body_html": draft.body_html,
@@ -107,6 +109,7 @@ def fill(draft: MailDraft, content: DraftContent) -> None:
     draft.kind = content.kind
     draft.recipients = json.dumps(content.to)
     draft.cc = json.dumps(content.cc)
+    draft.bcc = store.encode_list(content.bcc)
     draft.subject = content.subject
     draft.body = content.body
     draft.body_html = content.body_html

@@ -525,6 +525,20 @@ def test_pinned_mail_lists_first_and_has_a_view(client: TestClient) -> None:
     assert client.get("/mail/counts").json()["pinned"] == 1
 
 
+def test_pinned_mail_keeps_date_order_when_not_pinned_first(client: TestClient) -> None:
+    """
+    List with pinned_first off: pinned mail stays in date order
+
+    Returns:
+        None
+    """
+    seed([parsed(1, "a@x.org"), parsed(2, "b@x.org")])
+    oldest = client.get("/mail/messages").json()[-1]["id"]
+    client.patch(f"/mail/messages/{oldest}", json={"is_pinned": True})
+    rows = client.get("/mail/messages", params={"pinned_first": False}).json()
+    assert [row["subject"] for row in rows] == ["Mail 2", "Mail 1"]
+
+
 def test_activity_flag_is_stored_locally(client: TestClient) -> None:
     """
     Flag a message for the Activity feed and read the flag back
@@ -834,6 +848,39 @@ def test_send_appends_account_signature(client: TestClient, sender: FakeSender) 
     assert sender.sent == ["Hi\n\nMe\nACME\n\n> q"]
 
 
+def test_send_passes_bcc_to_the_transport(
+    client: TestClient, sender: FakeSender
+) -> None:
+    """
+    Keep Bcc addresses through the Outbox up to the transport
+
+    Args:
+        client (TestClient): client
+        sender (FakeSender): fake transport
+    Returns:
+        None
+    """
+    payload = {"account_id": ACCOUNT_ID, "to": ["a@x.org"], "bcc": ["b@x.org"]}
+    response = client.post("/mail/send", json=payload)
+    assert response.status_code == 200, response.text
+    assert response.json()["bcc"] == ["b@x.org"]
+    assert outbox.send_next() is True
+    assert sender.mails[0].bcc == ["b@x.org"]
+
+
+def test_send_rejects_invalid_bcc(client: TestClient) -> None:
+    """
+    Refuse a Bcc value that is not an address
+
+    Args:
+        client (TestClient): client
+    Returns:
+        None
+    """
+    payload = {"account_id": ACCOUNT_ID, "to": ["a@x.org"], "bcc": ["nobody"]}
+    assert client.post("/mail/send", json=payload).status_code == 422
+
+
 def test_outbox_holds_mail_until_sent(client: TestClient, sender: FakeSender) -> None:
     """
     List queued mail in the Outbox, oldest first, and drop it once sent
@@ -940,10 +987,17 @@ def test_draft_keeps_incomplete_fields_and_updates_in_place(client: TestClient) 
     """
     draft = save_draft(client, to=["bob@"], subject="Plan", kind="reply", quote="> q")
     assert (draft["to"], draft["kind"], draft["quote"]) == (["bob@"], "reply", "> q")
+    assert draft["bcc"] == []
     save_draft(
-        client, str(draft["id"]), to=["bob@x.org"], subject="Plan v2", kind="reply"
+        client,
+        str(draft["id"]),
+        to=["bob@x.org"],
+        bcc=["eve@x.org"],
+        subject="Plan v2",
+        kind="reply",
     )
     [row] = client.get("/mail/drafts").json()
+    assert row["bcc"] == ["eve@x.org"]
     assert (row["id"], row["to"], row["subject"]) == (
         draft["id"],
         ["bob@x.org"],
@@ -1281,7 +1335,9 @@ def test_attachments_are_sent_then_removed(
     """
     upload_id = upload(client, "../report.pdf", b"%PDF", "application/pdf")
     payload = {"account_id": ACCOUNT_ID, "to": ["a@x.org"], "body": "See file"}
-    response = client.post("/mail/send", json={**payload, "attachment_ids": [upload_id]})
+    response = client.post(
+        "/mail/send", json={**payload, "attachment_ids": [upload_id]}
+    )
     assert response.status_code == 200, response.text
     assert outbox.send_next() is True
     files = sender.mails[0].attachments
@@ -1363,7 +1419,9 @@ def test_forward_copies_original_attachments(
     mail = EmailMessage()
     mail["From"] = "a@x.org"
     mail.set_content("Two files")
-    mail.add_attachment(b"%PDF", maintype="application", subtype="pdf", filename="a.pdf")
+    mail.add_attachment(
+        b"%PDF", maintype="application", subtype="pdf", filename="a.pdf"
+    )
     mail.add_attachment(b"big!", maintype="text", subtype="plain", filename="b.txt")
     seed([parsed(1, "a@x.org")])
     monkeypatch.setattr(

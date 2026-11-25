@@ -13,11 +13,13 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import type { MenuItem } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
-import { DatePickerModule } from 'primeng/datepicker';
+import { IconFieldModule } from 'primeng/iconfield';
+import { InputIconModule } from 'primeng/inputicon';
 import { InputTextModule } from 'primeng/inputtext';
 import { MenuModule } from 'primeng/menu';
 import { SelectButtonModule } from 'primeng/selectbutton';
@@ -33,6 +35,7 @@ import {
 import { formatFileTime, formatLocalDate, parseLocalDate } from '@domain/time';
 import { ACTIVITY_PROJECT } from '@domain/contracts';
 import { ActivityApi } from '../../core/activity/activity.api';
+import { FileDetailsApi } from '../../core/files/file-details.api';
 import { FilesApi } from '../../core/files/files.api';
 import { NoteHistoryApi } from '../../core/files/note-history.api';
 import { Logger } from '../../core/logging/logger.service';
@@ -62,6 +65,7 @@ import { AGENDA_SOURCE, agendaMarkdown } from './note-agenda';
 import { NoteCompletions } from './note-completions';
 import { type ExportFormat, NoteExport } from './note-export';
 import { NoteHistoryDialogComponent } from './note-history-dialog.component';
+import { filterNotes, groupNotesByDay, splitPinned } from './note-list';
 import { fileMarkdown } from './note-references';
 import { NoteRelations } from './note-relations';
 import { NoteScrollSync } from './note-scroll-sync';
@@ -78,6 +82,7 @@ interface NoteDraft {
 const NOTES_FOLDER = 'notes';
 const PREVIEW_WIDTH_KEY = 'ac.notes.previewWidth';
 const SYNC_SCROLL_KEY = 'ac.notes.syncScroll';
+const SIDEBAR_COLLAPSED_KEY = 'ac.notes.sidebarCollapsed';
 /** No stored width: editor and preview split the space evenly. */
 const EVEN_SPLIT = 0;
 const NEW_NOTE = '# New note\n\n';
@@ -94,15 +99,32 @@ const LAYOUTS = [
 ];
 
 /**
- * Read the persisted scroll-sync preference.
+ * Read a persisted on/off preference.
  *
- * @returns `true` unless turned off.
+ * @param key - Storage key.
+ * @param fallback - Value when nothing is stored (or storage is unavailable).
+ * @returns Stored value.
  */
-function storedSyncScroll(): boolean {
+function storedFlag(key: string, fallback: boolean): boolean {
   try {
-    return localStorage.getItem(SYNC_SCROLL_KEY) !== '0';
+    const value = localStorage.getItem(key);
+    return value === null ? fallback : value === '1';
   } catch {
-    return true;
+    return fallback;
+  }
+}
+
+/**
+ * Persist an on/off preference.
+ *
+ * @param key - Storage key.
+ * @param enabled - Value.
+ */
+function storeFlag(key: string, enabled: boolean): void {
+  try {
+    localStorage.setItem(key, enabled ? '1' : '0');
+  } catch {
+    // Preference only: storage may be unavailable.
   }
 }
 
@@ -120,9 +142,11 @@ function messageOf(error: unknown): string | undefined {
 @Component({
   selector: 'ac-notes-page',
   imports: [
+    NgTemplateOutlet,
     FormsModule,
     ButtonModule,
-    DatePickerModule,
+    IconFieldModule,
+    InputIconModule,
     InputTextModule,
     MenuModule,
     SelectButtonModule,
@@ -143,6 +167,7 @@ function messageOf(error: unknown): string | undefined {
 })
 export class NotesPage {
   private readonly files = inject(FilesApi);
+  private readonly details = inject(FileDetailsApi);
   private readonly projects = inject(ProjectsApi);
   private readonly notify = inject(NotifyService);
   private readonly sync = inject(DataSync);
@@ -159,8 +184,6 @@ export class NotesPage {
 
   /** Query parameter: note being edited. */
   readonly path = input<string | undefined>(undefined);
-  /** Query parameter: day shown in the sidebar. */
-  readonly date = input<string | undefined>(undefined);
   /** Query parameter: `1` creates a note on arrival (from the New menu or palette). */
   readonly create = input<string | undefined>(undefined);
 
@@ -170,7 +193,8 @@ export class NotesPage {
   protected readonly content = signal('');
   protected readonly loaded = signal(false);
   protected readonly renaming = signal('');
-  protected readonly syncScroll = signal(storedSyncScroll());
+  protected readonly syncScroll = signal(storedFlag(SYNC_SCROLL_KEY, true));
+  protected readonly sidebarCollapsed = signal(storedFlag(SIDEBAR_COLLAPSED_KEY, false));
   protected readonly showHistory = signal(false);
   protected readonly showEmbedPicker = signal(false);
   protected readonly aiContext = AI_CONTEXT;
@@ -179,11 +203,11 @@ export class NotesPage {
     const path = this.path();
     return path !== undefined && isSharedFilePath(path) ? path : null;
   });
+  /** Day of the open note (agenda insertion). */
   protected readonly day = computed(
-    () =>
-      this.date() ?? parseSharedPath(this.notePath() ?? '')?.date ?? formatLocalDate(new Date()),
+    () => parseSharedPath(this.notePath() ?? '')?.date ?? formatLocalDate(new Date()),
   );
-  protected readonly dayDate = computed(() => parseLocalDate(this.day()));
+  protected readonly query = signal('');
   protected readonly isMarkdown = computed(() =>
     ['md', 'markdown', 'txt'].includes(extensionOf(this.notePath() ?? '')),
   );
@@ -195,14 +219,31 @@ export class NotesPage {
     { label: 'Word (.doc)', icon: 'pi pi-file-word', command: () => void this.exportNote('word') },
   ];
 
-  /** Notes of the day (assets in `notes/<note>/assets` are skipped). */
+  /** Every note (assets in `notes/<note>/assets` are skipped). */
   protected readonly notes = resource({
-    params: () => ({ day: this.day(), version: this.sync.version('notes')() }),
-    loader: async ({ params }) =>
-      (await this.files.listFolder(NOTES_FOLDER, params.day, params.day)).filter((path) =>
-        isSharedFilePath(path),
-      ),
+    params: () => ({ version: this.sync.version('notes')() }),
+    loader: async () =>
+      (await this.files.folderFiles(NOTES_FOLDER)).filter((path) => isSharedFilePath(path)),
   });
+  /** Pinned files (all kinds; intersected with notes). */
+  private readonly pinnedResource = resource({
+    params: () => ({ version: this.sync.version('pinned')() }),
+    loader: () => this.details.pinnedFiles(),
+  });
+  protected readonly pinnedSet = computed<ReadonlySet<string>>(
+    () => new Set(this.pinnedResource.hasValue() ? this.pinnedResource.value() : []),
+  );
+  /** Notes matching the search, split into pinned and the rest. */
+  private readonly matchingNotes = computed(() =>
+    splitPinned(
+      filterNotes(this.notes.hasValue() ? this.notes.value() : [], this.query()),
+      this.pinnedSet(),
+    ),
+  );
+  /** Pinned notes matching the search, by name. */
+  protected readonly pinnedNotes = computed(() => this.matchingNotes().pinned);
+  /** Unpinned notes matching the search, grouped by day, newest first. */
+  protected readonly noteDays = computed(() => groupNotesByDay(this.matchingNotes().others));
 
   /**
    * Store a pasted, dropped or picked file in `notes/<note name>/assets` of the current note.
@@ -268,6 +309,22 @@ export class NotesPage {
   }
 
   /**
+   * Pin or unpin a note.
+   *
+   * @param path - Note path.
+   * @param event - Click event (kept from opening the note).
+   */
+  protected async togglePin(path: string, event: Event): Promise<void> {
+    event.stopPropagation();
+    const pinned = !this.pinnedSet().has(path);
+    try {
+      await this.details.setPinned(path, pinned);
+    } catch (error) {
+      this.notify.error(pinned ? 'Note not pinned.' : 'Note not unpinned.', messageOf(error));
+    }
+  }
+
+  /**
    * File name of a path.
    *
    * @param path - Path.
@@ -275,20 +332,6 @@ export class NotesPage {
    */
   protected nameOf(path: string): string {
     return fileNameOf(path);
-  }
-
-  /**
-   * Show another day.
-   *
-   * @param date - Picked date.
-   */
-  protected pickDay(date: Date | null): void {
-    if (date !== null) {
-      void this.router.navigate([], {
-        queryParams: { date: formatLocalDate(date) },
-        queryParamsHandling: 'merge',
-      });
-    }
   }
 
   /**
@@ -325,12 +368,13 @@ export class NotesPage {
     this.onEdit(toggleTask(this.content(), index));
   }
 
-  /** Create a note for the selected day and open it. */
+  /** Create a note dated today and open it. */
   protected async createNote(): Promise<void> {
+    const now = new Date();
     const path = buildSharedPath({
-      date: this.day(),
+      date: formatLocalDate(now),
       folder: NOTES_FOLDER,
-      name: `${formatFileTime(new Date())}.md`,
+      name: `${formatFileTime(now)}.md`,
     });
     await this.files.writeText(path, NEW_NOTE, { summarize: false });
     this.open(path);
@@ -395,11 +439,14 @@ export class NotesPage {
   protected toggleSyncScroll(): void {
     const enabled = !this.syncScroll();
     this.syncScroll.set(enabled);
-    try {
-      localStorage.setItem(SYNC_SCROLL_KEY, enabled ? '1' : '0');
-    } catch {
-      // Preference only: storage may be unavailable.
-    }
+    storeFlag(SYNC_SCROLL_KEY, enabled);
+  }
+
+  /** Collapse or expand the notes sidebar. */
+  protected toggleSidebar(): void {
+    const collapsed = !this.sidebarCollapsed();
+    this.sidebarCollapsed.set(collapsed);
+    storeFlag(SIDEBAR_COLLAPSED_KEY, collapsed);
   }
 
   /** Recompute scroll anchors (after each preview render or layout change). */

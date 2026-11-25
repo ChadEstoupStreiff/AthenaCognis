@@ -1,6 +1,5 @@
 """Files attached in the compose dialog: stored on disk until sent or abandoned."""
 
-import json
 import logging
 import re
 from datetime import datetime, timedelta
@@ -133,7 +132,7 @@ def encode_ids(ids: list[str]) -> str | None:
     Returns:
         str | None: JSON list, None when empty
     """
-    return json.dumps(ids) if ids else None
+    return store.encode_list(ids)
 
 
 def decode_ids(raw: str | None) -> list[str]:
@@ -145,7 +144,7 @@ def decode_ids(raw: str | None) -> list[str]:
     Returns:
         list[str]: upload ids
     """
-    return [str(value) for value in json.loads(raw)] if raw else []
+    return store.decode_list(raw)
 
 
 def _uploads(session: Session, ids: list[str]) -> dict[str, MailUpload]:

@@ -65,6 +65,7 @@ default_settings = {
     "mail_activity_reset_time": "04:00",
     "mail_auto_fetch": True,  # sync every account in the background
     "mail_auto_fetch_minutes": 5,  # minutes between two background syncs
+    "mail_pinned_first": True,  # pinned mail heads every mailbox list (front-only)
     "mail_nav_badge": True,  # unread inbox count on the Mail rail entry (front-only)
     "mail_trash_retention_days": 30,  # deleted mail and drafts kept in the Trash  # flags before it count for the day before
     "nav_order": [],  # sidebar routes in display order (front-only)
