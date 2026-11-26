@@ -5,7 +5,6 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Dict
 
-import tiktoken
 from db import ChatMessage, ChatSession, get_db
 from fastapi import HTTPException
 from tools.ai import (
@@ -14,6 +13,7 @@ from tools.ai import (
     request_chat_llm,
 )
 from tools.prompts import get_prompt
+from tools.token_count import count_tokens
 from utils import guess_mime, read_content
 from views.settings import get_setting
 
@@ -104,16 +104,14 @@ class ChatManager:
         latest_calendars = json.loads(history[-1]["calendar"]) if history[-1]["calendar"] else []
         latest_query_text = history[-1]["content"]
 
-        encoder = tiktoken.encoding_for_model("gpt-4")
-
         def turn_tokens(turn):
             return sum(
-                len(encoder.encode(part["text"])) if part["type"] == "text" else 300
+                count_tokens(part["text"]) if part["type"] == "text" else 300
                 for part in turn["content"]
             )
 
         budget = int(get_model_context_tokens(ai_type, model) * 0.7)
-        remaining = budget - len(encoder.encode(system_text))
+        remaining = budget - count_tokens(system_text)
 
         kept = []
         for i, turn in enumerate(reversed(turns)):
