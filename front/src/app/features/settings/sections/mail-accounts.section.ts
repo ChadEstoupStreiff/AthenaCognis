@@ -85,7 +85,7 @@ import { MailAccountDialogComponent } from '../../mail/account-dialog.component'
     }
     h3 {
       margin: 0;
-      font-size: 14px;
+      font-size: calc(14px * var(--ac-font-scale));
     }
     .account-bar {
       flex: none;

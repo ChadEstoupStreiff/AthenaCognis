@@ -137,7 +137,7 @@ function optional(value: string): string | null {
       display: flex;
       flex-direction: column;
       gap: 4px;
-      font-size: 12px;
+      font-size: calc(12px * var(--ac-font-scale));
       color: var(--ac-muted);
     }
     .wide {

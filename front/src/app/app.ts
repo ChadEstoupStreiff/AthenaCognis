@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { ToastModule } from 'primeng/toast';
+import { AppearanceService } from './core/theme/appearance.service';
 import { ThemeService } from './core/theme/theme.service';
 
 /** Root component: router outlet plus global toast and confirm dialog hosts. */
@@ -24,4 +25,6 @@ import { ThemeService } from './core/theme/theme.service';
 export class App {
   /** Instantiated eagerly so the theme class is applied before the first route renders. */
   protected readonly theme = inject(ThemeService);
+  /** Instantiated eagerly so custom fonts and colors apply before the first route renders. */
+  protected readonly appearance = inject(AppearanceService);
 }

@@ -10,35 +10,37 @@ import {
 } from '@angular/core';
 import { Router } from '@angular/router';
 import type {
-  DailyGeneration,
-  DailyGenerationRequest,
   DataSourceInfo,
+  GenerationRequest,
   GenerationSpan,
+  PeriodGeneration,
 } from '@domain/contracts';
 import { ButtonModule } from 'primeng/button';
 import { ProgressBarModule } from 'primeng/progressbar';
 import { ActivityGenerationApi } from '../../core/activity/activity-generation.api';
-import { dailyRequest, periodOf } from '../../core/activity/activity-period';
+import {
+  generationRequest,
+  periodOf,
+  type GenerationContext,
+} from '../../core/activity/activity-period';
 import { periodOptions, scheduleDefaults } from '../../core/activity/generation-settings';
 import { SettingsStore } from '../../core/settings/settings.store';
 import { DataSync } from '../../core/state/data-sync.service';
 import { MarkdownViewComponent } from '../../shared/ui/markdown-view.component';
-import { TagChipComponent } from '../../shared/ui/tag-chip.component';
 import { DryRunDialogComponent } from './dry-run-dialog.component';
-import { GenerationDialogComponent, type GenerationChoice } from './generation-dialog.component';
-import { isGenerating, noteBody, recordRange } from './generation-model';
+import { GenerationDialogComponent } from './generation-dialog.component';
+import { isGenerating, noteBody } from './generation-model';
 
 /** Refresh of a running generation. */
 const GENERATION_POLL_MS = 3000;
 
-/** What was generated for the picked day, week or month, and the generation form. */
+/** Summary generated for the picked day, week or month, and the generation form. */
 @Component({
   selector: 'ac-generation-panel',
   imports: [
     ButtonModule,
     ProgressBarModule,
     MarkdownViewComponent,
-    TagChipComponent,
     GenerationDialogComponent,
     DryRunDialogComponent,
   ],
@@ -59,7 +61,6 @@ export class GenerationPanelComponent {
   /** Picked day (any day of the week or month for longer spans). */
   readonly picked = input.required<Date>();
 
-  protected readonly recordRange = recordRange;
   protected readonly noteBody = noteBody;
   protected readonly period = computed(() =>
     periodOf(this.span(), this.picked(), periodOptions(this.settings.values())),
@@ -70,22 +71,19 @@ export class GenerationPanelComponent {
   );
   protected readonly formOpen = signal(false);
   /** Request previewed by the dry run popup; null when closed. */
-  protected readonly dryRunRequest = signal<DailyGenerationRequest | null>(null);
+  protected readonly dryRunRequest = signal<GenerationRequest | null>(null);
 
-  /** Generation of the picked day; weekly and monthly are not generated yet. */
-  protected readonly daily = resource({
-    params: () => (this.span() === 'daily' ? this.period().key : undefined),
-    loader: ({ params }) => this.api.daily(params),
+  /** Generation of the picked day, week or month. */
+  protected readonly result = resource({
+    params: () => ({ span: this.span(), day: this.period().key }),
+    loader: ({ params }) => this.api.generation(params.span, params.day),
   });
-  protected readonly generation = computed<DailyGeneration | null>(() =>
-    this.daily.hasValue() ? this.daily.value() : null,
+  protected readonly generation = computed<PeriodGeneration | null>(() =>
+    this.result.hasValue() ? this.result.value() : null,
   );
   protected readonly run = computed(() => this.generation()?.task ?? null);
   protected readonly generating = computed(() => isGenerating(this.run()));
-  protected readonly hasResults = computed(() => {
-    const generation = this.generation();
-    return generation !== null && (generation.note !== null || generation.records.length > 0);
-  });
+  protected readonly hasResults = computed(() => (this.generation()?.note ?? null) !== null);
 
   constructor() {
     effect((onCleanup) => {
@@ -93,12 +91,12 @@ export class GenerationPanelComponent {
         return;
       }
       const timer = setInterval(() => {
-        this.daily.reload();
+        this.result.reload();
       }, GENERATION_POLL_MS);
       onCleanup(() => {
         clearInterval(timer);
-        // Finished: notes, time entries, projects and the calendar dots changed.
-        this.sync.invalidate('notes', 'calendar', 'projects', 'generation');
+        // Finished: notes, projects and the calendar dots changed.
+        this.sync.invalidate('notes', 'projects', 'generation');
       });
     });
   }
@@ -106,27 +104,21 @@ export class GenerationPanelComponent {
   /**
    * Queue the generation asked by the form.
    *
-   * @param choice - Context and outputs.
+   * @param context - Context and custom instruction.
    */
-  protected async generate(choice: GenerationChoice): Promise<void> {
-    if (this.span() !== 'daily') {
-      return;
-    }
-    await this.api.generateDaily(dailyRequest(this.period(), choice.sources, choice.outputs));
-    this.daily.reload();
+  protected async generate(context: GenerationContext): Promise<void> {
+    await this.api.generate(generationRequest(this.period(), context));
+    this.result.reload();
     this.sync.invalidate('generation');
   }
 
   /**
-   * Preview the prompts of the generation asked by the form.
+   * Preview the prompt of the generation asked by the form.
    *
-   * @param choice - Context and outputs.
+   * @param context - Context and custom instruction.
    */
-  protected previewPrompts(choice: GenerationChoice): void {
-    if (this.span() !== 'daily') {
-      return;
-    }
-    this.dryRunRequest.set(dailyRequest(this.period(), choice.sources, choice.outputs));
+  protected previewPrompts(context: GenerationContext): void {
+    this.dryRunRequest.set(generationRequest(this.period(), context));
   }
 
   /**

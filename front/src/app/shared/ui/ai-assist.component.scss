@@ -10,7 +10,7 @@
   align-items: center;
   gap: 4px;
   margin-right: 4px;
-  font-size: 12px;
+  font-size: calc(12px * var(--ac-font-scale));
   font-weight: 600;
   color: var(--p-primary-color);
 }

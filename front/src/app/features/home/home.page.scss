@@ -3,12 +3,38 @@
 
   h1 {
     margin: 0;
-    font-size: 26px;
+    font-size: calc(26px * var(--ac-font-scale));
     letter-spacing: -0.02em;
   }
 
   p {
     margin: 2px 0 0;
+  }
+
+  .daily-title {
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: calc(11px * var(--ac-font-scale));
+  }
+
+  .daily {
+    margin: 2px 0 4px;
+
+    p {
+      margin: 0;
+      font-size: calc(20px * var(--ac-font-scale));
+      font-weight: 600;
+      line-height: 1.35;
+      letter-spacing: -0.01em;
+      white-space: pre-line;
+    }
+
+    cite {
+      display: block;
+      margin-top: 2px;
+      font-style: italic;
+      opacity: 0.75;
+    }
   }
 }
 
@@ -62,7 +88,7 @@
     height: 44px;
     border-radius: 50%;
     background: var(--ac-panel-background);
-    font-size: 12px;
+    font-size: calc(12px * var(--ac-font-scale));
     font-weight: 600;
   }
 }
@@ -94,7 +120,7 @@
     align-items: center;
     gap: 8px;
     margin: 0;
-    font-size: 15px;
+    font-size: calc(15px * var(--ac-font-scale));
   }
 }
 
@@ -115,13 +141,13 @@ section.block.tray {
   background: color-mix(in srgb, var(--p-primary-color) 1.5%, transparent);
 
   h2 {
-    font-size: 18px;
+    font-size: calc(18px * var(--ac-font-scale));
     font-weight: 700;
     color: var(--p-text-color);
   }
 
   h2 i {
-    font-size: 18px;
+    font-size: calc(18px * var(--ac-font-scale));
     color: var(--p-primary-color);
   }
 
@@ -130,14 +156,14 @@ section.block.tray {
     border-radius: 999px;
     background: color-mix(in srgb, var(--p-primary-color) 12%, transparent);
     color: var(--p-primary-color);
-    font-size: 12px;
+    font-size: calc(12px * var(--ac-font-scale));
     font-weight: 600;
     line-height: 20px;
   }
 }
 
 .count {
-  font-size: 12px;
+  font-size: calc(12px * var(--ac-font-scale));
   font-weight: 400;
 }
 
@@ -148,7 +174,7 @@ section.block.tray {
 
   span {
     flex: 1;
-    font-size: 12px;
+    font-size: calc(12px * var(--ac-font-scale));
   }
 }
 
@@ -179,7 +205,7 @@ section.block.tray {
 }
 
 .due {
-  font-size: 12px;
+  font-size: calc(12px * var(--ac-font-scale));
   color: var(--ac-muted);
   white-space: nowrap;
 
@@ -191,12 +217,12 @@ section.block.tray {
 
 .empty {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--ac-font-scale));
 }
 
 .group-title {
   margin: 20px 0 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--ac-font-scale));
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -222,16 +248,16 @@ section.block.tray {
   }
 
   strong {
-    font-size: 22px;
+    font-size: calc(22px * var(--ac-font-scale));
     letter-spacing: -0.02em;
   }
 
   span {
-    font-size: 12px;
+    font-size: calc(12px * var(--ac-font-scale));
   }
 
   .hint {
-    font-size: 11px;
+    font-size: calc(11px * var(--ac-font-scale));
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -243,7 +269,7 @@ section.block.tray {
   flex-wrap: wrap;
   gap: 6px 16px;
   margin-top: 8px;
-  font-size: 12px;
+  font-size: calc(12px * var(--ac-font-scale));
 
   span {
     display: inline-flex;

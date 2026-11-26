@@ -101,7 +101,7 @@ interface LoadedAttachment {
       max-height: 75vh;
       margin: 0;
       overflow: auto;
-      font-size: 13px;
+      font-size: calc(13px * var(--ac-font-scale));
       white-space: pre-wrap;
       overflow-wrap: anywhere;
     }

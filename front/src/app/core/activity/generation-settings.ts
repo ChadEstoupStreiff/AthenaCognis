@@ -1,11 +1,7 @@
-import type { GenerationOutput, GenerationSpan, SettingValue } from '@domain/contracts';
+import type { GenerationBasis, GenerationSpan, SettingValue } from '@domain/contracts';
 import { DEFAULT_PERIOD_OPTIONS, type PeriodOptions } from './activity-period';
 
-/**
- * Context of a weekly or monthly generation: summaries of the next shorter span
- * (`generated`), daily summaries (`generated_daily`, monthly only) or data sources.
- */
-export type GenerationBasis = 'generated' | 'generated_daily' | 'sources';
+export type { GenerationBasis } from '@domain/contracts';
 
 /** Context choice of a form. */
 export interface ContextOption {
@@ -20,7 +16,8 @@ export interface ScheduleDefaults {
   readonly fillWithDaily: boolean;
   /** Data source keys; empty = every enabled source. */
   readonly sources: readonly string[];
-  readonly outputs: readonly GenerationOutput[];
+  /** Custom instruction steering the summary, "" when none. */
+  readonly instruction: string;
 }
 
 /** Settings shared by every span. */
@@ -33,8 +30,8 @@ const CLOCK_PATTERN = /^(\d{1,2}):(\d{2})$/;
 const MAX_HOUR = 23;
 const MAX_MINUTE = 59;
 const WEEK_DAYS = 7;
-const BOTH_OUTPUTS: readonly GenerationOutput[] = ['summary', 'time'];
-const OUTPUT_VALUES: ReadonlySet<string> = new Set(BOTH_OUTPUTS);
+/** Longest custom instruction (backend limit). */
+export const MAX_INSTRUCTION_LENGTH = 2000;
 const SOURCES_OPTION: ContextOption = { value: 'sources', label: 'Select data sources' };
 /** Context choices per span; none for daily (always data sources). */
 const CONTEXT_OPTIONS: Readonly<Record<GenerationSpan, readonly ContextOption[]>> = {
@@ -148,6 +145,9 @@ export function storedBasis(
   value: SettingValue | undefined,
   span: GenerationSpan,
 ): GenerationBasis {
+  if (span === 'daily') {
+    return 'sources';
+  }
   const offered = contextOptions(span).find((option) => option.value === value);
   return offered?.value ?? 'generated';
 }
@@ -157,20 +157,17 @@ export function storedBasis(
  *
  * @param values - Every setting.
  * @param span - Time span.
- * @returns Basis, fill toggle, sources and outputs (both outputs when unset).
+ * @returns Basis, fill toggle, sources and custom instruction.
  */
 export function scheduleDefaults(
   values: Readonly<Record<string, SettingValue>>,
   span: GenerationSpan,
 ): ScheduleDefaults {
-  const outputs = strings(values[spanSetting(span, 'outputs')]);
+  const instruction = values[spanSetting(span, 'instruction')];
   return {
     basis: storedBasis(values[spanSetting(span, 'basis')], span),
     fillWithDaily: values[spanSetting(span, 'fill_daily')] === true,
     sources: strings(values[spanSetting(span, 'sources')]) ?? [],
-    outputs:
-      outputs === null
-        ? BOTH_OUTPUTS
-        : outputs.filter((item): item is GenerationOutput => OUTPUT_VALUES.has(item)),
+    instruction: typeof instruction === 'string' ? instruction : '',
   };
 }

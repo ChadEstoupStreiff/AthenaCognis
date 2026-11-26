@@ -12,7 +12,7 @@
 
 h3 {
   margin: 0;
-  font-size: 11px;
+  font-size: calc(11px * var(--ac-font-scale));
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -23,7 +23,7 @@ h3 {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 12px;
+  font-size: calc(12px * var(--ac-font-scale));
   color: var(--ac-muted);
 
   input {
@@ -42,7 +42,7 @@ h3 {
   grid-template-columns: auto minmax(0, 1fr);
   gap: 6px 14px;
   margin: 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--ac-font-scale));
 
   dt {
     color: var(--ac-muted);
@@ -60,7 +60,7 @@ h3 {
   gap: 4px;
 
   code {
-    font-size: 11.5px;
+    font-size: calc(11.5px * var(--ac-font-scale));
   }
 }
 
@@ -72,7 +72,7 @@ h3 {
 
 .empty {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--ac-font-scale));
   color: var(--ac-muted);
 }
 
@@ -125,7 +125,7 @@ h3 {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: calc(12px * var(--ac-font-scale));
   cursor: pointer;
 }
 

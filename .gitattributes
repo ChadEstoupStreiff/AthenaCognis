@@ -1,0 +1,2 @@
+# Windows cmd needs CRLF to find labels reliably.
+*.bat text eol=crlf

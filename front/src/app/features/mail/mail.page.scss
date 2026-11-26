@@ -63,7 +63,7 @@
   border-radius: 10px;
   background: var(--p-primary-color);
   color: var(--p-primary-contrast-color);
-  font-size: 11px;
+  font-size: calc(11px * var(--ac-font-scale));
   font-weight: 600;
   text-align: center;
 
@@ -91,7 +91,7 @@
 
   h2 {
     margin: 0;
-    font-size: 18px;
+    font-size: calc(18px * var(--ac-font-scale));
   }
 
   p {
@@ -118,7 +118,7 @@
   h2 {
     margin: 0;
     overflow: hidden;
-    font-size: 16px;
+    font-size: calc(16px * var(--ac-font-scale));
     white-space: nowrap;
     text-overflow: ellipsis;
   }
@@ -141,7 +141,7 @@
 .sync-error {
   margin: 0;
   color: var(--p-orange-500);
-  font-size: 12px;
+  font-size: calc(12px * var(--ac-font-scale));
 }
 
 .digest {
@@ -150,7 +150,7 @@
   border-radius: 10px;
   background: color-mix(in srgb, var(--p-primary-color) 8%, transparent);
   overflow-y: auto;
-  font-size: 13px;
+  font-size: calc(13px * var(--ac-font-scale));
 }
 
 .digest-head {
@@ -259,7 +259,7 @@
 }
 
 .mail-preview-label {
-  font-size: 11px;
+  font-size: calc(11px * var(--ac-font-scale));
   letter-spacing: 0.06em;
   display: inline-flex;
   align-items: center;
@@ -330,13 +330,13 @@
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  font-size: 13px;
+  font-size: calc(13px * var(--ac-font-scale));
   font-weight: 600;
 
   &.large {
     width: 42px;
     height: 42px;
-    font-size: 15px;
+    font-size: calc(15px * var(--ac-font-scale));
   }
 }
 
@@ -361,12 +361,12 @@
   }
 
   i {
-    font-size: 11px;
+    font-size: calc(11px * var(--ac-font-scale));
   }
 
   time {
     flex: none;
-    font-size: 11px;
+    font-size: calc(11px * var(--ac-font-scale));
   }
 }
 
@@ -375,11 +375,11 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: 13px;
+  font-size: calc(13px * var(--ac-font-scale));
 }
 
 .snippet {
-  font-size: 12px;
+  font-size: calc(12px * var(--ac-font-scale));
 }
 
 .vip {
@@ -427,7 +427,7 @@
 
   h1 {
     margin: 0;
-    font-size: 20px;
+    font-size: calc(20px * var(--ac-font-scale));
     letter-spacing: -0.01em;
   }
 }
@@ -439,7 +439,7 @@
 
   time {
     flex: none;
-    font-size: 12px;
+    font-size: calc(12px * var(--ac-font-scale));
   }
 }
 
@@ -473,7 +473,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: calc(12px * var(--ac-font-scale));
 }
 
 .loading {
@@ -504,7 +504,7 @@
   border-radius: 10px;
   background: color-mix(in srgb, var(--p-primary-color) 15%, transparent);
   color: var(--p-primary-color);
-  font-size: 11px;
+  font-size: calc(11px * var(--ac-font-scale));
 }
 
 .people {
@@ -554,7 +554,7 @@
   align-items: center;
   gap: 6px;
   margin: 0 0 10px;
-  font-size: 12px;
+  font-size: calc(12px * var(--ac-font-scale));
 }
 
 .attachment {
@@ -584,7 +584,7 @@
 .text {
   margin: 0;
   font-family: inherit;
-  font-size: 14px;
+  font-size: calc(14px * var(--ac-font-scale));
   line-height: 1.55;
   white-space: pre-wrap;
   word-break: break-word;

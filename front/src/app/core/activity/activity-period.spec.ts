@@ -1,4 +1,4 @@
-import { dailyRequest, periodOf } from './activity-period';
+import { generationRequest, periodOf } from './activity-period';
 
 describe('periodOf', () => {
   const thursday = new Date(2026, 10, 19, 15, 30);
@@ -30,15 +30,33 @@ describe('periodOf', () => {
   });
 });
 
-describe('dailyRequest', () => {
+describe('generationRequest', () => {
+  const context = {
+    basis: 'sources',
+    fillWithDaily: true,
+    sources: ['github'],
+    instruction: ' Brief ',
+  } as const;
+
   it('sends the local day as instants with its UTC offset', () => {
     const period = periodOf('daily', new Date(2026, 10, 19, 9));
-    const request = dailyRequest(period, ['github'], ['summary', 'time']);
+    const request = generationRequest(period, context);
+    expect(request.span).toBe('daily');
     expect(request.day).toBe('2026-11-19');
     expect(new Date(request.start)).toEqual(period.start);
     expect(new Date(request.end)).toEqual(period.end);
     expect(request.utc_offset_minutes).toBe(-period.start.getTimezoneOffset());
-    expect(request.outputs).toEqual(['summary', 'time']);
+    expect(request.sources).toEqual(['github']);
+    expect(request.instruction).toBe('Brief');
+    expect(request.fill_daily).toBe(false);
+  });
+
+  it('drops sources from generated contexts', () => {
+    const period = periodOf('monthly', new Date(2026, 10, 19));
+    const request = generationRequest(period, { ...context, basis: 'generated' });
+    expect(request.day).toBe('2026-11-01');
+    expect(request.sources).toEqual([]);
+    expect(request.fill_daily).toBe(true);
   });
 });
 

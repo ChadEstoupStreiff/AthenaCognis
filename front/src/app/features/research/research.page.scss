@@ -12,12 +12,12 @@
 
   h1 {
     margin: 0;
-    font-size: 22px;
+    font-size: calc(22px * var(--ac-font-scale));
   }
 
   p {
     margin: 2px 0 0;
-    font-size: 13px;
+    font-size: calc(13px * var(--ac-font-scale));
   }
 }
 
@@ -28,7 +28,7 @@
 .count {
   margin-left: 6px;
   color: var(--ac-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--ac-font-scale));
 }
 
 p-tab i {

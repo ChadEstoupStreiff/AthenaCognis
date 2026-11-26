@@ -68,6 +68,10 @@ default_settings = {
     "mail_pinned_first": True,  # pinned mail heads every mailbox list (front-only)
     "mail_nav_badge": True,  # unread inbox count on the Mail rail entry (front-only)
     "mail_trash_retention_days": 30,  # deleted mail and drafts kept in the Trash  # flags before it count for the day before
+    "home_daily_text_kind": "quote",  # greeting | motivation | quote | joke (front-only)
+    "home_daily_text_language": "en",  # fr | en (front-only)
+    "api_ninjas_api_key": "",  # optional, extra English quotes and motivation
+    "blagues_api_token": "",  # optional, extra French jokes
     "nav_order": [],  # sidebar routes in display order (front-only)
     "nav_hidden": [],  # sidebar routes hidden from the rail (front-only)
     "research_default_scope": "library",  # library | recent | subject | custom

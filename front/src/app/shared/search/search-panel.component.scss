@@ -28,7 +28,7 @@
   }
 
   .search-input {
-    font-size: 15px;
+    font-size: calc(15px * var(--ac-font-scale));
   }
 
   .depth {
@@ -79,7 +79,7 @@ h3 {
   align-items: center;
   justify-content: space-between;
   margin: 0;
-  font-size: 11px;
+  font-size: calc(11px * var(--ac-font-scale));
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -90,7 +90,7 @@ h3 {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: calc(11px * var(--ac-font-scale));
   font-weight: 500;
   letter-spacing: 0;
   text-transform: none;
@@ -113,11 +113,11 @@ h3 {
   background: transparent;
   color: var(--p-text-color);
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px * var(--ac-font-scale));
   cursor: pointer;
 
   i {
-    font-size: 11px;
+    font-size: calc(11px * var(--ac-font-scale));
     color: var(--ac-muted);
   }
 
@@ -151,7 +151,7 @@ h3 {
   cursor: pointer;
 
   i {
-    font-size: 12px;
+    font-size: calc(12px * var(--ac-font-scale));
   }
 
   &:hover:not(:disabled) {

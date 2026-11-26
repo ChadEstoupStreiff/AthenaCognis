@@ -16,7 +16,13 @@ import { ConfirmationService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { TabsModule } from 'primeng/tabs';
 import { TooltipModule } from 'primeng/tooltip';
-import { buildSharedPath, fileKindOf, FILE_KIND_ICONS, supportsOcr } from '@domain/files';
+import {
+  buildSharedPath,
+  fileKindOf,
+  FILE_KIND_ICONS,
+  supportsOcr,
+  supportsTranscription,
+} from '@domain/files';
 import { parseOcr } from '@domain/mappers';
 import { FileDetailsApi } from '../../core/files/file-details.api';
 import { FilesApi, triggerDownload } from '../../core/files/files.api';
@@ -31,6 +37,7 @@ import { ResizeHandleComponent } from '../../shared/ui/resize-handle.component';
 import { AiTabComponent } from './ai-tab.component';
 import { InfoTabComponent } from './info-tab.component';
 import { LinksTabComponent } from './links-tab.component';
+import { MediaTextComponent } from './media-text.component';
 import { NotesTabComponent } from './notes-tab.component';
 import { PeopleTabComponent } from './people-tab.component';
 
@@ -60,6 +67,7 @@ const STAGE_MIN_HEIGHT = 240;
     InfoTabComponent,
     AiTabComponent,
     LinksTabComponent,
+    MediaTextComponent,
     NotesTabComponent,
     PeopleTabComponent,
   ],
@@ -116,6 +124,10 @@ export class ViewerPage {
     loader: ({ params }) => this.details.ocr(params.path),
   });
   protected readonly ocr = computed(() => parseOcr(this.ocrRecord.value()?.ocr));
+  /** OCR / caption or transcription shown under the preview. */
+  protected readonly hasMediaText = computed(
+    () => supportsOcr(this.kind()) || supportsTranscription(this.kind()),
+  );
   protected readonly missing = computed(
     () => !this.metadata.isLoading() && this.metadata.value() === null,
   );

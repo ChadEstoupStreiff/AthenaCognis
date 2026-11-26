@@ -4,22 +4,13 @@ import {
   computed,
   inject,
   input,
-  model,
   resource,
   signal,
 } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
 import { TabsModule } from 'primeng/tabs';
 import { TagModule } from 'primeng/tag';
-import { ToggleSwitchModule } from 'primeng/toggleswitch';
-import {
-  JOB_SERVICE_LABELS,
-  type JobService,
-  type JobState,
-  type OcrRecord,
-  type ParsedOcr,
-} from '@domain/contracts';
+import { JOB_SERVICE_LABELS, type JobService, type JobState } from '@domain/contracts';
 import { type FileKind, supportsOcr, supportsTranscription } from '@domain/files';
 import { FileDetailsApi } from '../../core/files/file-details.api';
 import { NotifyService } from '../../core/notify/notify.service';
@@ -35,21 +26,13 @@ const STATE_SEVERITY: Readonly<Record<JobState, 'info' | 'warn' | 'success' | 'd
   FAILED: 'danger',
 };
 
-/** AI subtabs of a file: summary (with OCR, transcription, jobs) and section tree. */
+/** AI subtabs of a file: summary (with jobs) and section tree. */
 type AiSubtab = 'summary' | 'tree';
 
-/** Summary, OCR, transcription, job history and section tree of a file. */
+/** Summary, job history and section tree of a file. */
 @Component({
   selector: 'ac-ai-tab',
-  imports: [
-    FormsModule,
-    ButtonModule,
-    TabsModule,
-    TagModule,
-    ToggleSwitchModule,
-    SummaryBlockComponent,
-    DocumentTreeComponent,
-  ],
+  imports: [ButtonModule, TabsModule, TagModule, SummaryBlockComponent, DocumentTreeComponent],
   templateUrl: './ai-tab.component.html',
   styleUrl: './inspector.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -65,20 +48,12 @@ export class AiTabComponent {
   readonly readonly = input(false);
   /** File kind. */
   readonly kind = input.required<FileKind>();
-  /** OCR record (loaded by the page, shared with the overlay). */
-  readonly ocrRecord = input<OcrRecord | null>(null);
-  /** Parsed OCR. */
-  readonly ocr = input<ParsedOcr>({ text: '', boxes: [] });
-  /** Show OCR boxes on the image (two-way). */
-  readonly showBoxes = model(false);
-  /** Show OCR confidences (two-way). */
-  readonly showScores = model(false);
 
   /** Active subtab. */
   protected readonly subtab = signal<AiSubtab>('summary');
 
-  protected readonly canOcr = computed(() => supportsOcr(this.kind()));
-  protected readonly canTranscribe = computed(() => supportsTranscription(this.kind()));
+  private readonly canOcr = computed(() => supportsOcr(this.kind()));
+  private readonly canTranscribe = computed(() => supportsTranscription(this.kind()));
   protected readonly severity = STATE_SEVERITY;
   protected readonly labels = JOB_SERVICE_LABELS;
 
@@ -87,10 +62,6 @@ export class AiTabComponent {
     version: this.sync.version('jobs')(),
   }));
 
-  protected readonly transcription = resource({
-    params: () => (this.canTranscribe() ? this.params() : undefined),
-    loader: ({ params }) => this.details.transcription(params.path),
-  });
   protected readonly history = resource({
     params: this.params,
     loader: ({ params }) => this.loadHistory(params.path),

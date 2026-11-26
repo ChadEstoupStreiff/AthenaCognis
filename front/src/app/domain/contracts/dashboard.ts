@@ -160,3 +160,11 @@ export interface DashboardToday {
   readonly weekHours: number;
   readonly openTasks: readonly TaskSummary[];
 }
+
+/** Raw `/daily-text` answer: text of the day from an online provider. */
+export interface BackendDailyText {
+  readonly text: string;
+  /** Empty when none (jokes). */
+  readonly author: string;
+  readonly provider: string;
+}

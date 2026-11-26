@@ -1,6 +1,19 @@
 <header class="hero">
+  @let text = daily();
   <div>
-    <h1>{{ hello }}{{ userName() ? ', ' + userName() : '' }}</h1>
+    @if (text?.kind === 'greeting') {
+      <h1>{{ text?.text }}</h1>
+    } @else if (text) {
+      <small class="daily-title ac-muted"
+        >{{ text.title }}{{ text.provider ? ' · ' + text.provider : '' }}</small
+      >
+      <blockquote class="daily">
+        <p>{{ text.text }}</p>
+        @if (text.author) {
+          <cite>— {{ text.author }}</cite>
+        }
+      </blockquote>
+    }
     <p class="ac-muted">{{ todayLabel }}</p>
   </div>
 </header>

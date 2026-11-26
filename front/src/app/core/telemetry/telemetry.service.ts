@@ -2,7 +2,6 @@ import { computed, inject, Injectable } from '@angular/core';
 import type { BackendMetrics } from '@domain/contracts';
 import { ApiClient, backendUrl } from '../api/api-client';
 import { hasStatus } from '../api/api-error';
-import { AppConfig } from '../config/app-config';
 import { Logger } from '../logging/logger.service';
 import { SettingsStore } from '../settings/settings.store';
 import {
@@ -43,14 +42,11 @@ function isRecorded(status: number | null): boolean {
 @Injectable({ providedIn: 'root' })
 export class TelemetryService {
   private readonly api = inject(ApiClient);
-  private readonly config = inject(AppConfig);
   private readonly settings = inject(SettingsStore);
   private readonly logger = inject(Logger);
   private readonly counters = inject(UsageCounters);
   private attemptedOn: string | null = null;
 
-  /** Whether a telemetry server is configured in `.env`. */
-  readonly configured = computed(() => this.config.value().telemetryServerUrl !== '');
   /** Consent: true, false, or null when not decided yet. */
   readonly consent = computed(() => {
     const value = this.settings.values()['telemetry_enabled'];
@@ -58,7 +54,7 @@ export class TelemetryService {
   });
   /** Whether to ask for consent. */
   readonly needsConsent = computed(
-    () => this.configured() && this.settings.snapshot.hasValue() && this.consent() === null,
+    () => this.settings.snapshot.hasValue() && this.consent() === null,
   );
 
   /**
@@ -79,7 +75,7 @@ export class TelemetryService {
    * @param event - Feature event.
    */
   track(event: UsageEvent): void {
-    if (this.configured() && this.consent() === true) {
+    if (this.consent() === true) {
       this.counters.increment(event);
     }
   }
@@ -89,7 +85,6 @@ export class TelemetryService {
     const today = utcToday();
     if (
       this.attemptedOn === today ||
-      !this.configured() ||
       this.consent() !== true ||
       this.settings.values()['telemetry_last_sent'] === today
     ) {

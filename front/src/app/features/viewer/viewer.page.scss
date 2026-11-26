@@ -31,7 +31,7 @@
 
   h1 {
     margin: 0;
-    font-size: 20px;
+    font-size: calc(20px * var(--ac-font-scale));
     letter-spacing: -0.01em;
     overflow: hidden;
     white-space: nowrap;
@@ -39,7 +39,7 @@
   }
 
   span {
-    font-size: 12px;
+    font-size: calc(12px * var(--ac-font-scale));
   }
 }
 
@@ -79,6 +79,18 @@
   flex: none;
 }
 
+/* OCR / caption / transcription under the preview; scrolls when the preview fills the screen. */
+.media-text {
+  flex: none;
+  max-height: 45%;
+  overflow-y: auto;
+  padding: 12px 14px;
+}
+
+:host(.sized) .media-text {
+  max-height: none;
+}
+
 /* Size containment: the row follows the preview column, long inspector content scrolls. */
 .inspector {
   contain: size;
@@ -100,6 +112,10 @@
 
   .stage {
     height: 80dvh;
+  }
+
+  .media-text {
+    max-height: none;
   }
 
   .splitter {

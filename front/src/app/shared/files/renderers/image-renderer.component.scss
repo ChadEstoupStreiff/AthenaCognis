@@ -33,7 +33,7 @@ img {
     text-overflow: ellipsis;
     background: #fff;
     color: #111;
-    font-size: 11px;
+    font-size: calc(11px * var(--ac-font-scale));
     line-height: 16px;
   }
 }

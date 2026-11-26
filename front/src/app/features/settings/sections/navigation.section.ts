@@ -81,7 +81,11 @@ export class NavigationSectionComponent extends SettingsSection {
     const next = [...this.items()];
     moveItemInArray(next, event.previousIndex, event.currentIndex);
     this.items.set(next);
-    this.save(NAV_ORDER_KEY, next.map((item) => item.route), true);
+    this.save(
+      NAV_ORDER_KEY,
+      next.map((item) => item.route),
+      true,
+    );
   }
 
   /**

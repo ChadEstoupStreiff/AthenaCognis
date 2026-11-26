@@ -57,7 +57,7 @@ export function isOwnDropZone(target: EventTarget | null): boolean {
       border: 2px dashed #fff;
       border-radius: 20px;
       color: #fff;
-      font-size: 18px;
+      font-size: calc(18px * var(--ac-font-scale));
     }
     .target i {
       font-size: 3rem;

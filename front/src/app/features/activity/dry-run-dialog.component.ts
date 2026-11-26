@@ -7,7 +7,7 @@ import {
   resource,
 } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
-import type { DailyGenerationRequest, PromptPartKind } from '@domain/contracts';
+import type { GenerationRequest, PromptPartKind } from '@domain/contracts';
 import { DialogModule } from 'primeng/dialog';
 import { ProgressBarModule } from 'primeng/progressbar';
 import { ActivityGenerationApi } from '../../core/activity/activity-generation.api';
@@ -17,7 +17,7 @@ import { partRows, promptStatItems } from './dry-run-stats';
 const KIND_ICONS: Readonly<Record<PromptPartKind, string>> = {
   instructions: 'pi pi-align-left',
   source: 'pi pi-database',
-  catalog: 'pi pi-tags',
+  summary: 'pi pi-bolt',
 };
 
 /** Popup building the single prompt of a generation and showing it with its size per block. */
@@ -128,7 +128,7 @@ const KIND_ICONS: Readonly<Record<PromptPartKind, string>> = {
       color: var(--p-orange-500);
     }
     dt {
-      font-size: 11px;
+      font-size: calc(11px * var(--ac-font-scale));
       opacity: 0.7;
     }
     dd {
@@ -141,7 +141,7 @@ const KIND_ICONS: Readonly<Record<PromptPartKind, string>> = {
     table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 13px;
+      font-size: calc(13px * var(--ac-font-scale));
     }
     th,
     td {
@@ -183,7 +183,7 @@ const KIND_ICONS: Readonly<Record<PromptPartKind, string>> = {
       padding: 12px;
       border-radius: 6px;
       background: var(--p-content-hover-background);
-      font-size: 12px;
+      font-size: calc(12px * var(--ac-font-scale));
       white-space: pre-wrap;
       word-break: break-word;
     }
@@ -194,12 +194,12 @@ export class DryRunDialogComponent {
   private readonly api = inject(ActivityGenerationApi);
 
   /** Request to dry run; the popup shows while set, closing clears it. */
-  readonly request = model<DailyGenerationRequest | null>(null);
+  readonly request = model<GenerationRequest | null>(null);
 
   protected readonly kindIcons = KIND_ICONS;
   protected readonly dryRun = resource({
     params: () => this.request() ?? undefined,
-    loader: ({ params }) => this.api.dryRunDaily(params),
+    loader: ({ params }) => this.api.dryRun(params),
   });
   /** Figures of the whole prompt. */
   protected readonly totals = computed(() => {

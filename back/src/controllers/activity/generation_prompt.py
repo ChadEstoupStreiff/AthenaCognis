@@ -1,15 +1,18 @@
-"""Activity generation prompt: one LLM call for every output, split answer, dry-run stats."""
+"""Activity generation prompt: one LLM call per summary, dry-run stats."""
 
-import re
 from dataclasses import dataclass
 from typing import Literal
 
 from controllers.activity.generation import (
-    Catalog,
-    Output,
+    CLOCK_FORMAT,
+    DATED_CLOCK_FORMAT,
+    Basis,
+    GenerationRequest,
     SourceSection,
+    Span,
+    SummarySection,
+    period_label,
     section_text,
-    strip_fence,
 )
 from tools.prompts import get_prompt, render
 
@@ -17,23 +20,19 @@ from tools.prompts import get_prompt, render
 CHARS_PER_TOKEN = 4
 PART_SEPARATOR = "\n\n"
 INSTRUCTIONS_LABEL = "Instructions"
-CATALOG_LABEL = "Projects and tags"
-SUMMARY_MARKER = "=== SUMMARY ==="
-TIME_MARKER = "=== TIME ENTRIES ==="
-# Marker line of the answer, tolerant to spaces, case and the count of "=".
-ANSWER_MARKER = re.compile(
-    r"^\s*=+\s*(SUMMARY|TIME ENTRIES)\s*=+\s*$", re.IGNORECASE | re.MULTILINE
-)
-MARKER_OUTPUTS: dict[str, Output] = {"SUMMARY": "summary", "TIME ENTRIES": "time"}
-
-TASK_KEYS: dict[Output, str] = {"summary": "activity.summary_task", "time": "activity.time_task"}
-FORMAT_KEYS: dict[Output, str] = {
-    "summary": "activity.summary_format",
-    "time": "activity.time_format",
+SPAN_NOUNS: dict[Span, str] = {"daily": "day", "weekly": "week", "monthly": "month"}
+TASK_KEYS: dict[Span, str] = {
+    "daily": "activity.daily_task",
+    "weekly": "activity.weekly_task",
+    "monthly": "activity.monthly_task",
 }
-OUTPUT_MARKERS: dict[Output, str] = {"summary": SUMMARY_MARKER, "time": TIME_MARKER}
+INTRO_KEYS: dict[Basis, str] = {
+    "sources": "activity.sources_intro",
+    "generated": "activity.generated_intro",
+    "generated_daily": "activity.generated_intro",
+}
 
-PartKind = Literal["instructions", "source", "catalog"]
+PartKind = Literal["instructions", "source", "summary"]
 
 
 @dataclass(frozen=True)
@@ -50,7 +49,7 @@ class PromptPart:
 
 @dataclass(frozen=True)
 class Prompt:
-    """Prompt asking every output in one LLM call."""
+    """Prompt asking one summary."""
 
     parts: tuple[PromptPart, ...]
 
@@ -94,7 +93,7 @@ class PromptStats:
 
 @dataclass(frozen=True)
 class PartStat:
-    """Size of one block of the prompt (instructions, a data source, the catalog)."""
+    """Size of one block of the prompt (instructions, a data source, a summary)."""
 
     label: str
     kind: PartKind
@@ -128,96 +127,82 @@ def instructions(text: str) -> PromptPart:
     return PromptPart(INSTRUCTIONS_LABEL, "instructions", text)
 
 
-def source_part(section: SourceSection, utc_offset_minutes: int) -> PromptPart:
+def source_part(section: SourceSection, utc_offset_minutes: int, clock_format: str) -> PromptPart:
     """
     Build the block of one data source
 
     Args:
         section (SourceSection): source activities
         utc_offset_minutes (int): local time minus UTC, in minutes
+        clock_format (str): strftime format of each activity moment
     Returns:
         PromptPart: source block with its activity count and error
     """
     return PromptPart(
         section.label,
         "source",
-        section_text(section, utc_offset_minutes),
+        section_text(section, utc_offset_minutes, clock_format),
         len(section.activities),
         section.error,
     )
 
 
-def task_text(outputs: tuple[Output, ...]) -> str:
+def summary_part(section: SummarySection) -> PromptPart:
     """
-    Render the tasks and the answer format of the asked outputs
+    Build the block of a summary already generated
 
     Args:
-        outputs (tuple[Output, ...]): asked outputs
+        section (SummarySection): summary
     Returns:
-        str: TASK and FORMAT blocks
+        PromptPart: "### label" block
     """
-    tasks = "\n\n".join(get_prompt(TASK_KEYS[output]) for output in outputs)
-    formats = "\n".join(
-        render(FORMAT_KEYS[output], marker=OUTPUT_MARKERS[output]) for output in outputs
-    )
-    return render("activity.task", tasks=tasks, formats=formats)
+    return PromptPart(section.label, "summary", f"### {section.label}\n{section.text}")
+
+
+def task_text(request: GenerationRequest) -> str:
+    """
+    Render the context, task, custom instruction and answer format of a request
+
+    Args:
+        request (GenerationRequest): request
+    Returns:
+        str: blocks separated by blank lines (no instruction block when empty)
+    """
+    noun = SPAN_NOUNS[request.span]
+    blocks = [render(INTRO_KEYS[request.basis], span=noun), get_prompt(TASK_KEYS[request.span])]
+    instruction = request.instruction.strip()
+    if instruction:
+        blocks.append(render("activity.instruction", instruction=instruction))
+    blocks.append(get_prompt("activity.format"))
+    return PART_SEPARATOR.join(blocks)
 
 
 def build_prompt(
-    day: str,
-    sections: list[SourceSection],
-    outputs: tuple[Output, ...],
-    catalog: Catalog,
-    utc_offset_minutes: int,
+    request: GenerationRequest,
+    sources: list[SourceSection],
+    summaries: list[SummarySection],
 ) -> Prompt:
     """
-    Build the single prompt asking every output of a day
+    Build the single prompt asking the summary of a period
 
     Args:
-        day (str): "YYYY-MM-DD"
-        sections (list[SourceSection]): source activities
-        outputs (tuple[Output, ...]): asked outputs
-        catalog (Catalog): projects and tags (listed only for time entries)
-        utc_offset_minutes (int): local time minus UTC, in minutes
+        request (GenerationRequest): request
+        sources (list[SourceSection]): source activities (data source context)
+        summaries (list[SummarySection]): shorter summaries (generated context)
     Returns:
-        Prompt: activity, catalog when needed, tasks and format
+        Prompt: activity, task and format
     """
+    clock_format = CLOCK_FORMAT if request.span == "daily" else DATED_CLOCK_FORMAT
+    noun = SPAN_NOUNS[request.span]
+    period = period_label(request.span, request.day)
     parts = [
-        instructions(render("activity.day_start", day=day)),
-        *(source_part(section, utc_offset_minutes) for section in sections),
-        instructions(render("activity.day_end", day=day)),
+        instructions(render("activity.period_start", span=noun, period=period)),
+        *(source_part(item, request.utc_offset_minutes, clock_format) for item in sources),
+        *(summary_part(item) for item in summaries),
+        instructions(get_prompt("activity.period_end")),
+        instructions(task_text(request)),
     ]
-    if "time" in outputs:
-        parts.append(
-            PromptPart(CATALOG_LABEL, "catalog", render("activity.catalog", catalog=catalog.text()))
-        )
-    parts.append(instructions(task_text(outputs)))
     return Prompt(tuple(parts))
-
-
-def split_answer(answer: str, outputs: tuple[Output, ...]) -> dict[Output, str]:
-    """
-    Split an LLM answer into the section of each output
-
-    Args:
-        answer (str): raw answer with marker lines
-        outputs (tuple[Output, ...]): asked outputs
-    Returns:
-        dict[Output, str]: section text per asked output, fence stripped
-    Raises:
-        ValueError: an asked section is missing
-    """
-    found: dict[Output, str] = {}
-    markers = list(ANSWER_MARKER.finditer(answer))
-    for index, marker in enumerate(markers):
-        end = markers[index + 1].start() if index + 1 < len(markers) else len(answer)
-        found[MARKER_OUTPUTS[marker.group(1).upper()]] = strip_fence(answer[marker.end() : end])
-    if not markers and len(outputs) == 1:
-        found[outputs[0]] = strip_fence(answer)
-    missing = [output for output in outputs if output not in found]
-    if missing:
-        raise ValueError(f"Answer misses the section of: {', '.join(missing)}.")
-    return {output: found[output] for output in outputs}
 
 
 def part_stats(prompt: Prompt) -> tuple[PartStat, ...]:

@@ -14,7 +14,7 @@
   flex-direction: column;
   gap: 10px;
   padding: 12px 14px;
-  font-size: 13px;
+  font-size: calc(13px * var(--ac-font-scale));
 }
 
 .row {
@@ -50,7 +50,7 @@
 
 .hint {
   margin: 0;
-  font-size: 12px;
+  font-size: calc(12px * var(--ac-font-scale));
 }
 
 /* Height set by acFillHeight: graph and details fill the page below the controls. */
@@ -73,23 +73,23 @@
 
 .caption {
   margin: 6px 0 0;
-  font-size: 12px;
+  font-size: calc(12px * var(--ac-font-scale));
 }
 
 .details {
   min-height: 0;
   padding: 14px;
   overflow-y: auto;
-  font-size: 13px;
+  font-size: calc(13px * var(--ac-font-scale));
 
   h3 {
     margin: 0 0 4px;
-    font-size: 15px;
+    font-size: calc(15px * var(--ac-font-scale));
   }
 
   h4 {
     margin: 14px 0 6px;
-    font-size: 13px;
+    font-size: calc(13px * var(--ac-font-scale));
   }
 
   p {
@@ -136,7 +136,7 @@
   align-self: flex-start;
   padding: 0 8px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: calc(11px * var(--ac-font-scale));
   font-weight: 600;
 
   &[data-relation='cites'] {

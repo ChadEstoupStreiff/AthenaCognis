@@ -82,7 +82,7 @@ const CHARS_PER_LINE = 70;
       background: none;
       color: var(--p-primary-color);
       font: inherit;
-      font-size: 13px;
+      font-size: calc(13px * var(--ac-font-scale));
       font-weight: 600;
       cursor: pointer;
     }

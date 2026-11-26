@@ -70,10 +70,6 @@ services:
     restart: unless-stopped
     depends_on:
       - back
-    environment:
-      USER_NAME: ${USER_NAME:-}
-      TELEMETRY_SERVER_URL: ${TELEMETRY_SERVER_URL:-}
-      TELEMETRY_DASHBOARD_URL: ${TELEMETRY_DASHBOARD_URL:-}
     ports:
       - "${FRONT_PORT:-8401}:80"
     volumes:

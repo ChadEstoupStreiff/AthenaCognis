@@ -57,7 +57,7 @@
   border-radius: 50%;
   background: var(--ac-panel-background);
   color: var(--p-primary-color);
-  font-size: 12px;
+  font-size: calc(12px * var(--ac-font-scale));
 }
 
 .body {
@@ -73,7 +73,7 @@
   align-items: center;
   gap: 6px;
   font-weight: 600;
-  font-size: 13px;
+  font-size: calc(13px * var(--ac-font-scale));
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -85,7 +85,7 @@
 }
 
 .meta {
-  font-size: 12px;
+  font-size: calc(12px * var(--ac-font-scale));
 }
 
 .chips {

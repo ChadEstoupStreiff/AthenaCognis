@@ -34,58 +34,84 @@ if ! docker info >/dev/null 2>&1; then
   pause_exit
 fi
 
-# --- 2. .env exists? if not, ask for the important settings -----------
+# --- 2. .env exists? if not, ask for the settings and write it ---------
+# ask VAR "Question" "default": read an answer, empty = default.
+ask() {
+  local answer
+  read -rp "$2 [$3]: " answer
+  printf -v "$1" '%s' "${answer:-$3}"
+}
+
+# ask_port VAR "Question" default: same, but only accepts 1-65535.
+ask_port() {
+  while true; do
+    ask "$1" "$2" "$3"
+    case "${!1}" in
+      ''|*[!0-9]*) ;;
+      *) [ "${!1}" -ge 1 ] && [ "${!1}" -le 65535 ] && return ;;
+    esac
+    echo "  Please enter a port number between 1 and 65535."
+  done
+}
+
+# ask_path VAR "Question" default: absolute path without spaces, ~ expanded.
+ask_path() {
+  while true; do
+    ask "$1" "$2" "$3"
+    printf -v "$1" '%s' "${!1/#\~/$HOME}"
+    case "${!1}" in
+      *' '*) echo "  Please pick a path without spaces." ;;
+      /*) return ;;
+      *) echo "  Please enter an absolute path (starting with /)." ;;
+    esac
+  done
+}
+
 if [ ! -f .env ]; then
   echo "No .env file found - let's create one."
   echo "Press Enter on any question to accept the default shown in [brackets]."
   echo
 
-  read -rp "Project name (letters, numbers, - or _) [athenacognis]: " PROJECT_NAME
-  PROJECT_NAME="${PROJECT_NAME:-athenacognis}"
-  PROJECT_NAME="$(echo "$PROJECT_NAME" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9_-' '-')"
+  ask PROJECT_NAME "Project name (letters, numbers, - or _)" "athenacognis"
+  PROJECT_NAME="$(printf '%s' "$PROJECT_NAME" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9_-' '-')"
   [ -n "$PROJECT_NAME" ] || PROJECT_NAME="athenacognis"
 
-  read -rp "Your name (shown in the app) [${USER:-User}]: " USER_NAME
-  USER_NAME="${USER_NAME:-${USER:-User}}"
+  ask_path DATA_PATH "Folder to store your data - documents, database, AI models" "$HOME/AthenaCognisData"
+  ask_path LOCAL_PATH "Folder the app may read (Activity page watches folders inside it)" "$HOME"
 
-  DEFAULT_DATA_PATH="$HOME/AthenaCognisData"
-  read -rp "Folder to store your data - documents, database, AI models (avoid spaces) [$DEFAULT_DATA_PATH]: " DATA_PATH
-  DATA_PATH="${DATA_PATH:-$DEFAULT_DATA_PATH}"
-
-  read -rp "Backend port [8400]: " BACK_PORT
-  BACK_PORT="${BACK_PORT:-8400}"
-
-  read -rp "Frontend (web UI) port [8401]: " FRONT_PORT
-  FRONT_PORT="${FRONT_PORT:-8401}"
-
-  read -rp "phpMyAdmin port [8402]: " PMA_PORT
-  PMA_PORT="${PMA_PORT:-8402}"
+  ask_port FRONT_PORT "Web interface port" 8401
+  ask_port BACK_PORT "Backend API port" 8400
+  ask_port PMA_PORT "phpMyAdmin (database UI) port" 8402
 
   if command -v openssl >/dev/null 2>&1; then
     DEFAULT_DB_PASSWORD="$(openssl rand -hex 12)"
   else
-    DEFAULT_DB_PASSWORD="$(tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24)"
+    DEFAULT_DB_PASSWORD="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24)"
   fi
-  read -rp "Database password [random: $DEFAULT_DB_PASSWORD]: " DATABASE_PASSWORD
-  DATABASE_PASSWORD="${DATABASE_PASSWORD:-$DEFAULT_DB_PASSWORD}"
+  ask DATABASE_PASSWORD "Database password" "$DEFAULT_DB_PASSWORD"
 
   mkdir -p "$DATA_PATH"
 
   cat > .env <<EOF
+# Created by the AthenaCognis launcher. Edit and re-run the launcher to apply.
+# Docker Compose project name.
 PROJECT_NAME=$PROJECT_NAME
-USER_NAME=$USER_NAME
+# Docker Hub image tag (Docker Hub install only).
 ATHENACOGNIS_VERSION=latest
 
+# Host folder for all persistent data (database, models, caches, uploads). Back it up.
 DATA_PATH=$DATA_PATH
-BACK_PORT=$BACK_PORT
+# Host folder mounted read-only at /local; the Activity page watches folders inside it.
+LOCAL_PATH=$LOCAL_PATH
+
+# Host ports: web interface, backend API, phpMyAdmin.
 FRONT_PORT=$FRONT_PORT
+BACK_PORT=$BACK_PORT
 PMA_PORT=$PMA_PORT
 
+# MariaDB root password. Fixed when the database is first created:
+# changing it later does not update an existing database.
 DATABASE_PASSWORD=$DATABASE_PASSWORD
-
-# Telemetry (optional) - URL of the separately deployed telemetry service
-TELEMETRY_SERVER_URL=https://telemetryathenacognis.chades.fr
-TELEMETRY_DASHBOARD_URL=https://athenacognis.chades.fr
 EOF
 
   echo
@@ -140,5 +166,5 @@ fi
 echo
 echo "AthenaCognis is running at $URL"
 echo "Closing this window will NOT stop the app - it keeps running in the background."
-echo "To stop it later, run: docker compose down"
+echo "To stop it later, double-click stop.sh (or run ./stop.sh)."
 read -rp "Press Enter to close this window..." _

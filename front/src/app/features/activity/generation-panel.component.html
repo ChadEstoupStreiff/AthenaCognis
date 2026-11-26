@@ -30,39 +30,6 @@
         <ac-markdown-view [source]="noteBody(note.content)" />
       </article>
     }
-    @if (generated.records.length > 0) {
-      <article class="block">
-        <header class="block-head">
-          <h4>
-            <i class="pi pi-bolt" aria-hidden="true" title="Activity generation"></i> Time entries
-          </h4>
-        </header>
-        <ul class="records">
-          @for (record of generated.records; track record.id) {
-            <li>
-              <i class="pi pi-bolt" aria-hidden="true" title="Activity generation"></i>
-              <time class="ac-muted">{{ recordRange(record) }}</time>
-              <span class="record-text">
-                <strong>{{ record.title }}</strong>
-                @if (record.description) {
-                  <small class="ac-muted">{{ record.description }}</small>
-                }
-                @if (record.projects.length > 0 || record.tags.length > 0) {
-                  <span class="chips">
-                    @for (project of record.projects; track project) {
-                      <ac-tag-chip [name]="project" kind="project" />
-                    }
-                    @for (tag of record.tags; track tag) {
-                      <ac-tag-chip [name]="tag" kind="tag" />
-                    }
-                  </span>
-                }
-              </span>
-            </li>
-          }
-        </ul>
-      </article>
-    }
   }
 
   @if (hasResults()) {

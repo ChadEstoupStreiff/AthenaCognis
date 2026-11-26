@@ -73,11 +73,11 @@ img {
   padding: 10px 12px;
   overflow: hidden;
   color: var(--p-text-color);
-  font-size: 10px;
+  font-size: calc(10px * var(--ac-font-scale));
   line-height: 1.45;
   mask-image: linear-gradient(to bottom, black 70%, transparent);
 }
 
 .pending {
-  font-size: 11px;
+  font-size: calc(11px * var(--ac-font-scale));
 }

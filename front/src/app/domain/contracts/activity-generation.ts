@@ -1,6 +1,6 @@
 import type { JobState } from './jobs';
 
-/** Non-editable project holding generated notes and time entries. */
+/** Non-editable project holding generated notes. */
 export const ACTIVITY_PROJECT = '⚡ Activity';
 
 /** Time spans an activity summary covers. */
@@ -9,20 +9,29 @@ export const GENERATION_SPANS = ['daily', 'weekly', 'monthly'] as const;
 /** One time span. */
 export type GenerationSpan = (typeof GENERATION_SPANS)[number];
 
-/** What a generation produces. */
-export type GenerationOutput = 'summary' | 'time';
+/**
+ * Context of a summary: data sources, summaries of the next shorter span (`generated`),
+ * or daily summaries (`generated_daily`, monthly only).
+ */
+export type GenerationBasis = 'generated' | 'generated_daily' | 'sources';
 
-/** Daily generation request (`POST /activity-generation/daily`). */
-export interface DailyGenerationRequest {
-  /** Local day, `YYYY-MM-DD`. */
+/** Generation request (`POST /activity-generation/generate` and `/dry-run`). */
+export interface GenerationRequest {
+  readonly span: GenerationSpan;
+  /** First local day of the period, `YYYY-MM-DD`. */
   readonly day: string;
-  /** Local day window as ISO instants. */
+  /** Local period window as ISO instants. */
   readonly start: string;
   readonly end: string;
   /** Local time minus UTC, in minutes. */
   readonly utc_offset_minutes: number;
+  readonly basis: GenerationBasis;
+  /** Data source keys, read with the `sources` context. */
   readonly sources: readonly string[];
-  readonly outputs: readonly GenerationOutput[];
+  /** Custom instruction steering the summary, "" when none. */
+  readonly instruction: string;
+  /** Monthly from weekly: days no weekly summary covers use their daily summary. */
+  readonly fill_daily: boolean;
 }
 
 /** Size of a prompt. */
@@ -35,9 +44,9 @@ export interface PromptStats {
 }
 
 /** Kind of a prompt block. */
-export type PromptPartKind = 'instructions' | 'source' | 'catalog';
+export type PromptPartKind = 'instructions' | 'source' | 'summary';
 
-/** Size of one block of the prompt (instructions, a data source, the catalog). */
+/** Size of one block of the prompt (instructions, a data source, a summary). */
 export interface PromptPartStat {
   readonly label: string;
   readonly kind: PromptPartKind;
@@ -48,7 +57,7 @@ export interface PromptPartStat {
   readonly stats: PromptStats;
 }
 
-/** Dry run (`POST /activity-generation/daily/dry-run`): the single prompt, nothing asked nor written. */
+/** Dry run (`POST /activity-generation/dry-run`): the single prompt, nothing asked nor written. */
 export interface GenerationDryRun {
   readonly prompt: string;
   readonly stats: PromptStats;
@@ -68,25 +77,13 @@ export interface GenerationRun {
   readonly result: string | null;
 }
 
-/** Generated time entry. */
-export interface GeneratedRecord {
-  readonly id: string;
-  /** Local start, `HH:MM`. */
-  readonly start: string | null;
-  readonly hours: number;
-  readonly title: string;
-  readonly description: string;
-  /** Projects picked by the AI (the Activity project left out). */
-  readonly projects: readonly string[];
-  readonly tags: readonly string[];
-}
-
-/** What was generated for a day (`GET /activity-generation/daily/{day}`). */
-export interface DailyGeneration {
+/** What was generated for a period (`GET /activity-generation/{span}/{day}`). */
+export interface PeriodGeneration {
+  readonly span: GenerationSpan;
+  /** First local day, `YYYY-MM-DD`. */
   readonly day: string;
   readonly task: GenerationRun | null;
   readonly note: { readonly path: string; readonly content: string } | null;
-  readonly records: readonly GeneratedRecord[];
 }
 
 /** What happened to a day: generated, failed, generating, or skipped by the scheduler. */

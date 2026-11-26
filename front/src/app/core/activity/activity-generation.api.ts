@@ -1,10 +1,11 @@
 import { inject, Injectable } from '@angular/core';
 import type {
-  DailyGeneration,
-  DailyGenerationRequest,
   DayStatus,
   GenerationDryRun,
+  GenerationRequest,
+  GenerationSpan,
   HolidayCountries,
+  PeriodGeneration,
 } from '@domain/contracts';
 import { ApiClient, backendUrl } from '../api/api-client';
 
@@ -14,38 +15,36 @@ export class ActivityGenerationApi {
   private readonly api = inject(ApiClient);
 
   /**
-   * What was generated for a day.
+   * What was generated for a period.
    *
-   * @param day - Local day, `YYYY-MM-DD`.
-   * @returns Latest run, note and time entries.
+   * @param span - Time span.
+   * @param day - First local day, `YYYY-MM-DD`.
+   * @returns Latest run and note.
    */
-  daily(day: string): Promise<DailyGeneration> {
-    return this.api.get<DailyGeneration>(
-      backendUrl(`/activity-generation/daily/${encodeURIComponent(day)}`),
+  generation(span: GenerationSpan, day: string): Promise<PeriodGeneration> {
+    return this.api.get<PeriodGeneration>(
+      backendUrl(`/activity-generation/${span}/${encodeURIComponent(day)}`),
     );
   }
 
   /**
-   * Queue the generation of a day.
+   * Queue the generation of a period.
    *
-   * @param request - Day, sources and outputs.
+   * @param request - Period, context and custom instruction.
    * @returns Queued job key.
    */
-  generateDaily(request: DailyGenerationRequest): Promise<{ key: string }> {
-    return this.api.post<{ key: string }>(backendUrl('/activity-generation/daily'), request);
+  generate(request: GenerationRequest): Promise<{ key: string }> {
+    return this.api.post<{ key: string }>(backendUrl('/activity-generation/generate'), request);
   }
 
   /**
-   * Build the prompts of a day without asking the LLM.
+   * Build the prompt of a period without asking the LLM.
    *
-   * @param request - Day, sources and outputs.
-   * @returns Prompts with their size, activities per source, routed model.
+   * @param request - Period, context and custom instruction.
+   * @returns Prompt with its size, activities per source, routed model.
    */
-  dryRunDaily(request: DailyGenerationRequest): Promise<GenerationDryRun> {
-    return this.api.post<GenerationDryRun>(
-      backendUrl('/activity-generation/daily/dry-run'),
-      request,
-    );
+  dryRun(request: GenerationRequest): Promise<GenerationDryRun> {
+    return this.api.post<GenerationDryRun>(backendUrl('/activity-generation/dry-run'), request);
   }
 
   /**

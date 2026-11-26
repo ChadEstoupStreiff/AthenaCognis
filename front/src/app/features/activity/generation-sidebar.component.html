@@ -55,18 +55,11 @@
   <div class="row">
     <div class="label">
       <strong>{{ flag(key('enabled')) ? 'Enabled' : 'Disabled' }}</strong>
-      <small class="ac-muted">
-        @if (!isAvailable()) {
-          {{ spanLabel() }} generation is not available yet; the schedule is kept for later.
-        } @else if (span() === 'daily') {
-          Generates the day that just ended, when the next one starts.
-        }
-      </small>
+      <small class="ac-muted">{{ scheduleHint() }}</small>
     </div>
     <p-toggleswitch
       [ngModel]="flag(key('enabled'))"
       (ngModelChange)="saveSchedule(key('enabled'), $event, true)"
-      [disabled]="!isAvailable()"
       [ariaLabel]="'Enable ' + spanLabel() + ' schedule'"
     />
   </div>
@@ -106,9 +99,6 @@
       />
     </div>
     <ac-off-days-settings />
-    @if (lastRun()) {
-      <small class="ac-muted">Last scheduled day: {{ lastRun() }}</small>
-    }
   } @else if (span() === 'weekly') {
     <div class="row">
       <div class="label"><strong>Week starts on</strong></div>
@@ -174,20 +164,23 @@
   }
 
   <div class="row stacked">
-    <div class="label"><strong>Generate</strong></div>
-    <div class="outputs">
-      @for (option of outputOptions; track option.value) {
-        <label class="output">
-          <p-checkbox
-            [binary]="true"
-            [ngModel]="outputs().includes(option.value)"
-            (ngModelChange)="toggleOutput(option.value, $event)"
-            [ariaLabel]="option.label"
-          />
-          <i class="pi pi-bolt" aria-hidden="true"></i>
-          {{ option.label }}
-        </label>
-      }
+    <div class="label">
+      <strong>Custom instruction</strong>
+      <small class="ac-muted">Added to every {{ spanLabel().toLowerCase() }} summary prompt.</small>
     </div>
+    <textarea
+      pTextarea
+      rows="3"
+      [autoResize]="true"
+      [maxlength]="maxInstructionLength"
+      [ngModel]="instruction()"
+      (ngModelChange)="saveSchedule(key('instruction'), $event)"
+      placeholder="Optional, e.g. write in French, focus on the client project"
+      [attr.aria-label]="spanLabel() + ' custom instruction'"
+    ></textarea>
   </div>
+
+  @if (lastRun()) {
+    <small class="ac-muted">Last scheduled {{ spanLabel().toLowerCase() }}: {{ lastRun() }}</small>
+  }
 </section>

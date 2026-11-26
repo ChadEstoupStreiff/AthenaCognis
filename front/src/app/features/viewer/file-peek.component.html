@@ -55,14 +55,25 @@
 
     @if (bodyReady()) {
       <div class="body">
-        <div class="preview">
-          <ac-file-renderer
+        <div class="preview-column">
+          <div class="preview">
+            <ac-file-renderer
+              [path]="file.path"
+              [compact]="true"
+              [metadata]="metadata.value() ?? null"
+              [ocrBoxes]="ocr().boxes"
+              [showBoxes]="showBoxes()"
+              [showScores]="showScores()"
+            />
+          </div>
+          <ac-media-text
             [path]="file.path"
-            [compact]="true"
-            [metadata]="metadata.value() ?? null"
-            [ocrBoxes]="ocr().boxes"
-            [showBoxes]="showBoxes()"
-            [showScores]="showScores()"
+            [kind]="kind()"
+            [readonly]="true"
+            [ocrRecord]="ocrRecord.value() ?? null"
+            [ocr]="ocr()"
+            [(showBoxes)]="showBoxes"
+            [(showScores)]="showScores"
           />
         </div>
 
@@ -89,15 +100,7 @@
             </p-tabpanel>
             <p-tabpanel value="ai">
               @if (tab() === 'ai') {
-                <ac-ai-tab
-                  [path]="file.path"
-                  [kind]="kind()"
-                  [readonly]="true"
-                  [ocrRecord]="ocrRecord.value() ?? null"
-                  [ocr]="ocr()"
-                  [(showBoxes)]="showBoxes"
-                  [(showScores)]="showScores"
-                />
+                <ac-ai-tab [path]="file.path" [kind]="kind()" [readonly]="true" />
               }
             </p-tabpanel>
             <p-tabpanel value="links">

@@ -38,11 +38,11 @@ const SECONDS_DECIMALS = 2;
       height: 4px;
     }
     .caption {
-      font-size: 12px;
+      font-size: calc(12px * var(--ac-font-scale));
     }
     .error {
       color: var(--p-red-500);
-      font-size: 13px;
+      font-size: calc(13px * var(--ac-font-scale));
     }
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,

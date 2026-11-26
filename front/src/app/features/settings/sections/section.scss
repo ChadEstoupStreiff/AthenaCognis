@@ -20,7 +20,43 @@
 
   h2 {
     margin: 0 0 12px;
-    font-size: 16px;
+    font-size: calc(16px * var(--ac-font-scale));
+  }
+}
+
+.subhead {
+  scroll-margin-top: 16px;
+}
+
+h3.subhead,
+.subhead h3 {
+  margin: 20px 0 4px;
+  font-size: calc(13px * var(--ac-font-scale));
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ac-muted);
+}
+
+.heading.subhead {
+  margin-bottom: 4px;
+
+  h3 {
+    margin: 0;
+  }
+}
+
+.swatch {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 2px solid var(--ac-panel-background);
+  border-radius: 50%;
+  outline: 1px solid var(--ac-panel-border);
+  cursor: pointer;
+
+  &.selected {
+    outline: 2px solid var(--p-text-color);
   }
 }
 
@@ -44,7 +80,7 @@
 
 .intro {
   margin: -4px 0 12px;
-  font-size: 13px;
+  font-size: calc(13px * var(--ac-font-scale));
 }
 
 .row {
@@ -73,13 +109,13 @@
   min-width: 0;
 
   strong {
-    font-size: 14px;
+    font-size: calc(14px * var(--ac-font-scale));
     font-weight: 600;
   }
 
   small,
   a {
-    font-size: 12px;
+    font-size: calc(12px * var(--ac-font-scale));
   }
 }
 
@@ -143,7 +179,7 @@
   padding: 4px 10px;
   border: 1px solid var(--ac-panel-border);
   border-radius: 999px;
-  font-size: 13px;
+  font-size: calc(13px * var(--ac-font-scale));
 }
 
 .tag-list {
@@ -168,7 +204,7 @@
   width: 100%;
   margin-top: 8px;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: calc(13px * var(--ac-font-scale));
 
   td {
     padding: 4px 8px 4px 0;

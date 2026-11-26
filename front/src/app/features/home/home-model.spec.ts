@@ -1,12 +1,5 @@
 import type { DashboardMetrics, MailCounters, TaskSummary } from '@domain/contracts';
-import {
-  dueTasks,
-  greeting,
-  kpiGroups,
-  mailCategorySegments,
-  percent,
-  topSegments,
-} from './home-model';
+import { dueTasks, kpiGroups, mailCategorySegments, percent, topSegments } from './home-model';
 
 const MAIL: MailCounters = {
   accounts: 1,
@@ -62,12 +55,6 @@ const task = (id: string, end: string | null, priority = 1): TaskSummary => ({
 });
 
 describe('home model', () => {
-  it('greets by time of day', () => {
-    expect(greeting(new Date(2026, 0, 1, 9))).toBe('Good morning');
-    expect(greeting(new Date(2026, 0, 1, 15))).toBe('Good afternoon');
-    expect(greeting(new Date(2026, 0, 1, 21))).toBe('Good evening');
-  });
-
   it('keeps tasks due within two weeks, most urgent first', () => {
     const today = new Date(2026, 9, 14);
     const due = dueTasks(

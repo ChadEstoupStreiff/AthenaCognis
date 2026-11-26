@@ -36,6 +36,7 @@ def session_factory(monkeypatch: pytest.MonkeyPatch) -> Iterator[SessionFactory]
         "controllers.ActivityGenerationManager",
         "views.activity_generation",
         "views.calendar",
+        "views.settings",
     ):
         monkeypatch.setattr(f"{module}.get_db", factory)
     yield factory

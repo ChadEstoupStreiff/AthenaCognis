@@ -153,25 +153,36 @@ provider keys, Ollama models, assistant, processing, background jobs, tags and t
 
 The easiest way. Double-click the launcher for your OS at the repository root:
 
-| File | Platform |
-|------|----------|
-| `start.command` | macOS |
-| `start.bat` | Windows |
-| `start.sh` | Linux |
+| Start | Stop | Platform |
+|-------|------|----------|
+| `start.command` | `stop.command` | macOS |
+| `start.bat` | `stop.bat` | Windows |
+| `start.sh` | `stop.sh` | Linux |
 
 1. If Docker isn't installed, it opens the Docker download page for you.
-2. If `.env` doesn't exist yet, it asks a few questions (project name, data folder, ports, database
-   password — press Enter to accept the defaults shown) and writes `.env` for you.
+2. If `.env` doesn't exist yet, it asks a few questions and writes `.env` for you — no file to copy
+   or edit. Press Enter to accept the default shown in `[brackets]`:
+
+   | Question | Default | Written as |
+   |----------|---------|------------|
+   | Project name | `athenacognis` | `PROJECT_NAME` |
+   | Data folder (database, models, uploads) | `~/AthenaCognisData` | `DATA_PATH` |
+   | Folder the app may read (Activity page) | your home folder | `LOCAL_PATH` |
+   | Web interface / backend / phpMyAdmin ports | `8401` / `8400` / `8402` | `FRONT_PORT`, `BACK_PORT`, `PMA_PORT` |
+   | Database password | random | `DATABASE_PASSWORD` |
+
+   Paths must be absolute without spaces; ports must be 1–65535 — invalid answers are asked again.
+   To change a value later, edit `.env` and run the launcher again.
 3. It starts AthenaCognis detached (`docker compose up -d`).
 4. It waits for the app to respond and opens it in your browser. If it doesn't come up, it tells you
    to check your `.env` (bad `DATA_PATH`, a port already in use, etc.) and the container logs.
 
-Closing the window does **not** stop AthenaCognis — it keeps running in the background; stop it with
-`./down.sh` or `docker compose down`.
+Closing the window does **not** stop AthenaCognis — it keeps running in the background. Stop it with
+the matching `stop` script: it removes the containers and keeps your data (`DATA_PATH`).
 
 > **Linux note:** most file managers won't run a `.sh` file on double-click until it is executable.
-> Right-click `start.sh` → Properties → Permissions → "Allow executing file as program" (varies by desktop
-> environment), or run `chmod +x start.sh` once from a terminal.
+> Right-click `start.sh` / `stop.sh` → Properties → Permissions → "Allow executing file as program" (varies
+> by desktop environment), or run `chmod +x start.sh stop.sh` once from a terminal.
 
 ### From a terminal
 
@@ -183,11 +194,12 @@ There are two ways to run AthenaCognis:
 ```bash
 git clone https://github.com/ChadEstoupStreiff/athenacognis.git
 cd athenacognis
-cp .env_ex .env     # then fill in the values, see Configuration
-./up.sh             # build and start
+./start.sh          # macOS: ./start.command — asks the settings, writes .env, builds and starts
 ```
 
-Open `http://localhost:<FRONT_PORT>`. Stop with `./down.sh`.
+The launcher opens `http://localhost:<FRONT_PORT>` once the app is up. Later starts: `./up.sh`
+(or the launcher again). Stop with `./stop.sh` (or `./down.sh`). Prefer writing `.env` by hand? Copy `.env_ex`
+(every variable commented) — see [Configuration](#%EF%B8%8F-configuration).
 
 **Optional — a local LLM:** in **Settings → Ollama**, enter a model name (e.g. `llama3.2:8b`) and pull it.
 Browse models at [ollama.com/library](https://ollama.com/library).
@@ -333,18 +345,19 @@ an API key in **Settings → Providers & keys** (stored in the database, not in 
 
 ## ⚙️ Configuration
 
-All core configuration lives in `.env`:
+All core configuration lives in `.env`, written by the launcher on first start (template:
+`.env_ex`):
 
 | Variable | Required | Description | Example |
 |----------|----------|-------------|---------|
 | `PROJECT_NAME` | ✅ | Docker Compose project name | `athenacognis` |
-| `USER_NAME` | ✅ | Your name, shown in the Home greeting | `chad` |
 | `DATA_PATH` | ✅ | Absolute host path for all persistent data (files, database, models, caches) | `/data/athenacognis` |
+| `LOCAL_PATH` | ✅ | Host folder mounted read-only at `/local`; the Activity page watches folders inside it | `/home/chad` |
 | `BACK_PORT` | ✅ | Host port of the FastAPI backend | `8400` |
 | `FRONT_PORT` | ✅ | Host port of the web app | `8401` |
 | `PMA_PORT` | ✅ | Host port of phpMyAdmin | `8402` |
-| `DATABASE_PASSWORD` | ✅ | MariaDB root password | `supersecret` |
-| `TELEMETRY_SERVER_URL`, `TELEMETRY_DASHBOARD_URL` | ☑️ optional | Anonymous usage statistics (opt-in, once a day) | |
+| `DATABASE_PASSWORD` | ✅ | MariaDB root password (fixed when the database is first created) | `supersecret` |
+| `ATHENACOGNIS_VERSION` | ☑️ optional | Docker Hub image tag (Docker Hub install only) | `latest` |
 
 ## 💡 Why I built it
 

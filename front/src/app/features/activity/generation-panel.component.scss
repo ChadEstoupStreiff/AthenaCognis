@@ -13,7 +13,7 @@
     align-items: center;
     gap: 8px;
     margin: 0;
-    font-size: 16px;
+    font-size: calc(16px * var(--ac-font-scale));
   }
 }
 
@@ -43,37 +43,12 @@
     align-items: center;
     gap: 6px;
     margin: 0;
-    font-size: 14px;
+    font-size: calc(14px * var(--ac-font-scale));
   }
 }
 
 .pi-bolt {
   color: var(--p-primary-color);
-}
-
-.records {
-  display: grid;
-  gap: 8px;
-  margin: 8px 0 0;
-  padding: 0;
-  list-style: none;
-
-  li {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-  }
-
-  time {
-    flex: none;
-    font-variant-numeric: tabular-nums;
-  }
-}
-
-.record-text {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
 }
 
 .generate {
@@ -97,11 +72,4 @@
   .pi-bolt {
     font-size: 1.3rem;
   }
-}
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 4px;
 }

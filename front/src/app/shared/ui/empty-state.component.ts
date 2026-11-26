@@ -29,7 +29,7 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
     }
     h2 {
       margin: 4px 0 0;
-      font-size: 16px;
+      font-size: calc(16px * var(--ac-font-scale));
     }
     p {
       margin: 0;

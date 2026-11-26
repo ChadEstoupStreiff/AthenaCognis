@@ -32,7 +32,7 @@
 }
 
 .filters {
-  font-size: 13px;
+  font-size: calc(13px * var(--ac-font-scale));
 }
 
 .years,
@@ -53,7 +53,7 @@
 .hint,
 .topics {
   margin: 0;
-  font-size: 12px;
+  font-size: calc(12px * var(--ac-font-scale));
 }
 
 .reasons {
@@ -68,7 +68,7 @@
   border-radius: 999px;
   background: color-mix(in srgb, var(--p-primary-color) 12%, transparent);
   color: var(--p-primary-color);
-  font-size: 11px;
+  font-size: calc(11px * var(--ac-font-scale));
   font-weight: 600;
 }
 
@@ -85,7 +85,7 @@
 
 .custom {
   width: 100%;
-  font-size: 13px;
+  font-size: calc(13px * var(--ac-font-scale));
 }
 
 .ai-queries {
@@ -95,7 +95,7 @@
   margin: 0;
   padding: 0;
   list-style: none;
-  font-size: 12px;
+  font-size: calc(12px * var(--ac-font-scale));
 
   code {
     overflow-wrap: anywhere;
@@ -108,7 +108,7 @@
   flex-wrap: wrap;
   gap: 6px;
   margin: 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--ac-font-scale));
 
   em {
     overflow-wrap: anywhere;
@@ -125,7 +125,7 @@
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 10px 12px;
   padding: 12px 14px;
-  font-size: 13px;
+  font-size: calc(13px * var(--ac-font-scale));
 }
 
 .field {
@@ -156,7 +156,7 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  font-size: 13px;
+  font-size: calc(13px * var(--ac-font-scale));
 }
 
 .failure {
@@ -165,7 +165,7 @@
   gap: 6px;
   margin: 0;
   color: var(--p-orange-500);
-  font-size: 12px;
+  font-size: calc(12px * var(--ac-font-scale));
 }
 
 .hits {
@@ -206,14 +206,14 @@ a.title:hover {
 
 .details {
   margin: 2px 0 6px;
-  font-size: 13px;
+  font-size: calc(13px * var(--ac-font-scale));
 }
 
 .abstract {
   display: -webkit-box;
   margin: 0;
   overflow: hidden;
-  font-size: 13px;
+  font-size: calc(13px * var(--ac-font-scale));
   line-height: 1.45;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -231,7 +231,7 @@ a.title:hover {
   background: none;
   color: var(--p-primary-color);
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px * var(--ac-font-scale));
   cursor: pointer;
 }
 
@@ -240,12 +240,12 @@ a.title:hover {
   align-items: center;
   flex-wrap: wrap;
   gap: 6px 12px;
-  font-size: 12px;
+  font-size: calc(12px * var(--ac-font-scale));
   overflow-wrap: anywhere;
 
   i {
     margin-right: 4px;
-    font-size: 11px;
+    font-size: calc(11px * var(--ac-font-scale));
   }
 
   a {
@@ -275,7 +275,7 @@ a.title:hover {
   border-radius: 999px;
   background: color-mix(in srgb, var(--p-green-500) 14%, transparent);
   color: var(--p-green-600);
-  font-size: 12px;
+  font-size: calc(12px * var(--ac-font-scale));
   font-weight: 600;
 }
 

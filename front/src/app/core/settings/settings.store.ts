@@ -22,6 +22,8 @@ interface KnownSettings {
   readonly mail_nav_badge: boolean;
   readonly mail_pinned_first: boolean;
   readonly mail_activity_reset_time: string;
+  readonly home_daily_text_kind: string;
+  readonly home_daily_text_language: string;
 }
 
 /** Defaults (mirror `back/src/views/settings.py`). */
@@ -42,6 +44,8 @@ export const SETTING_DEFAULTS: KnownSettings = {
   mail_nav_badge: true,
   mail_pinned_first: true,
   mail_activity_reset_time: '04:00',
+  home_daily_text_kind: 'quote',
+  home_daily_text_language: 'en',
 };
 
 /** Keys with typed defaults. */

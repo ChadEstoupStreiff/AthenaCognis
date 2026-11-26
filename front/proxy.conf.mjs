@@ -2,9 +2,9 @@
 //   /api/*        -> FastAPI            (set BACKEND_URL, default http://localhost:8400)
 //   /raw/*        -> FastAPI downloads   (nginx serves the /shared mount instead in Docker)
 //   /arxiv/*      -> export.arxiv.org
-//   /telemetry/*  -> TELEMETRY_SERVER_URL (only when set)
+//   /telemetry/*  -> telemetry server
 const backend = process.env.BACKEND_URL ?? 'http://localhost:8400';
-const telemetry = (process.env.TELEMETRY_SERVER_URL ?? '').replace(/\/$/, '');
+const telemetry = 'https://telemetryathenacognis.chades.fr';
 
 export default {
   '/api': { target: backend, changeOrigin: true, pathRewrite: { '^/api': '' } },
@@ -19,9 +19,5 @@ export default {
     secure: true,
     pathRewrite: { '^/arxiv': '' },
   },
-  ...(telemetry
-    ? {
-        '/telemetry': { target: telemetry, changeOrigin: true, pathRewrite: { '^/telemetry': '' } },
-      }
-    : {}),
+  '/telemetry': { target: telemetry, changeOrigin: true, pathRewrite: { '^/telemetry': '' } },
 };

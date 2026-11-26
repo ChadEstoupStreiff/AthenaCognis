@@ -79,7 +79,7 @@ const SCRIPTS_QUERY = 'scripts=1';
       padding: 8px 12px;
       border-radius: 8px;
       background: color-mix(in srgb, var(--p-orange-500) 10%, transparent);
-      font-size: 13px;
+      font-size: calc(13px * var(--ac-font-scale));
 
       i {
         color: var(--p-orange-500);

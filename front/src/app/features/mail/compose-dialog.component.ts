@@ -323,10 +323,10 @@ const KIND_TITLE: Readonly<Record<MailDraftKind, string>> = {
       display: flex;
       flex-direction: column;
       min-width: 0;
-      font-size: 13px;
+      font-size: calc(13px * var(--ac-font-scale));
       span {
         overflow: hidden;
-        font-size: 12px;
+        font-size: calc(12px * var(--ac-font-scale));
         text-overflow: ellipsis;
         white-space: nowrap;
       }
@@ -341,7 +341,7 @@ const KIND_TITLE: Readonly<Record<MailDraftKind, string>> = {
       grid-template-columns: 64px minmax(0, 1fr);
       align-items: center;
       gap: 8px;
-      font-size: 12px;
+      font-size: calc(12px * var(--ac-font-scale));
       color: var(--ac-muted);
     }
     .row.with-action {
@@ -362,7 +362,7 @@ const KIND_TITLE: Readonly<Record<MailDraftKind, string>> = {
       padding: 8px 10px;
       border: 1px dashed var(--ac-panel-border);
       border-radius: 8px;
-      font-size: 13px;
+      font-size: calc(13px * var(--ac-font-scale));
       overflow-wrap: anywhere;
     }
     .signature {
@@ -382,7 +382,7 @@ const KIND_TITLE: Readonly<Record<MailDraftKind, string>> = {
       align-items: center;
       gap: 8px;
       margin-right: auto;
-      font-size: 12px;
+      font-size: calc(12px * var(--ac-font-scale));
     }
     .attachments {
       display: flex;
@@ -399,7 +399,7 @@ const KIND_TITLE: Readonly<Record<MailDraftKind, string>> = {
         padding: 2px 4px 2px 10px;
         border: 1px solid var(--ac-panel-border);
         border-radius: 999px;
-        font-size: 12px;
+        font-size: calc(12px * var(--ac-font-scale));
       }
       .name {
         max-width: 220px;

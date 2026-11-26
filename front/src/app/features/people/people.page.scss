@@ -106,7 +106,7 @@
 
   h1 {
     margin: 0;
-    font-size: 22px;
+    font-size: calc(22px * var(--ac-font-scale));
   }
 
   p {
@@ -118,11 +118,11 @@
   display: flex;
   flex-wrap: wrap;
   gap: 14px;
-  font-size: 13px;
+  font-size: calc(13px * var(--ac-font-scale));
 
   i {
     margin-right: 5px;
-    font-size: 12px;
+    font-size: calc(12px * var(--ac-font-scale));
   }
 }
 
@@ -133,7 +133,7 @@
 
 .count {
   margin-left: 4px;
-  font-size: 11px;
+  font-size: calc(11px * var(--ac-font-scale));
   color: var(--ac-muted);
 }
 
@@ -151,7 +151,7 @@
 
   h2 {
     margin: 0;
-    font-size: 14px;
+    font-size: calc(14px * var(--ac-font-scale));
   }
 
   p {

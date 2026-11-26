@@ -24,7 +24,7 @@
   background: transparent;
   color: var(--p-text-color);
   font: inherit;
-  font-size: 16px;
+  font-size: calc(16px * var(--ac-font-scale));
 }
 
 .results {
@@ -35,7 +35,7 @@
 
 .section {
   padding: 10px 10px 4px;
-  font-size: 11px;
+  font-size: calc(11px * var(--ac-font-scale));
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -83,7 +83,7 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: 12px;
+  font-size: calc(12px * var(--ac-font-scale));
   color: var(--ac-muted);
 }
 
@@ -100,7 +100,7 @@
   gap: 4px 14px;
   padding: 10px 10px 2px;
   border-top: 1px solid var(--ac-panel-border);
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--ac-font-scale));
 
   .keys {
     margin-left: auto;

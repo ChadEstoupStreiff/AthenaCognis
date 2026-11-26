@@ -36,7 +36,7 @@ import { CatalogStore } from '../../core/catalog/catalog.store';
       max-width: 100%;
       padding: 1px 8px;
       border-radius: 999px;
-      font-size: 12px;
+      font-size: calc(12px * var(--ac-font-scale));
       font-weight: 500;
       line-height: 20px;
       background: var(--chip-color);
@@ -66,7 +66,7 @@ import { CatalogStore } from '../../core/catalog/catalog.store';
       background: none;
       color: inherit;
       cursor: pointer;
-      font-size: 10px;
+      font-size: calc(10px * var(--ac-font-scale));
       opacity: 0.7;
     }
   `,

@@ -138,7 +138,7 @@ const ATTACHMENT_OPTIONS: readonly { readonly value: TriState; readonly label: s
       display: flex;
       flex-direction: column;
       gap: 4px;
-      font-size: 12px;
+      font-size: calc(12px * var(--ac-font-scale));
       color: var(--ac-muted);
     }
     .dates {
@@ -151,7 +151,7 @@ const ATTACHMENT_OPTIONS: readonly { readonly value: TriState; readonly label: s
     }
     .error {
       margin: 0;
-      font-size: 12px;
+      font-size: calc(12px * var(--ac-font-scale));
       color: var(--p-red-500);
     }
   `,

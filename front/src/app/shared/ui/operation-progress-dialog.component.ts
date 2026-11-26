@@ -60,7 +60,7 @@ const PERCENT = 100;
   styles: `
     .counts {
       margin: 10px 0 0;
-      font-size: 13px;
+      font-size: calc(13px * var(--ac-font-scale));
       color: var(--ac-muted);
     }
 
@@ -78,7 +78,7 @@ const PERCENT = 100;
       padding: 10px 12px;
       border-radius: 6px;
       background: color-mix(in srgb, #f59e0b 15%, transparent);
-      font-size: 13px;
+      font-size: calc(13px * var(--ac-font-scale));
 
       i {
         margin-right: 6px;

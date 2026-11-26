@@ -24,7 +24,7 @@
   background: transparent;
   color: var(--p-text-color);
   font: inherit;
-  font-size: 14px;
+  font-size: calc(14px * var(--ac-font-scale));
   cursor: pointer;
 
   &:hover,
@@ -33,11 +33,11 @@
   }
 
   i {
-    font-size: 14px;
+    font-size: calc(14px * var(--ac-font-scale));
   }
 
   .caret {
-    font-size: 10px;
+    font-size: calc(10px * var(--ac-font-scale));
     color: var(--ac-muted);
   }
 
@@ -64,7 +64,7 @@
 
   &.mono {
     font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-    font-size: 12px;
+    font-size: calc(12px * var(--ac-font-scale));
   }
 }
 
@@ -72,7 +72,7 @@
   font-weight: 600;
 
   small {
-    font-size: 10px;
+    font-size: calc(10px * var(--ac-font-scale));
   }
 }
 
@@ -90,7 +90,7 @@
 }
 
 .panel-label {
-  font-size: 12px;
+  font-size: calc(12px * var(--ac-font-scale));
   color: var(--ac-muted);
 }
 
@@ -130,7 +130,7 @@
   }
 
   .small {
-    font-size: 12px;
+    font-size: calc(12px * var(--ac-font-scale));
   }
 }
 
@@ -186,7 +186,7 @@
   border: none;
   border-radius: 6px;
   background: transparent;
-  font-size: 18px;
+  font-size: calc(18px * var(--ac-font-scale));
   cursor: pointer;
 
   &:hover,
@@ -197,7 +197,7 @@
 
 .cheatsheet {
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: calc(12px * var(--ac-font-scale));
 
   td {
     padding: 3px 8px;

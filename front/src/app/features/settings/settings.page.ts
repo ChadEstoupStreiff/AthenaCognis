@@ -37,7 +37,7 @@ const SECTIONS: readonly SectionEntry[] = [
     label: 'General',
     icon: 'pi pi-sliders-h',
     keywords:
-      'appearance theme dark light display size limit target hours search semantic view cards list table progress banner phd',
+      'appearance theme dark light font text size scale accent color colour background tone surface home daily quote joke motivation greeting language display limit target hours search semantic view cards list table time progress banner goal phd',
   },
   {
     id: 'navigation',

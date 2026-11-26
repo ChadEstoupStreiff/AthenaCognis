@@ -63,7 +63,7 @@ const PADDING_REM = 1.1;
       border: 1px dashed var(--ac-panel-border);
       border-radius: var(--p-form-field-border-radius, 6px);
       color: var(--p-text-color);
-      font-size: 14px;
+      font-size: calc(14px * var(--ac-font-scale));
     }
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -124,13 +124,13 @@ export function bodyPreview(body: string): string {
     }
     .time,
     .foot {
-      font-size: 12px;
+      font-size: calc(12px * var(--ac-font-scale));
     }
     .subject {
       font-weight: 600;
     }
     .body {
-      font-size: 13px;
+      font-size: calc(13px * var(--ac-font-scale));
     }
     .error {
       min-width: 0;

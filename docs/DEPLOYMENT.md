@@ -108,10 +108,6 @@ services:
     restart: unless-stopped
     depends_on:
       - back
-    environment:
-      USER_NAME: ${USER_NAME:-}
-      TELEMETRY_SERVER_URL: ${TELEMETRY_SERVER_URL:-}
-      TELEMETRY_DASHBOARD_URL: ${TELEMETRY_DASHBOARD_URL:-}
     ports:
       - "${FRONT_PORT:-8401}:80"
     volumes:
@@ -126,6 +122,9 @@ networks:
 ```
 
 ## 3. Add `.env`
+
+> **Shortcut:** skip steps 3 and 4 — the [launcher](#5-optional-double-click-launcher-instead-of-steps-3--4)
+> asks these values and writes `.env` for you.
 
 Create a `.env` file next to `docker-compose.yml`:
 
@@ -168,19 +167,24 @@ launcher script for your OS and drop it in the same folder as
 | `start.sh` | Linux | [raw link](https://raw.githubusercontent.com/ChadEstoupStreiff/athenacognis/main/start.sh) |
 | `start.command` | macOS | [raw link](https://raw.githubusercontent.com/ChadEstoupStreiff/athenacognis/main/start.command) |
 | `start.bat` | Windows | [raw link](https://raw.githubusercontent.com/ChadEstoupStreiff/athenacognis/main/start.bat) |
+| `stop.sh` | Linux | [raw link](https://raw.githubusercontent.com/ChadEstoupStreiff/athenacognis/main/stop.sh) |
+| `stop.command` | macOS | [raw link](https://raw.githubusercontent.com/ChadEstoupStreiff/athenacognis/main/stop.command) |
+| `stop.bat` | Windows | [raw link](https://raw.githubusercontent.com/ChadEstoupStreiff/athenacognis/main/stop.bat) |
 
 ```bash
 # Linux / macOS example
 curl -fsSL -o start.sh https://raw.githubusercontent.com/ChadEstoupStreiff/athenacognis/main/start.sh
-chmod +x start.sh
+curl -fsSL -o stop.sh https://raw.githubusercontent.com/ChadEstoupStreiff/athenacognis/main/stop.sh
+chmod +x start.sh stop.sh
 ```
 
 Double-clicking it will:
 
 1. Check Docker is installed — if not, open the Docker download page for you.
-2. Check for `.env` — if it's missing (skipping steps 3 above), ask a few
-   questions (data folder, ports, database password — press Enter to accept
-   the defaults) and write it for you.
+2. Check for `.env` — if it's missing (skipping step 3 above), ask a few
+   questions (project name, data folder, folder the app may read, ports,
+   database password — press Enter to accept the defaults, invalid answers
+   are asked again) and write a commented `.env` for you.
 3. Start the stack detached (`docker compose up -d`).
 4. Wait for it to come up and open `http://localhost:<FRONT_PORT>` in your
    browser. If it doesn't come up in time, it tells you something's wrong
@@ -219,9 +223,15 @@ Set `ATHENACOGNIS_VERSION` in `.env` to pin to a specific release, or leave it a
 
 ## Stopping
 
+Double-click the `stop` script for your OS (`stop.sh`, `stop.command`, `stop.bat`), or:
+
 ```bash
 docker compose down
 ```
+
+Started with a launcher? The launcher uses the project name `superdiary_<PROJECT_NAME>`, so from
+a terminal run `docker compose -p superdiary_<PROJECT_NAME> down` instead (the `stop` script does
+this for you).
 
 Your data stays on disk under `DATA_PATH` and is untouched by `down`.
 

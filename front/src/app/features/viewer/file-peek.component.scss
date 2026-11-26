@@ -22,7 +22,7 @@
   }
 
   span {
-    font-size: 12px;
+    font-size: calc(12px * var(--ac-font-scale));
   }
 }
 
@@ -44,12 +44,21 @@
   align-items: start;
 }
 
-/* Preview stays in view while the details scroll beside it. */
+/* Preview (and its extracted text) stays in view while the details scroll beside it. */
+.preview-column {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: calc(100dvh - 170px);
+  overflow-y: auto;
+}
+
 .preview {
   --ac-compact-pdf-height: calc(100dvh - 190px);
   --ac-compact-code-height: calc(100dvh - 210px);
-  position: sticky;
-  top: 0;
+  flex: none;
   max-height: calc(100dvh - 170px);
   overflow: auto;
   padding: 8px;
@@ -63,10 +72,15 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .preview-column {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+  }
+
   .preview {
     --ac-compact-pdf-height: 50vh;
     --ac-compact-code-height: 45vh;
-    position: static;
     max-height: 55vh;
   }
 }

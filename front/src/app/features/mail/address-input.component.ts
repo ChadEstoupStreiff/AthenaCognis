@@ -127,7 +127,7 @@ export function shouldCommit(text: string): boolean {
       border-radius: 999px;
       background: var(--p-highlight-background, rgb(59 130 246 / 15%));
       color: var(--p-highlight-color, inherit);
-      font-size: 13px;
+      font-size: calc(13px * var(--ac-font-scale));
     }
     .pill-text {
       overflow: hidden;
@@ -146,7 +146,7 @@ export function shouldCommit(text: string): boolean {
       color: inherit;
       cursor: pointer;
       i {
-        font-size: 10px;
+        font-size: calc(10px * var(--ac-font-scale));
       }
     }
     .remove:hover {
@@ -184,7 +184,7 @@ export function shouldCommit(text: string): boolean {
       align-items: baseline;
       padding: 6px 8px;
       border-radius: 6px;
-      font-size: 13px;
+      font-size: calc(13px * var(--ac-font-scale));
       cursor: pointer;
     }
     li.active {

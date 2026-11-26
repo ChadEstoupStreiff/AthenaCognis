@@ -1,6 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import type {
   BackendCalendarRecord,
+  BackendDailyText,
   BackendMetrics,
   DashboardMetrics,
   DashboardToday,
@@ -19,6 +20,22 @@ export class DashboardApi {
   private readonly api = inject(ApiClient);
   private metricsCache: { readonly at: number; readonly value: Promise<DashboardMetrics> } | null =
     null;
+
+  /**
+   * Text of the day from an online provider (no toast: Home falls back to offline sentences).
+   *
+   * @param kind - `motivation`, `quote` or `joke`.
+   * @param language - `fr` or `en`.
+   * @param signal - Abort signal.
+   * @returns Text, author and provider.
+   */
+  dailyText(kind: string, language: string, signal?: AbortSignal): Promise<BackendDailyText> {
+    return this.api.get<BackendDailyText>(backendUrl('/daily-text'), {
+      params: { kind, language },
+      silent: true,
+      ...(signal ? { signal } : {}),
+    });
+  }
 
   /**
    * Files, records and open tasks of a day and the six days before.

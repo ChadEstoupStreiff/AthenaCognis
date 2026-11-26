@@ -1,4 +1,4 @@
-import type { DailyGenerationRequest, GenerationOutput, GenerationSpan } from '@domain/contracts';
+import type { GenerationBasis, GenerationRequest, GenerationSpan } from '@domain/contracts';
 import { formatLocalDate } from '@domain/time';
 
 /** Local period an activity summary covers, [start, end). */
@@ -133,25 +133,37 @@ export function periodOf(
   };
 }
 
+/** Context and custom instruction of a generation. */
+export interface GenerationContext {
+  readonly basis: GenerationBasis;
+  /** Monthly from weekly: fill uncovered days with daily summaries. */
+  readonly fillWithDaily: boolean;
+  /** Data source keys, read with the `sources` context. */
+  readonly sources: readonly string[];
+  readonly instruction: string;
+}
+
 /**
- * Daily generation request of a period.
+ * Generation request of a period.
  *
- * @param period - Daily period.
- * @param sources - Data source keys.
- * @param outputs - What to generate.
+ * @param period - Period.
+ * @param context - Context and custom instruction.
  * @returns Request with the local window as instants and the UTC offset.
  */
-export function dailyRequest(
+export function generationRequest(
   period: ActivityPeriod,
-  sources: readonly string[],
-  outputs: readonly GenerationOutput[],
-): DailyGenerationRequest {
+  context: GenerationContext,
+): GenerationRequest {
+  const usesSources = context.basis === 'sources';
   return {
+    span: period.span,
     day: period.key,
     start: period.start.toISOString(),
     end: period.end.toISOString(),
     utc_offset_minutes: -period.start.getTimezoneOffset(),
-    sources,
-    outputs,
+    basis: context.basis,
+    sources: usesSources ? context.sources : [],
+    instruction: context.instruction.trim(),
+    fill_daily: !usesSources && context.fillWithDaily,
   };
 }

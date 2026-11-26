@@ -37,22 +37,24 @@ describe('generation settings', () => {
 
   it('reads schedule defaults of a span', () => {
     expect(scheduleDefaults({}, 'daily')).toEqual({
-      basis: 'generated',
+      basis: 'sources',
       fillWithDaily: false,
       sources: [],
-      outputs: ['summary', 'time'],
+      instruction: '',
     });
     const values = {
       [spanSetting('weekly', 'basis')]: 'sources',
       [spanSetting('weekly', 'sources')]: ['github'],
-      [spanSetting('weekly', 'outputs')]: ['time', 'bogus'],
+      [spanSetting('weekly', 'instruction')]: 'In French.',
+      [spanSetting('monthly', 'instruction')]: 3,
     };
     expect(scheduleDefaults(values, 'weekly')).toEqual({
       basis: 'sources',
       fillWithDaily: false,
       sources: ['github'],
-      outputs: ['time'],
+      instruction: 'In French.',
     });
+    expect(scheduleDefaults(values, 'monthly').instruction).toBe('');
   });
 
   it('offers daily summaries as monthly context only', () => {

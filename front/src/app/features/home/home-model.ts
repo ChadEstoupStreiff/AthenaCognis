@@ -38,8 +38,6 @@ export interface DueTask {
   readonly color: string;
 }
 
-const MORNING_END = 12;
-const AFTERNOON_END = 18;
 const MAX_SEGMENTS = 8;
 const DISK_COLORS = {
   files: '#7700a7',
@@ -61,20 +59,6 @@ const MAIL_CATEGORY_LABELS: Readonly<Record<string, string>> = {
   newsletter: 'Newsletters',
   notification: 'Notifications',
 };
-
-/**
- * Greeting for the time of day.
- *
- * @param now - Current time.
- * @returns Greeting.
- */
-export function greeting(now: Date): string {
-  const hour = now.getHours();
-  if (hour < MORNING_END) {
-    return 'Good morning';
-  }
-  return hour < AFTERNOON_END ? 'Good afternoon' : 'Good evening';
-}
 
 /**
  * Top N counts as meter segments (rest grouped as "Other").

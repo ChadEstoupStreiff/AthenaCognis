@@ -1,5 +1,5 @@
 # AthenaCognis front — static Angular build + same-origin proxy to the backend.
-# ${BACKEND_HOST} / ${GROBID_HOST} / ${TELEMETRY_UPSTREAM} are substituted at container start (nginx image templates).
+# ${BACKEND_HOST} / ${GROBID_HOST} are substituted at container start (nginx image templates).
 
 # Strip /api and keep the raw (still-encoded) URI: file paths are sent as %2Fshared%2F... segments
 # and must reach FastAPI byte-for-byte (nginx would otherwise decode them and merge slashes).
@@ -42,7 +42,6 @@ server {
     resolver 127.0.0.11 valid=30s ipv6=off;
     set $backend ${BACKEND_HOST};
     set $grobid ${GROBID_HOST};
-    set $telemetry "${TELEMETRY_UPSTREAM}";
 
     client_max_body_size 0;
     # Notes and long texts travel in query strings (backend API design).
@@ -67,13 +66,11 @@ server {
         proxy_read_timeout 300s;
     }
 
-    # Optional usage statistics server (TELEMETRY_SERVER_URL): same-origin, so no CORS setup is needed.
+    # Usage statistics server: same-origin, so no CORS setup is needed.
     location /telemetry/ {
-        if ($telemetry = "") {
-            return 404;
-        }
-        proxy_pass $telemetry$telemetry_uri;
+        proxy_pass https://telemetryathenacognis.chades.fr$telemetry_uri;
         proxy_ssl_server_name on;
+        proxy_set_header Host telemetryathenacognis.chades.fr;
         proxy_read_timeout 60s;
     }
 
@@ -90,10 +87,6 @@ server {
         alias /shared/;
         add_header X-Content-Type-Options nosniff always;
         add_header Content-Security-Policy $raw_csp always;
-    }
-
-    location = /config.json {
-        add_header Cache-Control "no-store" always;
     }
 
     # Hashed build assets never change.

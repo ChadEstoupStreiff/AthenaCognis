@@ -165,6 +165,10 @@ import views.activity_generation
 
 app.include_router(views.activity_generation.router)
 
+import views.daily_text
+
+app.include_router(views.daily_text.router)
+
 
 def du_size(path: str) -> int:
     """Approximate `du -sb path` (sum of file sizes, no symlink following)."""

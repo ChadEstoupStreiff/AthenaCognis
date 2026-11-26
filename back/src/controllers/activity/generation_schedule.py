@@ -11,11 +11,15 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from sqlalchemy.exc import SQLAlchemyError
 
 from controllers.activity.generation import (
+    BASES,
     DAY_FORMAT,
-    OUTPUTS,
-    DailyRequest,
+    SPANS,
+    WEEK_DAYS,
+    Basis,
+    GenerationRequest,
     GenerationRequestError,
-    Output,
+    Span,
+    job_key,
 )
 from controllers.activity.off_days import (
     OffDayRules,
@@ -30,8 +34,12 @@ LOGGER = logging.getLogger(__name__)
 SETTING_PREFIX = "activity_generation_"
 TIMEZONE_SETTING = f"{SETTING_PREFIX}timezone"
 DAY_START_SETTING = f"{SETTING_PREFIX}day_start"
+WEEK_START_SETTING = f"{SETTING_PREFIX}week_start"
 DEFAULT_TIMEZONE = "UTC"
 DEFAULT_DAY_START = time(0, 0)
+# ISO weekday weeks start on (1 = Monday … 7 = Sunday).
+DEFAULT_WEEK_START = 1
+SECONDS_PER_MINUTE = 60
 CHECK_INTERVAL_SECONDS = 60
 CLOCK_FORMAT = "%H:%M"
 SKIPPED_SETTING = f"{SETTING_PREFIX}daily_skipped"
@@ -43,23 +51,29 @@ SettingWriter = Callable[[str, object], None]
 
 
 @dataclass(frozen=True)
-class DailySchedule:
-    """Settings of the scheduled daily generation."""
+class SpanSchedule:
+    """Settings of the scheduled generation of one span."""
 
+    span: Span
     enabled: bool
     zone: ZoneInfo
-    # Local moment a day starts (and the previous one gets generated).
+    # Local moment a day starts (and the previous period gets generated).
     day_start: time
+    # ISO weekday weeks start on.
+    week_start: int
+    basis: Basis
+    # Monthly from weekly: days no weekly summary covers use their daily summary.
+    fill_daily: bool
+    # Data source keys; empty = every enabled source.
     sources: tuple[str, ...]
-    outputs: tuple[Output, ...]
-    off: OffDayRules
-    # Key of the last day queued by the scheduler, "" when never.
+    instruction: str
+    # Key of the last period queued by the scheduler, "" when never.
     last: str
 
 
 @dataclass(frozen=True)
 class DuePeriod:
-    """Day whose generation is due: its key and local bounds."""
+    """Period whose generation is due: its first day and local bounds."""
 
     key: str
     start: datetime
@@ -125,81 +139,165 @@ def read_names(value: object) -> tuple[str, ...]:
     return tuple(item for item in items if isinstance(item, str))
 
 
-def read_daily(read: SettingReader) -> DailySchedule:
+def read_week_start(read: SettingReader) -> int:
     """
-    Read the daily schedule settings
+    ISO weekday weeks start on
 
     Args:
         read (SettingReader): setting reader
     Returns:
-        DailySchedule: schedule (outputs default to both)
+        int: 1 (Monday) … 7 (Sunday), Monday when unset or malformed
     """
-    outputs_value = read(span_key("daily", "outputs"))
-    outputs = (
-        tuple(item for item in read_names(outputs_value) if item in OUTPUTS)
-        if isinstance(outputs_value, list)
-        else OUTPUTS
-    )
-    last = read(span_key("daily", "last"))
-    return DailySchedule(
-        enabled=read(span_key("daily", "enabled")) is True,
+    value = read(WEEK_START_SETTING)
+    if isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= WEEK_DAYS:
+        return value
+    return DEFAULT_WEEK_START
+
+
+def read_basis(value: object, span: Span) -> Basis:
+    """
+    Context stored for a span
+
+    Args:
+        value (object): stored value
+        span (Span): time span
+    Returns:
+        Basis: stored context when offered, the span's first one otherwise
+    """
+    offered = BASES[span]
+    return next((basis for basis in offered if basis == value), offered[0])
+
+
+def read_text(value: object) -> str:
+    """
+    Read a stored text
+
+    Args:
+        value (object): stored value
+    Returns:
+        str: trimmed text, "" when not a string
+    """
+    return value.strip() if isinstance(value, str) else ""
+
+
+def read_schedule(read: SettingReader, span: Span) -> SpanSchedule:
+    """
+    Read the schedule settings of a span
+
+    Args:
+        read (SettingReader): setting reader
+        span (Span): time span
+    Returns:
+        SpanSchedule: schedule
+    """
+    return SpanSchedule(
+        span=span,
+        enabled=read(span_key(span, "enabled")) is True,
         zone=read_zone(read),
         day_start=read_day_start(read),
-        sources=read_names(read(span_key("daily", "sources"))),
-        outputs=outputs,  # type: ignore[arg-type]
-        off=read_rules(read),
-        last=last if isinstance(last, str) else "",
+        week_start=read_week_start(read),
+        basis=read_basis(read(span_key(span, "basis")), span),
+        fill_daily=read(span_key(span, "fill_daily")) is True,
+        sources=read_names(read(span_key(span, "sources"))),
+        instruction=read_text(read(span_key(span, "instruction"))),
+        last=read_text(read(span_key(span, "last"))),
     )
 
 
-def due_day(now: datetime, schedule: DailySchedule) -> DuePeriod | None:
+def current_day(local: datetime, day_start: time) -> date:
     """
-    Day that ended at the latest day start, when the scheduler has not queued it yet
+    Local day running at a moment, days starting at the day start
+
+    Args:
+        local (datetime): moment, aware in the user zone
+        day_start (time): local moment a day starts
+    Returns:
+        date: running day
+    """
+    boundary = datetime.combine(local.date(), day_start, local.tzinfo)
+    return local.date() if boundary <= local else local.date() - timedelta(days=1)
+
+
+def ended_period(today: date, schedule: SpanSchedule) -> tuple[date, date]:
+    """
+    Latest period of a span ended before a day
+
+    Args:
+        today (date): running local day
+        schedule (SpanSchedule): schedule
+    Returns:
+        tuple[date, date]: first day, and first day of the next period
+    """
+    if schedule.span == "daily":
+        return today - timedelta(days=1), today
+    if schedule.span == "weekly":
+        week_start = today - timedelta(days=(today.isoweekday() - schedule.week_start) % WEEK_DAYS)
+        return week_start - timedelta(days=WEEK_DAYS), week_start
+    month_start = today.replace(day=1)
+    return (month_start - timedelta(days=1)).replace(day=1), month_start
+
+
+def due_period(now: datetime, schedule: SpanSchedule) -> DuePeriod | None:
+    """
+    Period that ended at the latest boundary, when the scheduler has not queued it yet
 
     Args:
         now (datetime): current moment, aware
-        schedule (DailySchedule): schedule
+        schedule (SpanSchedule): schedule
     Returns:
-        DuePeriod | None: day to generate, None when disabled or already queued
+        DuePeriod | None: period to generate, None when disabled or already queued
     """
     if not schedule.enabled:
         return None
-    local = now.astimezone(schedule.zone)
-    boundary = datetime.combine(local.date(), schedule.day_start, schedule.zone)
-    if boundary > local:
-        boundary -= timedelta(days=1)
-    start = datetime.combine(
-        boundary.date() - timedelta(days=1), schedule.day_start, schedule.zone
-    )
-    key = start.strftime(DAY_FORMAT)
+    first, after = ended_period(current_day(now.astimezone(schedule.zone), schedule.day_start), schedule)
+    key = first.strftime(DAY_FORMAT)
     if key == schedule.last:
         return None
-    return DuePeriod(key, start, boundary)
+    return DuePeriod(
+        key,
+        datetime.combine(first, schedule.day_start, schedule.zone),
+        datetime.combine(after, schedule.day_start, schedule.zone),
+    )
 
 
-def daily_request(
-    period: DuePeriod, sources: tuple[str, ...], outputs: tuple[Output, ...]
-) -> DailyRequest:
+def naive_utc(moment: datetime) -> datetime:
     """
-    Generation request of a due day
+    Convert an aware moment to naive UTC
 
     Args:
-        period (DuePeriod): day, aware local bounds
-        sources (tuple[str, ...]): data source keys
-        outputs (tuple[Output, ...]): what to generate
+        moment (datetime): aware moment
     Returns:
-        DailyRequest: request with the window in naive UTC
+        datetime: naive UTC
+    """
+    return moment.astimezone(ZoneInfo(DEFAULT_TIMEZONE)).replace(tzinfo=None)
+
+
+def period_request(
+    period: DuePeriod, schedule: SpanSchedule, sources: tuple[str, ...]
+) -> GenerationRequest:
+    """
+    Generation request of a due period
+
+    Args:
+        period (DuePeriod): period, aware local bounds
+        schedule (SpanSchedule): schedule
+        sources (tuple[str, ...]): data source keys (used with the data sources context)
+    Returns:
+        GenerationRequest: request with the window in naive UTC
     Raises:
-        GenerationRequestError: no source or no output
+        GenerationRequestError: data sources context without source
     """
     offset = period.start.utcoffset() or timedelta()
-    return DailyRequest(
+    return GenerationRequest(
+        span=schedule.span,
         day=period.key,
-        start=period.start.astimezone(ZoneInfo(DEFAULT_TIMEZONE)).replace(tzinfo=None),
-        end=period.end.astimezone(ZoneInfo(DEFAULT_TIMEZONE)).replace(tzinfo=None),
-        utc_offset_minutes=int(offset.total_seconds() // 60),
-        sources=sources,
-        outputs=outputs,
+        start=naive_utc(period.start),
+        end=naive_utc(period.end),
+        utc_offset_minutes=int(offset.total_seconds() // SECONDS_PER_MINUTE),
+        basis=schedule.basis,
+        sources=sources if schedule.basis == "sources" else (),
+        instruction=schedule.instruction,
+        fill_daily=schedule.fill_daily,
     )
 
 
@@ -211,9 +309,9 @@ class SchedulerHooks:
     write: SettingWriter
     # Keys of the enabled data sources.
     active_sources: Callable[[], tuple[str, ...]]
-    # Tell whether a day was already generated or is generating (manual runs count).
+    # Tell whether a job key was already generated or is generating (manual runs count).
     has_run: Callable[[str], bool]
-    queue: Callable[[DailyRequest], None]
+    queue: Callable[[GenerationRequest], None]
     # Titles of the all-day agenda events of a local day (empty when unreadable).
     agenda_titles: Callable[[date], tuple[str, ...]]
 
@@ -252,37 +350,67 @@ def record_skip(hooks: SchedulerHooks, day: str, reason: str) -> None:
     hooks.write(SKIPPED_SETTING, {key: skipped[key] for key in kept})
 
 
-def run_due(now: datetime, hooks: SchedulerHooks) -> str | None:
+def is_skipped(period: DuePeriod, hooks: SchedulerHooks) -> bool:
     """
-    Queue the daily generation when due (manual runs of that day are kept)
+    Skip a due day that is non working, keeping why
+
+    Args:
+        period (DuePeriod): due day
+        hooks (SchedulerHooks): settings and agenda
+    Returns:
+        bool: True when skipped
+    """
+    reason = skip_reason(period, read_rules(hooks.read), hooks)
+    if reason is None:
+        return False
+    record_skip(hooks, period.key, reason)
+    LOGGER.info("Scheduled generation of %s skipped: %s.", period.key, reason)
+    return True
+
+
+def run_span(now: datetime, span: Span, hooks: SchedulerHooks) -> str | None:
+    """
+    Queue the generation of a span when due (manual runs of that period are kept)
+
+    Args:
+        now (datetime): current moment, aware
+        span (Span): time span
+        hooks (SchedulerHooks): settings, sources and queue
+    Returns:
+        str | None: job key queued, None when nothing was queued
+    """
+    schedule = read_schedule(hooks.read, span)
+    period = due_period(now, schedule)
+    if period is None:
+        return None
+    hooks.write(span_key(span, "last"), period.key)
+    key = job_key(span, period.key)
+    if hooks.has_run(key):
+        LOGGER.info("Scheduled generation of %s skipped: already generated.", key)
+        return None
+    if span == "daily" and is_skipped(period, hooks):
+        return None
+    try:
+        hooks.queue(period_request(period, schedule, schedule.sources or hooks.active_sources()))
+    except GenerationRequestError as error:
+        LOGGER.warning("Scheduled generation of %s skipped: %s", key, error)
+        return None
+    LOGGER.info("Scheduled generation of %s queued.", key)
+    return key
+
+
+def run_due(now: datetime, hooks: SchedulerHooks) -> list[str]:
+    """
+    Queue every due generation, shorter spans first (longer ones may read them)
 
     Args:
         now (datetime): current moment, aware
         hooks (SchedulerHooks): settings, sources and queue
     Returns:
-        str | None: day queued, None when nothing was queued
+        list[str]: job keys queued
     """
-    schedule = read_daily(hooks.read)
-    period = due_day(now, schedule)
-    if period is None:
-        return None
-    hooks.write(span_key("daily", "last"), period.key)
-    if hooks.has_run(period.key):
-        LOGGER.info("Scheduled generation of %s skipped: already generated.", period.key)
-        return None
-    reason = skip_reason(period, schedule.off, hooks)
-    if reason is not None:
-        record_skip(hooks, period.key, reason)
-        LOGGER.info("Scheduled generation of %s skipped: %s.", period.key, reason)
-        return None
-    sources = schedule.sources or hooks.active_sources()
-    try:
-        hooks.queue(daily_request(period, sources, schedule.outputs))
-    except GenerationRequestError as error:
-        LOGGER.warning("Scheduled generation of %s skipped: %s", period.key, error)
-        return None
-    LOGGER.info("Scheduled generation of %s queued.", period.key)
-    return period.key
+    queued = (run_span(now, span, hooks) for span in SPANS)
+    return [key for key in queued if key is not None]
 
 
 class GenerationScheduler:
@@ -318,6 +446,6 @@ class GenerationScheduler:
         while True:
             try:
                 run_due(datetime.now(ZoneInfo(DEFAULT_TIMEZONE)), hooks)
-            except (SQLAlchemyError, OSError, RuntimeError, ValueError, LookupError) as error:
-                LOGGER.exception("Activity generation scheduler failed: %s", error)
+            except (SQLAlchemyError, OSError, RuntimeError, ValueError, LookupError):
+                LOGGER.exception("Activity generation scheduler failed.")
             clock.sleep(CHECK_INTERVAL_SECONDS)

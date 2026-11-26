@@ -1,8 +1,11 @@
 import { definePreset } from '@primeuix/themes';
 import Aura from '@primeuix/themes/aura';
 
+/** AthenaCognis purple, default accent. */
+export const BRAND_COLOR = '#7700a7';
+
 /** Brand palette built around the AthenaCognis purple `#7700a7` (shade 500). */
-const BRAND_PALETTE = {
+export const BRAND_PALETTE = {
   50: '#f9effd',
   100: '#f0d6fb',
   200: '#e2adf6',

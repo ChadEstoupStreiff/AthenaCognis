@@ -84,7 +84,7 @@ import { MarkdownViewComponent } from '../../shared/ui/markdown-view.component';
     }
     p {
       margin: 0;
-      font-size: 13px;
+      font-size: calc(13px * var(--ac-font-scale));
       display: -webkit-box;
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
@@ -94,11 +94,11 @@ import { MarkdownViewComponent } from '../../shared/ui/markdown-view.component';
       display: flex;
       gap: 6px;
       align-items: center;
-      font-size: 12px;
+      font-size: calc(12px * var(--ac-font-scale));
       margin-top: auto;
     }
     .meta i {
-      font-size: 11px;
+      font-size: calc(11px * var(--ac-font-scale));
       margin-left: 4px;
     }
   `,

@@ -14,7 +14,7 @@
 
   h1 {
     margin: 0;
-    font-size: 24px;
+    font-size: calc(24px * var(--ac-font-scale));
     letter-spacing: -0.02em;
   }
 }
@@ -117,7 +117,7 @@
 
   strong {
     flex: 1;
-    font-size: 15px;
+    font-size: calc(15px * var(--ac-font-scale));
   }
 }
 
@@ -140,17 +140,17 @@
 }
 
 .description {
-  font-size: 12px;
+  font-size: calc(12px * var(--ac-font-scale));
   color: var(--p-text-color);
 }
 
 .meta {
   display: flex;
   gap: 10px;
-  font-size: 11px;
+  font-size: calc(11px * var(--ac-font-scale));
 
   i {
-    font-size: 10px;
+    font-size: calc(10px * var(--ac-font-scale));
     margin-right: 3px;
   }
 }
@@ -239,7 +239,7 @@
   background: var(--ac-code-background);
   color: inherit;
   font: inherit;
-  font-size: 11px;
+  font-size: calc(11px * var(--ac-font-scale));
   text-align: left;
   cursor: pointer;
 
@@ -262,7 +262,7 @@
 
   h2 {
     margin: 0;
-    font-size: 14px;
+    font-size: calc(14px * var(--ac-font-scale));
   }
 
   &[data-tone='overdue'] h2 {
@@ -284,7 +284,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 12px;
+  font-size: calc(12px * var(--ac-font-scale));
   color: var(--ac-muted);
 }
 

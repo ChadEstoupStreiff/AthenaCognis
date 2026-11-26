@@ -23,7 +23,7 @@ const DEFAULT_LINES = 3;
   styles: `
     .snippet {
       min-height: 1px;
-      font-size: 12.5px;
+      font-size: calc(12.5px * var(--ac-font-scale));
       color: var(--ac-muted);
     }
     .keywords {

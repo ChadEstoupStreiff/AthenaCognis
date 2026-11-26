@@ -101,7 +101,7 @@ import { AiTextareaComponent } from '../../shared/ui/ai-textarea.component';
       display: flex;
       flex-direction: column;
       gap: 4px;
-      font-size: 12px;
+      font-size: calc(12px * var(--ac-font-scale));
       color: var(--ac-muted);
     }
     input {

@@ -115,7 +115,7 @@ import { diffLines } from '../../shared/text/text-diff';
       display: flex;
       gap: 16px;
       margin: 0 0 8px;
-      font-size: 12px;
+      font-size: calc(12px * var(--ac-font-scale));
     }
     pre {
       margin: 0;

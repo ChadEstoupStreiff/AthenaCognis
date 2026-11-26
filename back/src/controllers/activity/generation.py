@@ -1,52 +1,91 @@
-"""Activity generation: request, LLM context and answers of a daily summary / time entries."""
+"""Activity generation: request, LLM context and note of a daily, weekly or monthly summary."""
 
 import json
-import logging
 import re
 from dataclasses import asdict, dataclass
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Literal, cast
 
 from controllers.activity.base import Activity
 
-LOGGER = logging.getLogger(__name__)
-
-# Non-editable project holding every generated note and time entry.
+# Non-editable project holding every generated note.
 ACTIVITY_PROJECT = "⚡ Activity"
 ACTIVITY_PROJECT_COLOR = "#F5B700"
-ACTIVITY_PROJECT_DESCRIPTION = "Notes and time entries generated from the Activity page."
+ACTIVITY_PROJECT_DESCRIPTION = "Notes generated from the Activity page."
 NOTES_FOLDER = "notes"
-DAILY_NOTE_NAME = "Daily activity.md"
 DAY_FORMAT = "%Y-%m-%d"
+MONTH_FORMAT = "%Y-%m"
 CLOCK_FORMAT = "%H:%M"
-DAILY_PREFIX = "daily/"
+# Activity lines of weekly and monthly prompts carry their day.
+DATED_CLOCK_FORMAT = "%a %Y-%m-%d %H:%M"
+KEY_SEPARATOR = "/"
 MINUTES_PER_HOUR = 60
 # Longest offset from UTC of a real time zone (UTC+14), in minutes.
 MAX_UTC_OFFSET_MINUTES = 14 * MINUTES_PER_HOUR
-HOURS_DECIMALS = 2
+MAX_INSTRUCTION_LENGTH = 2000
+WEEK_DAYS = 7
 CODE_FENCE = re.compile(r"^```[a-zA-Z]*\s*|\s*```$")
+TITLE_LINE = re.compile(r"^# .*\n+")
 
-Output = Literal["summary", "time"]
-OUTPUTS: tuple[Output, ...] = ("summary", "time")
+Span = Literal["daily", "weekly", "monthly"]
+SPANS: tuple[Span, ...] = ("daily", "weekly", "monthly")
+# Context of a summary: data sources, summaries of the next shorter span, or daily summaries.
+Basis = Literal["sources", "generated", "generated_daily"]
+BASES: dict[Span, tuple[Basis, ...]] = {
+    "daily": ("sources",),
+    "weekly": ("generated", "sources"),
+    "monthly": ("generated", "generated_daily", "sources"),
+}
+# Longest local window of a span (a month plus a DST shift).
+MAX_WINDOWS: dict[Span, timedelta] = {
+    "daily": timedelta(days=2),
+    "weekly": timedelta(days=8),
+    "monthly": timedelta(days=32),
+}
+SPAN_TITLES: dict[Span, str] = {"daily": "Daily", "weekly": "Weekly", "monthly": "Monthly"}
+
 
 class GenerationRequestError(ValueError):
-    """Generation request is malformed (bad day, window, offset or outputs)."""
+    """Generation request is malformed (bad span, day, window, offset, context)."""
+
+
+def parse_day(day: str) -> date:
+    """
+    Read a "YYYY-MM-DD" day
+
+    Args:
+        day (str): day
+    Returns:
+        date: day
+    Raises:
+        GenerationRequestError: malformed day
+    """
+    try:
+        return datetime.strptime(day, DAY_FORMAT).date()
+    except ValueError as error:
+        raise GenerationRequestError(f"Bad day '{day}'.") from error
 
 
 @dataclass(frozen=True)
-class DailyRequest:
-    """What to generate for one local day."""
+class GenerationRequest:
+    """What to summarize for one local day, week or month."""
 
-    # Local day, "YYYY-MM-DD".
+    span: Span
+    # First local day of the period, "YYYY-MM-DD" (the 1st for a month).
     day: str
-    # Local day window in naive UTC, [start, end).
+    # Local period window in naive UTC, [start, end).
     start: datetime
     end: datetime
     # Local time minus UTC, in minutes (e.g. 60 for UTC+1).
     utc_offset_minutes: int
-    sources: tuple[str, ...]
-    outputs: tuple[Output, ...]
+    basis: Basis
+    # Data source keys, read when basis is "sources".
+    sources: tuple[str, ...] = ()
+    # Free text of the user steering the summary, "" when none.
+    instruction: str = ""
+    # Monthly from weekly: days no weekly summary covers use their daily summary.
+    fill_daily: bool = False
 
     def __post_init__(self) -> None:
         """
@@ -55,20 +94,25 @@ class DailyRequest:
         Returns:
             None
         Raises:
-            GenerationRequestError: bad day, window, offset, sources or outputs
+            GenerationRequestError: bad span, day, window, offset, context or instruction
         """
-        try:
-            datetime.strptime(self.day, DAY_FORMAT)
-        except ValueError as error:
-            raise GenerationRequestError(f"Bad day '{self.day}'.") from error
-        if not self.start < self.end <= self.start + timedelta(days=2):
-            raise GenerationRequestError("Day window must be at most two days long.")
+        if self.span not in SPANS:
+            raise GenerationRequestError(f"Bad span '{self.span}'.")
+        first = parse_day(self.day)
+        if self.span == "monthly" and first.day != 1:
+            raise GenerationRequestError("A month starts on its 1st.")
+        if not self.start < self.end <= self.start + MAX_WINDOWS[self.span]:
+            raise GenerationRequestError(f"Window too long for a {self.span} summary.")
         if abs(self.utc_offset_minutes) > MAX_UTC_OFFSET_MINUTES:
             raise GenerationRequestError("UTC offset out of range.")
-        if not self.sources:
+        if self.basis not in BASES[self.span]:
+            raise GenerationRequestError(f"Context '{self.basis}' not offered for {self.span}.")
+        if self.basis == "sources" and not self.sources:
             raise GenerationRequestError("Pick at least one data source.")
-        if not self.outputs or any(item not in OUTPUTS for item in self.outputs):
-            raise GenerationRequestError("Pick a summary, time entries or both.")
+        if len(self.instruction) > MAX_INSTRUCTION_LENGTH:
+            raise GenerationRequestError(
+                f"Custom instruction exceeds {MAX_INSTRUCTION_LENGTH} characters."
+            )
 
     @property
     def key(self) -> str:
@@ -76,9 +120,19 @@ class DailyRequest:
         Job key of the request
 
         Returns:
-            str: "daily/<day>"
+            str: "<span>/<day>"
         """
-        return daily_key(self.day)
+        return job_key(self.span, self.day)
+
+    @property
+    def days(self) -> tuple[date, ...]:
+        """
+        Calendar days of the period
+
+        Returns:
+            tuple[date, ...]: days, in order
+        """
+        return period_days(self.span, parse_day(self.day))
 
     def to_json(self) -> str:
         """
@@ -92,26 +146,29 @@ class DailyRequest:
         return json.dumps(data)
 
     @classmethod
-    def from_json(cls, raw: str) -> "DailyRequest":
+    def from_json(cls, raw: str) -> "GenerationRequest":
         """
         Read a request stored on a task row
 
         Args:
             raw (str): JSON written by to_json
         Returns:
-            DailyRequest: request
+            GenerationRequest: request
         Raises:
             GenerationRequestError: malformed JSON or fields
         """
         try:
             data = json.loads(raw)
             return cls(
+                span=cast(Span, data.get("span", "daily")),
                 day=str(data["day"]),
                 start=datetime.fromisoformat(data["start"]),
                 end=datetime.fromisoformat(data["end"]),
                 utc_offset_minutes=int(data["utc_offset_minutes"]),
-                sources=tuple(str(item) for item in data["sources"]),
-                outputs=tuple(cast(Output, item) for item in data["outputs"]),
+                basis=cast(Basis, data.get("basis", "sources")),
+                sources=tuple(str(item) for item in data.get("sources", [])),
+                instruction=str(data.get("instruction", "")),
+                fill_daily=data.get("fill_daily") is True,
             )
         except (KeyError, TypeError, ValueError) as error:
             raise GenerationRequestError(f"Bad stored request: {error}") from error
@@ -129,118 +186,89 @@ class SourceSection:
 
 
 @dataclass(frozen=True)
-class Catalog:
-    """Projects and tags the LLM may give to time entries."""
+class SummarySection:
+    """Summary already generated for a shorter period, as given to the LLM."""
 
-    # (name, description) of each project the user can pick.
-    projects: tuple[tuple[str, str], ...] = ()
-    tags: tuple[str, ...] = ()
-
-    def text(self) -> str:
-        """
-        Render the lists for the LLM
-
-        Returns:
-            str: "Projects:" and "Tags:" bullet lists
-        """
-        projects = [
-            f"- {name}: {description}" if description else f"- {name}"
-            for name, description in self.projects
-        ]
-        tags = [f"- {name}" for name in self.tags]
-        return "\n".join(
-            ["Projects:", *(projects or ["(none)"]), "Tags:", *(tags or ["(none)"])]
-        )
-
-    def pick_projects(self, raw: object) -> tuple[str, ...]:
-        """
-        Keep the known projects of an LLM list (case-insensitive)
-
-        Args:
-            raw (object): JSON value
-        Returns:
-            tuple[str, ...]: canonical names, without duplicates
-        """
-        return pick_known(raw, [name for name, _ in self.projects])
-
-    def pick_tags(self, raw: object) -> tuple[str, ...]:
-        """
-        Keep the known tags of an LLM list (case-insensitive)
-
-        Args:
-            raw (object): JSON value
-        Returns:
-            tuple[str, ...]: canonical names, without duplicates
-        """
-        return pick_known(raw, list(self.tags))
+    label: str
+    text: str
 
 
-def pick_known(raw: object, known: list[str]) -> tuple[str, ...]:
+def job_key(span: Span, day: str) -> str:
     """
-    Keep the names of a JSON list that match a known name (case-insensitive)
+    Job key of a period
 
     Args:
-        raw (object): JSON value (list of names expected)
-        known (list[str]): canonical names
+        span (Span): time span
+        day (str): first day, "YYYY-MM-DD"
     Returns:
-        tuple[str, ...]: canonical names, in answer order, without duplicates
+        str: "<span>/<day>"
     """
-    if not isinstance(raw, list):
-        return ()
-    canonical = {name.casefold(): name for name in known}
-    matches = (canonical.get(str(item).strip().casefold()) for item in raw)
-    return tuple(dict.fromkeys(name for name in matches if name is not None))
+    return f"{span}{KEY_SEPARATOR}{day}"
 
 
-@dataclass(frozen=True)
-class TimeEntry:
-    """Time block proposed by the LLM (local times)."""
-
-    start: time
-    end: time
-    title: str
-    description: str
-    projects: tuple[str, ...] = ()
-    tags: tuple[str, ...] = ()
-
-    @property
-    def hours(self) -> float:
-        """
-        Length of the block
-
-        Returns:
-            float: hours, rounded to HOURS_DECIMALS
-        """
-        minutes = (self.end.hour - self.start.hour) * MINUTES_PER_HOUR + (
-            self.end.minute - self.start.minute
-        )
-        return round(minutes / MINUTES_PER_HOUR, HOURS_DECIMALS)
-
-
-def daily_key(day: str) -> str:
+def split_key(key: str) -> tuple[Span, str] | None:
     """
-    Job key of a day
+    Read a job key
 
     Args:
-        day (str): "YYYY-MM-DD"
+        key (str): "<span>/<day>"
     Returns:
-        str: "daily/<day>"
+        tuple[Span, str] | None: span and day, None when not a generation key
     """
-    return f"{DAILY_PREFIX}{day}"
+    span, separator, day = key.partition(KEY_SEPARATOR)
+    if not separator or span not in SPANS:
+        return None
+    return cast(Span, span), day
 
 
-def activity_line(activity: Activity, utc_offset_minutes: int) -> str:
+def period_days(span: Span, first: date) -> tuple[date, ...]:
+    """
+    Calendar days of the period of a span starting on a day
+
+    Args:
+        span (Span): time span
+        first (date): first day (the 1st for a month)
+    Returns:
+        tuple[date, ...]: days, in order
+    """
+    if span == "daily":
+        return (first,)
+    if span == "weekly":
+        return tuple(first + timedelta(days=offset) for offset in range(WEEK_DAYS))
+    next_month = (first.replace(day=1) + timedelta(days=32)).replace(day=1)
+    return tuple(first + timedelta(days=offset) for offset in range((next_month - first).days))
+
+
+def period_label(span: Span, day: str) -> str:
+    """
+    Readable name of a period
+
+    Args:
+        span (Span): time span
+        day (str): first day, "YYYY-MM-DD"
+    Returns:
+        str: "<day>", "Week of <day>" or "YYYY-MM"
+    """
+    if span == "weekly":
+        return f"Week of {day}"
+    if span == "monthly":
+        return parse_day(day).strftime(MONTH_FORMAT)
+    return day
+
+
+def activity_line(activity: Activity, utc_offset_minutes: int, clock_format: str) -> str:
     """
     Render one activity for the LLM at local time
 
     Args:
         activity (Activity): activity (naive UTC)
         utc_offset_minutes (int): local time minus UTC, in minutes
+        clock_format (str): strftime format of the moment
     Returns:
-        str: "[HH:MM] kind — title (actors): summary; key: value…" (included content only)
+        str: "[moment] kind — title (actors): summary; key: value…" (included content only)
     """
     local = activity.occurred_at + timedelta(minutes=utc_offset_minutes)
-    line = f"[{local:{CLOCK_FORMAT}}] {activity.kind} — {activity.title}"
+    line = f"[{local:{clock_format}}] {activity.kind} — {activity.title}"
     if activity.actors:
         line += f" ({', '.join(activity.actors)})"
     if activity.summary:
@@ -250,13 +278,14 @@ def activity_line(activity: Activity, utc_offset_minutes: int) -> str:
     return line
 
 
-def section_text(section: SourceSection, utc_offset_minutes: int) -> str:
+def section_text(section: SourceSection, utc_offset_minutes: int, clock_format: str) -> str:
     """
     Render the activities of one source, oldest first
 
     Args:
         section (SourceSection): source activities
         utc_offset_minutes (int): local time minus UTC, in minutes
+        clock_format (str): strftime format of each moment
     Returns:
         str: "### label" block with instruction and lines
     """
@@ -266,7 +295,7 @@ def section_text(section: SourceSection, utc_offset_minutes: int) -> str:
     if section.error:
         lines.append(f"(could not be read: {section.error})")
     ordered = sorted(section.activities, key=lambda item: item.occurred_at)
-    lines += [activity_line(item, utc_offset_minutes) for item in ordered]
+    lines += [activity_line(item, utc_offset_minutes, clock_format) for item in ordered]
     if not ordered and not section.error:
         lines.append("(nothing)")
     return "\n".join(lines)
@@ -296,99 +325,41 @@ def strip_fence(answer: str) -> str:
     return CODE_FENCE.sub("", answer.strip()).strip()
 
 
-def parse_clock(value: object) -> time | None:
+def note_path(root: Path, span: Span, day: str) -> Path:
     """
-    Read an "HH:MM" clock value
-
-    Args:
-        value (object): raw value
-    Returns:
-        time | None: time, None when malformed
-    """
-    try:
-        return datetime.strptime(str(value).strip(), CLOCK_FORMAT).time()
-    except ValueError:
-        return None
-
-
-def time_entry(item: object, catalog: Catalog) -> TimeEntry | None:
-    """
-    Read one proposed time block
-
-    Args:
-        item (object): JSON item
-        catalog (Catalog): projects and tags allowed
-    Returns:
-        TimeEntry | None: block, None when malformed or not positive
-    """
-    if not isinstance(item, dict):
-        return None
-    start, end = parse_clock(item.get("start")), parse_clock(item.get("end"))
-    title = str(item.get("title") or "").strip()
-    if start is None or end is None or end <= start or not title:
-        return None
-    return TimeEntry(
-        start,
-        end,
-        title,
-        str(item.get("description") or "").strip(),
-        catalog.pick_projects(item.get("projects")),
-        catalog.pick_tags(item.get("tags")),
-    )
-
-
-def parse_time_entries(answer: str, catalog: Catalog) -> list[TimeEntry]:
-    """
-    Read the time blocks of an LLM answer, dropping malformed and overlapping ones
-
-    Args:
-        answer (str): raw answer (JSON array, maybe fenced)
-        catalog (Catalog): projects and tags allowed (unknown names dropped)
-    Returns:
-        list[TimeEntry]: blocks by start time
-    Raises:
-        ValueError: answer is not a JSON array
-    """
-    try:
-        data = json.loads(strip_fence(answer))
-    except json.JSONDecodeError as error:
-        raise ValueError(f"Time entries answer is not JSON: {error}") from error
-    if not isinstance(data, list):
-        raise ValueError("Time entries answer is not a JSON array.")
-    entries = sorted(
-        (entry for item in data if (entry := time_entry(item, catalog)) is not None),
-        key=lambda entry: entry.start,
-    )
-    kept: list[TimeEntry] = []
-    for entry in entries:
-        if kept and entry.start < kept[-1].end:
-            LOGGER.info("Overlapping time entry dropped: %s", entry.title)
-            continue
-        kept.append(entry)
-    return kept
-
-
-def daily_note_path(root: Path, day: str) -> Path:
-    """
-    Path of the generated note of a day
+    Path of the generated note of a period
 
     Args:
         root (Path): shared root
-        day (str): "YYYY-MM-DD"
+        span (Span): time span
+        day (str): first day, "YYYY-MM-DD"
     Returns:
-        Path: <root>/<day>/notes/Daily activity.md
+        Path: <root>/<day>/notes/<Span> activity.md
     """
-    return root / day / NOTES_FOLDER / DAILY_NOTE_NAME
+    return root / day / NOTES_FOLDER / f"{SPAN_TITLES[span]} activity.md"
 
 
-def daily_note(day: str, summary: str) -> str:
+def note_markdown(span: Span, day: str, summary: str) -> str:
     """
-    Markdown of the generated note of a day
+    Markdown of the generated note of a period
 
     Args:
-        day (str): "YYYY-MM-DD"
+        span (Span): time span
+        day (str): first day, "YYYY-MM-DD"
         summary (str): LLM summary
     Returns:
         str: note with its title
     """
-    return f"# ⚡ Daily activity — {day}\n\n{strip_fence(summary)}\n"
+    return f"# ⚡ {SPAN_TITLES[span]} activity — {period_label(span, day)}\n\n{strip_fence(summary)}\n"
+
+
+def note_body(content: str) -> str:
+    """
+    Note text without its generated title line
+
+    Args:
+        content (str): note markdown
+    Returns:
+        str: body, trimmed
+    """
+    return TITLE_LINE.sub("", content, count=1).strip()

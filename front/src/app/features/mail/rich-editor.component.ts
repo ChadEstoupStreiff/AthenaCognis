@@ -371,12 +371,12 @@ function imageFiles(data: DataTransfer | null): File[] {
       display: inline-block;
       width: 1rem;
       font-family: Georgia, 'Times New Roman', serif;
-      font-size: 15px;
+      font-size: calc(15px * var(--ac-font-scale));
       line-height: 1;
       text-align: center;
     }
     .glyph-quote {
-      font-size: 22px;
+      font-size: calc(22px * var(--ac-font-scale));
       line-height: 0.6;
       transform: translateY(4px);
     }
@@ -410,25 +410,25 @@ function imageFiles(data: DataTransfer | null): File[] {
       touch-action: none;
     }
     .editor :is(font[size='1']) {
-      font-size: 10px;
+      font-size: calc(10px * var(--ac-font-scale));
     }
     .editor :is(font[size='2']) {
-      font-size: 12px;
+      font-size: calc(12px * var(--ac-font-scale));
     }
     .editor :is(font[size='3']) {
-      font-size: 14px;
+      font-size: calc(14px * var(--ac-font-scale));
     }
     .editor :is(font[size='4']) {
-      font-size: 16px;
+      font-size: calc(16px * var(--ac-font-scale));
     }
     .editor :is(font[size='5']) {
-      font-size: 20px;
+      font-size: calc(20px * var(--ac-font-scale));
     }
     .editor :is(font[size='6']) {
-      font-size: 28px;
+      font-size: calc(28px * var(--ac-font-scale));
     }
     .editor :is(font[size='7']) {
-      font-size: 40px;
+      font-size: calc(40px * var(--ac-font-scale));
     }
     .editor {
       min-height: 240px;
@@ -436,7 +436,7 @@ function imageFiles(data: DataTransfer | null): File[] {
       padding: 10px 12px;
       overflow: auto;
       outline: none;
-      font-size: 14px;
+      font-size: calc(14px * var(--ac-font-scale));
       line-height: 1.5;
       overflow-wrap: anywhere;
     }

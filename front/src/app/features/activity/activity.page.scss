@@ -98,7 +98,7 @@
     align-items: center;
     gap: 8px;
     margin: 0;
-    font-size: 16px;
+    font-size: calc(16px * var(--ac-font-scale));
   }
 
   > h2 {
@@ -154,18 +154,18 @@
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
-    font-size: 12px;
+    font-size: calc(12px * var(--ac-font-scale));
   }
 
   time {
     flex: none;
-    font-size: 12px;
+    font-size: calc(12px * var(--ac-font-scale));
   }
 }
 
 h3 {
   margin: 16px 0 8px;
-  font-size: 13px;
+  font-size: calc(13px * var(--ac-font-scale));
   font-weight: 600;
   color: var(--ac-muted);
 
@@ -198,7 +198,7 @@ h3 {
   }
 
   small {
-    font-size: 12px;
+    font-size: calc(12px * var(--ac-font-scale));
   }
 }
 
@@ -213,7 +213,7 @@ button.entry {
 
 .state {
   flex: none;
-  font-size: 11px;
+  font-size: calc(11px * var(--ac-font-scale));
   color: var(--ac-muted);
 }
 

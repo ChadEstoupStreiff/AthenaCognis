@@ -13,8 +13,7 @@ browser ──► nginx (front container, :8401)
               ├── /raw/*    ─► /shared (ro)   inline files, Range requests (video seeking, PDF)
               ├── /grobid/* ─► grobid:8070    paper metadata extraction (Research)
               ├── /arxiv/*  ─► export.arxiv.org (no CORS upstream)
-              ├── /telemetry/* ─► TELEMETRY_SERVER_URL (optional)
-              └── /config.json  written at start from USER_NAME / TELEMETRY_* env
+              └── /telemetry/* ─► telemetryathenacognis.chades.fr (opt-in usage stats)
 ```
 
 CrossRef, PubMed and OpenAlex are called straight from the browser (they allow CORS).
@@ -33,8 +32,6 @@ Open `http://localhost:${FRONT_PORT}` (default `8401`). Environment used by the 
 | ------------------------------------------------- | ---------------------------------------------------------------- |
 | `FRONT_PORT`                                      | Host port (default `8401`)                                       |
 | `DATA_PATH`                                       | Its `shared/` folder is mounted read-only at `/shared`           |
-| `USER_NAME`                                       | Greeting on Home                                                 |
-| `TELEMETRY_SERVER_URL`, `TELEMETRY_DASHBOARD_URL` | Optional anonymous statistics (consent required, one ping a day) |
 | `BACKEND_HOST`, `GROBID_HOST`                     | Image defaults `back:80`, `grobid:8070`                          |
 
 ## Develop

@@ -14,14 +14,14 @@
     height: 100%;
   }
 
+  /* PrimeNG sizes in rem: scaling the root font scales its components with the text. */
+  html {
+    font-size: calc(100% * var(--ac-font-scale));
+  }
+
   body {
-    font-family:
-      'Inter',
-      system-ui,
-      -apple-system,
-      'Segoe UI',
-      sans-serif;
-    font-size: 14px;
+    font-family: var(--ac-font-family);
+    font-size: calc(14px * var(--ac-font-scale));
     line-height: 1.5;
     color: var(--p-text-color);
     background: var(--ac-app-background);
@@ -35,6 +35,8 @@
 
 @layer app {
   :root {
+    --ac-font-scale: 1;
+    --ac-font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
     --ac-app-background: var(--p-surface-50);
     --ac-panel-background: var(--p-surface-0);
     --ac-panel-border: var(--p-surface-200);

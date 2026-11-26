@@ -124,7 +124,7 @@ const KIND_LABEL: Readonly<Record<MailDraftKind, string | null>> = {
     .time,
     .files,
     .foot {
-      font-size: 12px;
+      font-size: calc(12px * var(--ac-font-scale));
     }
     .files {
       display: inline-flex;
@@ -135,7 +135,7 @@ const KIND_LABEL: Readonly<Record<MailDraftKind, string | null>> = {
       font-weight: 600;
     }
     .body {
-      font-size: 13px;
+      font-size: calc(13px * var(--ac-font-scale));
     }
     .actions {
       display: flex;

@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
   inject,
   input,
   resource,
@@ -14,7 +15,6 @@ import { TabsModule } from 'primeng/tabs';
 import { TooltipModule } from 'primeng/tooltip';
 import { formatLocalDate } from '@domain/time';
 import { CatalogStore } from '../../core/catalog/catalog.store';
-import { AppConfig } from '../../core/config/app-config';
 import { DashboardApi } from '../../core/dashboard/dashboard.api';
 import { SettingsStore } from '../../core/settings/settings.store';
 import { DataSync } from '../../core/state/data-sync.service';
@@ -24,15 +24,26 @@ import { TagChipComponent } from '../../shared/ui/tag-chip.component';
 import {
   diskSegments,
   dueTasks,
-  greeting,
   kpiGroups,
   mailCategorySegments,
   topSegments,
   typeColor,
   type MeterSegment,
 } from './home-model';
+import {
+  type DailyText,
+  type DailyTextKind,
+  type DailyTextLanguage,
+  greetingText,
+  offlineText,
+  onlineText,
+  parseDailyTextKind,
+  parseDailyTextLanguage,
+} from './daily-text';
 
 const WORK_DAYS = 5;
+/** Retry the online text this often while offline sentences are shown. */
+const OFFLINE_RETRY_MS = 300_000;
 const PERCENT = 100;
 const DATE_FORMAT = new Intl.DateTimeFormat(undefined, {
   weekday: 'long',
@@ -69,15 +80,21 @@ export class HomePage {
   private readonly sync = inject(DataSync);
   private readonly router = inject(Router);
   protected readonly catalog = inject(CatalogStore);
-  private readonly config = inject(AppConfig);
-  protected readonly userName = computed(() => this.config.value().userName);
 
   /** Query parameter: active tab. */
   readonly tab = input<string | undefined>(undefined);
 
   private readonly now = new Date();
   protected readonly todayLabel = DATE_FORMAT.format(this.now);
-  protected readonly hello = greeting(this.now);
+  private readonly dailyResource = resource({
+    params: () => ({
+      kind: parseDailyTextKind(this.settings.get('home_daily_text_kind')),
+      language: parseDailyTextLanguage(this.settings.get('home_daily_text_language')),
+    }),
+    loader: ({ params, abortSignal }) => this.loadDaily(params.kind, params.language, abortSignal),
+  });
+  /** Undefined until the first answer. */
+  protected readonly daily = computed(() => this.dailyResource.value());
   protected readonly refreshMetrics = signal(false);
 
   protected readonly today = resource({
@@ -141,6 +158,49 @@ export class HomePage {
     { title: 'Files per tag', data: this.perTag(), unit: '' },
     { title: 'Received mail by category', data: this.mailCategories(), unit: '' },
   ]);
+
+  constructor() {
+    effect((onCleanup) => {
+      if (this.daily()?.offline !== true) {
+        return;
+      }
+      const retry = (): void => {
+        this.dailyResource.reload();
+      };
+      const timer = setInterval(retry, OFFLINE_RETRY_MS);
+      window.addEventListener('online', retry);
+      onCleanup(() => {
+        clearInterval(timer);
+        window.removeEventListener('online', retry);
+      });
+    });
+  }
+
+  /**
+   * Text of the day: greeting locally, else online, else an offline sentence.
+   *
+   * @param kind - Kind of text.
+   * @param language - Language.
+   * @param signal - Abort signal.
+   * @returns Text to show.
+   */
+  private async loadDaily(
+    kind: DailyTextKind,
+    language: DailyTextLanguage,
+    signal: AbortSignal,
+  ): Promise<DailyText> {
+    if (kind === 'greeting') {
+      return greetingText(language, this.now);
+    }
+    try {
+      return onlineText(kind, language, await this.dashboard.dailyText(kind, language, signal));
+    } catch (error: unknown) {
+      if (signal.aborted) {
+        throw error;
+      }
+      return offlineText(kind, language, this.now);
+    }
+  }
 
   /**
    * Switch tab.

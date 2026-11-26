@@ -86,7 +86,7 @@ function prettyJson(text: string): string {
     .note {
       padding: 8px 0;
       margin: 0;
-      font-size: 12px;
+      font-size: calc(12px * var(--ac-font-scale));
     }
     .markdown {
       display: block;

@@ -1,22 +1,23 @@
-"""Activity generation: queue a day, read what was generated, Jobs page status."""
+"""Activity generation: queue a period, read what was generated, Jobs page status."""
 
 from dataclasses import asdict
 from datetime import date, datetime
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from controllers.activity.base import to_naive_utc
 from controllers.activity.generation import (
-    ACTIVITY_PROJECT,
-    CLOCK_FORMAT,
-    DAILY_PREFIX,
     DAY_FORMAT,
-    DailyRequest,
+    SPAN_TITLES,
+    Basis,
+    GenerationRequest,
     GenerationRequestError,
-    Output,
-    daily_key,
-    daily_note_path,
+    Span,
+    job_key,
+    note_path,
+    period_label,
+    split_key,
 )
 from controllers.activity.generation_prompt import DryRun
 from controllers.activity.generation_schedule import SKIPPED_SETTING
@@ -28,9 +29,8 @@ from controllers.activity.off_days import (
     supported_countries,
 )
 from controllers.ActivityGenerationManager import ActivityGenerationManager
-from controllers.calendar_links import links_of, record_ids_in_project
 from controllers.JobManager import JobAlreadyQueuedError
-from db import ActivityGenerationTask, CalendarRecord, get_db
+from db import ActivityGenerationTask, get_db
 from views.settings import get_setting
 
 HTTP_BAD_REQUEST = 400
@@ -41,15 +41,18 @@ router = APIRouter(prefix="/activity-generation", tags=["Activity"])
 JsonDict = dict[str, object]
 
 
-class DailyBody(BaseModel):
-    """Daily generation request sent by the Activity page."""
+class GenerationBody(BaseModel):
+    """Generation request sent by the Activity page."""
 
+    span: Span
     day: str
     start: datetime
     end: datetime
     utc_offset_minutes: int
-    sources: list[str]
-    outputs: list[Output]
+    basis: Basis
+    sources: list[str] = Field(default_factory=list)
+    instruction: str = ""
+    fill_daily: bool = False
 
 
 def task_label(file: str) -> str:
@@ -57,13 +60,18 @@ def task_label(file: str) -> str:
     Readable name of a generation task
 
     Args:
-        file (str): job key ("daily/<day>")
+        file (str): job key ("<span>/<first day>")
     Returns:
-        str: "Daily · <day>", the key itself when unknown
+        str: "Daily · <day>", "Weekly · Week of <day>", "Monthly · YYYY-MM"; the key when unknown
     """
-    if file.startswith(DAILY_PREFIX):
-        return f"Daily · {file.removeprefix(DAILY_PREFIX)}"
-    return file
+    parsed = split_key(file)
+    if parsed is None:
+        return file
+    span, day = parsed
+    try:
+        return f"{SPAN_TITLES[span]} · {period_label(span, day)}"
+    except GenerationRequestError:
+        return file
 
 
 def parse_day(day: str) -> datetime:
@@ -109,99 +117,63 @@ def latest_task(file: str) -> JsonDict | None:
         }
 
 
-def generated_records(date: datetime) -> list[JsonDict]:
+def generation_request(body: GenerationBody) -> GenerationRequest:
     """
-    Generated time entries of a day, by start time
+    Validate a generation request body
 
     Args:
-        date (datetime): local midnight
+        body (GenerationBody): request
     Returns:
-        list[JsonDict]: id, start ("HH:MM" or None), hours, title, description,
-            projects (Activity left out), tags
-    """
-    with get_db() as db:
-        records = (
-            db.query(CalendarRecord)
-            .filter(
-                CalendarRecord.id.in_(record_ids_in_project(db, ACTIVITY_PROJECT)),
-                CalendarRecord.date == date,
-            )
-            .order_by(CalendarRecord.start_time)
-            .all()
-        )
-        links = links_of(db, records)
-        return [
-            {
-                "id": record.id,
-                "start": record.start_time.strftime(CLOCK_FORMAT)
-                if record.start_time
-                else None,
-                "hours": record.time_spent,
-                "title": record.title,
-                "description": record.description or "",
-                "projects": [
-                    name for name in links[record.id].projects if name != ACTIVITY_PROJECT
-                ],
-                "tags": list(links[record.id].tags),
-            }
-            for record in records
-        ]
-
-
-def daily_request(body: DailyBody) -> DailyRequest:
-    """
-    Validate a daily request body
-
-    Args:
-        body (DailyBody): request
-    Returns:
-        DailyRequest: request, window in naive UTC
+        GenerationRequest: request, window in naive UTC
     Raises:
         HTTPException: 400 malformed request
     """
     try:
-        return DailyRequest(
+        return GenerationRequest(
+            span=body.span,
             day=body.day,
             start=to_naive_utc(body.start),
             end=to_naive_utc(body.end),
             utc_offset_minutes=body.utc_offset_minutes,
+            basis=body.basis,
             sources=tuple(body.sources),
-            outputs=tuple(body.outputs),
+            instruction=body.instruction,
+            fill_daily=body.fill_daily,
         )
     except GenerationRequestError as error:
         raise HTTPException(HTTP_BAD_REQUEST, str(error)) from error
 
 
-@router.post("/daily/dry-run")
-def dry_run_daily(body: DailyBody) -> DryRun:
+@router.post("/dry-run")
+def dry_run(body: GenerationBody) -> DryRun:
     """
-    Prompt a daily generation would send, with its size; nothing asked nor written
+    Prompt a generation would send, with its size; nothing asked nor written
 
     Args:
-        body (DailyBody): request
+        body (GenerationBody): request
     Returns:
         DryRun: prompt, size overall and per block, routed model
     Raises:
         HTTPException: 400 malformed request
     """
-    return ActivityGenerationManager.dry_run(daily_request(body))
+    return ActivityGenerationManager.dry_run(generation_request(body))
 
 
-@router.post("/daily")
-def request_daily(body: DailyBody) -> JsonDict:
+@router.post("/generate")
+def request_generation(body: GenerationBody) -> JsonDict:
     """
-    Queue the generation of a day
+    Queue the generation of a period
 
     Args:
-        body (DailyBody): request
+        body (GenerationBody): request
     Returns:
         JsonDict: queued job key
     Raises:
-        HTTPException: 400 malformed request, 409 day already generating
+        HTTPException: 400 malformed request, 409 period already generating
     """
-    request = daily_request(body)
+    request = generation_request(body)
     try:
-        ActivityGenerationManager.request_daily(request)
+        ActivityGenerationManager.request(request)
     except JobAlreadyQueuedError as error:
         raise HTTPException(HTTP_CONFLICT, str(error)) from error
     return {"key": request.key}
@@ -216,7 +188,7 @@ def latest_runs(days: list[date]) -> dict[str, LatestRun]:
     Returns:
         dict[str, LatestRun]: run per "YYYY-MM-DD", days never run left out
     """
-    keys = {daily_key(day.strftime(DAY_FORMAT)): day.strftime(DAY_FORMAT) for day in days}
+    keys = {job_key("daily", day.strftime(DAY_FORMAT)): day.strftime(DAY_FORMAT) for day in days}
     with get_db() as db:
         tasks = (
             db.query(ActivityGenerationTask)
@@ -260,33 +232,6 @@ def holiday_countries() -> dict[str, list[str]]:
     return supported_countries()
 
 
-@router.get("/daily/{day}")
-def read_daily(day: str) -> JsonDict:
-    """
-    What was generated for a day: latest run, note and time entries
-
-    Args:
-        day (str): "YYYY-MM-DD"
-    Returns:
-        JsonDict: day, task (or None), note (path and content, or None), records
-    Raises:
-        HTTPException: 400 malformed day
-    """
-    date = parse_day(day)
-    path = daily_note_path(ActivityGenerationManager.root, day)
-    note = (
-        {"path": str(path), "content": path.read_text(encoding="utf-8")}
-        if path.is_file()
-        else None
-    )
-    return {
-        "day": day,
-        "task": latest_task(daily_key(day)),
-        "note": note,
-        "records": generated_records(date),
-    }
-
-
 @router.get("/health")
 def health() -> str:
     """
@@ -322,3 +267,26 @@ def list_tasks() -> list[JsonDict]:
         {**asdict(task), "label": task_label(task.file)}
         for task in ActivityGenerationManager.list_tasks()
     ]
+
+
+@router.get("/{span}/{day}")
+def read_generation(span: Span, day: str) -> JsonDict:
+    """
+    What was generated for a period: latest run and note
+
+    Args:
+        span (Span): time span
+        day (str): first day, "YYYY-MM-DD"
+    Returns:
+        JsonDict: span, day, task (or None), note (path and content, or None)
+    Raises:
+        HTTPException: 400 malformed day
+    """
+    parse_day(day)
+    path = note_path(ActivityGenerationManager.root, span, day)
+    note = (
+        {"path": str(path), "content": path.read_text(encoding="utf-8")}
+        if path.is_file()
+        else None
+    )
+    return {"span": span, "day": day, "task": latest_task(job_key(span, day)), "note": note}

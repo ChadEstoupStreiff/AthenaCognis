@@ -104,7 +104,7 @@ const CONTACT_MAIL_LIMIT = 100;
       time {
         flex: none;
         margin-left: auto;
-        font-size: 12px;
+        font-size: calc(12px * var(--ac-font-scale));
       }
     }
     .subject,
@@ -114,7 +114,7 @@ const CONTACT_MAIL_LIMIT = 100;
       text-overflow: ellipsis;
     }
     .snippet {
-      font-size: 13px;
+      font-size: calc(13px * var(--ac-font-scale));
     }
     .reply {
       color: var(--p-primary-color);

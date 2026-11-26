@@ -39,14 +39,14 @@
 
   h2 {
     margin: 0;
-    font-size: 17px;
+    font-size: calc(17px * var(--ac-font-scale));
     line-height: 1.35;
     overflow-wrap: anywhere;
   }
 
   p {
     margin: 4px 0 0;
-    font-size: 13px;
+    font-size: calc(13px * var(--ac-font-scale));
   }
 }
 
@@ -80,11 +80,11 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 6px 12px;
-  font-size: 12px;
+  font-size: calc(12px * var(--ac-font-scale));
 
   i {
     margin-right: 4px;
-    font-size: 11px;
+    font-size: calc(11px * var(--ac-font-scale));
   }
 
   a {
@@ -98,7 +98,7 @@ dl {
   grid-template-columns: auto minmax(0, 1fr);
   gap: 4px 12px;
   margin: 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--ac-font-scale));
 }
 
 dt {
@@ -116,7 +116,7 @@ dd {
 
   h3 {
     margin: 0 0 10px;
-    font-size: 14px;
+    font-size: calc(14px * var(--ac-font-scale));
   }
 }
 

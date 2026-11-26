@@ -25,6 +25,7 @@ import { RelativeDatePipe } from '../../shared/pipes/relative-date.pipe';
 import { AiTabComponent } from './ai-tab.component';
 import { InfoTabComponent } from './info-tab.component';
 import { LinksTabComponent } from './links-tab.component';
+import { MediaTextComponent } from './media-text.component';
 import { NotesTabComponent } from './notes-tab.component';
 import { PeopleTabComponent } from './people-tab.component';
 import { SummaryBlockComponent } from './summary-block.component';
@@ -49,6 +50,7 @@ const TABS: readonly PeekTab[] = ['overview', 'ai', 'links', 'notes'];
     AiTabComponent,
     InfoTabComponent,
     LinksTabComponent,
+    MediaTextComponent,
     NotesTabComponent,
     PeopleTabComponent,
     SummaryBlockComponent,

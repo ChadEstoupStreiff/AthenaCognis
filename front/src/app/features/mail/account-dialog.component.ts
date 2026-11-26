@@ -280,7 +280,7 @@ function formOf(account: MailAccount | null): MailAccountInput {
       display: flex;
       flex-direction: column;
       gap: 4px;
-      font-size: 12px;
+      font-size: calc(12px * var(--ac-font-scale));
       color: var(--ac-muted);
     }
     .wide {
@@ -318,7 +318,7 @@ function formOf(account: MailAccount | null): MailAccountInput {
     .note,
     .error {
       margin: 0;
-      font-size: 12px;
+      font-size: calc(12px * var(--ac-font-scale));
     }
     .error {
       color: var(--p-red-500);
@@ -328,7 +328,7 @@ function formOf(account: MailAccount | null): MailAccountInput {
       border: 0;
       background: none;
       color: var(--p-primary-color);
-      font-size: 12px;
+      font-size: calc(12px * var(--ac-font-scale));
       text-align: left;
       cursor: pointer;
     }

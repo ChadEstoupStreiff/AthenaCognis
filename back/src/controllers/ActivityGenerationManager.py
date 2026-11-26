@@ -1,4 +1,4 @@
-"""Activity generation daemon: daily summary note and time entries from data sources."""
+"""Activity generation daemon: daily, weekly and monthly summary notes."""
 
 import logging
 from collections.abc import Callable
@@ -22,24 +22,22 @@ from controllers.activity.generation import (
     ACTIVITY_PROJECT,
     ACTIVITY_PROJECT_COLOR,
     ACTIVITY_PROJECT_DESCRIPTION,
-    Catalog,
-    DailyRequest,
+    GenerationRequest,
     GenerationRequestError,
     SourceSection,
-    TimeEntry,
-    daily_key,
-    daily_note,
-    daily_note_path,
+    SummarySection,
     has_activity,
-    parse_time_entries,
+    note_markdown,
+    note_path,
+    strip_fence,
 )
+from controllers.activity.generation_context import generated_sections
 from controllers.activity.generation_prompt import (
     DryRun,
     Prompt,
     PromptStats,
     build_prompt,
     part_stats,
-    split_answer,
 )
 from controllers.activity.generation_schedule import GenerationScheduler, SchedulerHooks
 from controllers.activity.registry import (
@@ -49,15 +47,12 @@ from controllers.activity.registry import (
     get_source,
 )
 from controllers.activity.settings_io import write_setting
-from controllers.calendar_links import record_ids_in_project, set_record_links
 from controllers.JobManager import JobManager
 from db import (
     ActivityGenerationTask,
-    CalendarRecord,
     JobTask,
     Project,
     ProjectFile,
-    Tag,
     TaskStateEnum,
     get_db,
 )
@@ -66,8 +61,8 @@ from views.settings import get_setting
 
 SETTING_PREFIX = "activity"
 FALLBACK_SETTING_PREFIX = "summarization"
-# Clock-only datetimes of time entries use this date (see views/calendar.py).
-CLOCK_DATE = datetime(1900, 1, 1)
+NO_ACTIVITY = "No activity in the picked data sources."
+NO_SUMMARY = "No generated summary in this period."
 SOURCE_ERRORS = (
     SourceUnavailableError,
     InvalidSettingError,
@@ -110,31 +105,47 @@ def ask_activity_llm(prompt: str) -> str:
 
 @dataclass(frozen=True)
 class PreparedPrompt:
-    """Prompt of a request with what reading its answer needs."""
+    """Prompt of a request and whether its context holds anything."""
 
     prompt: Prompt
-    # Projects and tags allowed in time entries (empty without time entries).
-    catalog: Catalog
-    has_activity: bool
+    # Why nothing can be summarized, "" when the context holds something.
+    empty_reason: str
 
 
-def prepare_prompt(db: Session, request: DailyRequest) -> PreparedPrompt:
+def read_context(
+    request: GenerationRequest, root: Path
+) -> tuple[list[SourceSection], list[SummarySection]]:
     """
-    Read the sources of a request and build its single prompt
+    Read the context of a request: data sources or generated summaries
 
     Args:
-        db (Session): session
-        request (DailyRequest): request
+        request (GenerationRequest): request
+        root (Path): shared root holding generated notes
     Returns:
-        PreparedPrompt: prompt, catalog, whether any source returned an activity
+        tuple[list[SourceSection], list[SummarySection]]: source activities, summaries
     """
+    if request.basis != "sources":
+        return [], generated_sections(root, request)
     window = TimeRange(request.start, request.end)
-    sections = [read_section(key, window) for key in request.sources]
-    catalog = load_catalog(db) if "time" in request.outputs else Catalog()
-    prompt = build_prompt(
-        request.day, sections, request.outputs, catalog, request.utc_offset_minutes
-    )
-    return PreparedPrompt(prompt, catalog, has_activity(sections))
+    return [read_section(key, window) for key in request.sources], []
+
+
+def prepare_prompt(request: GenerationRequest, root: Path) -> PreparedPrompt:
+    """
+    Read the context of a request and build its single prompt
+
+    Args:
+        request (GenerationRequest): request
+        root (Path): shared root holding generated notes
+    Returns:
+        PreparedPrompt: prompt, and why it is empty ("" when not)
+    """
+    sources, summaries = read_context(request, root)
+    if request.basis == "sources":
+        reason = "" if has_activity(sources) else NO_ACTIVITY
+    else:
+        reason = "" if summaries else NO_SUMMARY
+    return PreparedPrompt(build_prompt(request, sources, summaries), reason)
 
 
 def routed_model() -> tuple[str, int]:
@@ -194,57 +205,6 @@ def read_section(key: str, window: TimeRange) -> SourceSection:
     return SourceSection(label, source.instruction(), tuple(activities))
 
 
-def load_catalog(db: Session) -> Catalog:
-    """
-    Projects (but Activity) and tags the LLM may give to time entries
-
-    Args:
-        db (Session): session
-    Returns:
-        Catalog: names (and project descriptions), sorted
-    """
-    projects = db.query(Project.name, Project.description).order_by(Project.name)
-    return Catalog(
-        tuple(
-            (str(name), str(description or ""))
-            for name, description in projects
-            if name != ACTIVITY_PROJECT
-        ),
-        tuple(str(name) for (name,) in db.query(Tag.name).order_by(Tag.name)),
-    )
-
-
-def replace_time_entries(db: Session, day: str, entries: list[TimeEntry]) -> None:
-    """
-    Replace the generated time entries of a day (those linked to the Activity project)
-
-    Args:
-        db (Session): session
-        day (str): "YYYY-MM-DD"
-        entries (list[TimeEntry]): new entries, with their projects and tags
-    Returns:
-        None
-    """
-    date = datetime.strptime(day, "%Y-%m-%d")
-    generated = record_ids_in_project(db, ACTIVITY_PROJECT)
-    for record in db.query(CalendarRecord).filter(
-        CalendarRecord.id.in_(generated), CalendarRecord.date == date
-    ):
-        db.delete(record)
-    db.flush()
-    for entry in entries:
-        record = CalendarRecord(
-            date=date,
-            start_time=datetime.combine(CLOCK_DATE, entry.start),
-            time_spent=entry.hours,
-            title=entry.title,
-            description=entry.description,
-        )
-        db.add(record)
-        db.flush()
-        set_record_links(db, record, [ACTIVITY_PROJECT, *entry.projects], entry.tags)
-
-
 def link_to_project(db: Session, path: Path) -> None:
     """
     Add a file to the Activity project when not already in it
@@ -261,7 +221,7 @@ def link_to_project(db: Session, path: Path) -> None:
 
 
 class ActivityGenerationManager(JobManager):
-    """Generate activity summaries and time entries (`file` = "daily/<date>")."""
+    """Generate activity summaries (`file` = "<span>/<first day>")."""
 
     name = "ACTIVITY"
     task_model = ActivityGenerationTask
@@ -284,21 +244,21 @@ class ActivityGenerationManager(JobManager):
         )
 
     @classmethod
-    def request_daily(cls, request: DailyRequest) -> None:
+    def request(cls, request: GenerationRequest) -> None:
         """
-        Queue a daily generation
+        Queue a generation
 
         Args:
-            request (DailyRequest): request
+            request (GenerationRequest): request
         Returns:
             None
         Raises:
-            JobAlreadyQueuedError: when the day already has an open task
+            JobAlreadyQueuedError: when the period already has an open task
         """
         cls.add_file_to_queue(request.key, request.to_json())
 
     @classmethod
-    def running_request(cls, db: Session, file: str) -> DailyRequest:
+    def running_request(cls, db: Session, file: str) -> GenerationRequest:
         """
         Read the request of the running task of a key
 
@@ -306,7 +266,7 @@ class ActivityGenerationManager(JobManager):
             db (Session): session
             file (str): job key
         Returns:
-            DailyRequest: request
+            GenerationRequest: request
         Raises:
             GenerationRequestError: no running task or malformed request
         """
@@ -321,12 +281,12 @@ class ActivityGenerationManager(JobManager):
         )
         if task is None or not task.params:
             raise GenerationRequestError(f"No running request for {file}.")
-        return DailyRequest.from_json(task.params)
+        return GenerationRequest.from_json(task.params)
 
     @classmethod
     def process(cls, file: str, db: Session) -> str:
         """
-        Generate the requested outputs of a day
+        Generate the summary note of a period
 
         Args:
             file (str): job key
@@ -334,41 +294,31 @@ class ActivityGenerationManager(JobManager):
         Returns:
             str: what was generated
         Raises:
-            GenerationRequestError: bad request, or no activity in the picked sources
-            ValueError: answer misses a section, or time entries unreadable
+            GenerationRequestError: bad request, or nothing to summarize
+            ValueError: empty answer
         """
         request = cls.running_request(db, file)
-        prepared = prepare_prompt(db, request)
-        if not prepared.has_activity:
-            raise GenerationRequestError("No activity in the picked data sources.")
-        # One call for every output; read it all first so a bad answer writes nothing.
-        answers = split_answer(cls.llm(prepared.prompt.text()), request.outputs)
-        summary = answers.get("summary")
-        entries = (
-            parse_time_entries(answers["time"], prepared.catalog) if "time" in answers else None
-        )
+        prepared = prepare_prompt(request, cls.root)
+        if prepared.empty_reason:
+            raise GenerationRequestError(prepared.empty_reason)
+        summary = strip_fence(cls.llm(prepared.prompt.text()))
+        if not summary:
+            raise ValueError("The model answered an empty summary.")
         ensure_activity_project(db)
-        done: list[str] = []
-        if summary is not None:
-            cls.write_note(db, request.day, summary)
-            done.append("summary note")
-        if entries is not None:
-            replace_time_entries(db, request.day, entries)
-            done.append(f"{len(entries)} time entries")
-        return f"Generated {' and '.join(done)}."
+        cls.write_note(db, request, summary)
+        return "Generated summary note."
 
     @classmethod
-    def dry_run(cls, request: DailyRequest) -> DryRun:
+    def dry_run(cls, request: GenerationRequest) -> DryRun:
         """
         Build the prompt of a request without asking the LLM or writing anything
 
         Args:
-            request (DailyRequest): request
+            request (GenerationRequest): request
         Returns:
             DryRun: prompt, its size overall and per block, routed model
         """
-        with get_db() as db:
-            prompt = prepare_prompt(db, request).prompt
+        prompt = prepare_prompt(request, cls.root).prompt
         text = prompt.text()
         model, context_tokens = routed_model()
         return DryRun(
@@ -380,20 +330,20 @@ class ActivityGenerationManager(JobManager):
         )
 
     @classmethod
-    def write_note(cls, db: Session, day: str, summary: str) -> None:
+    def write_note(cls, db: Session, request: GenerationRequest, summary: str) -> None:
         """
-        Write the summary as the day's note and add it to the Activity project
+        Write the summary as the period's note and add it to the Activity project
 
         Args:
             db (Session): session
-            day (str): "YYYY-MM-DD"
+            request (GenerationRequest): request
             summary (str): LLM summary
         Returns:
             None
         """
-        path = daily_note_path(cls.root, day)
+        path = note_path(cls.root, request.span, request.day)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(daily_note(day, summary), encoding="utf-8")
+        path.write_text(note_markdown(request.span, request.day, summary), encoding="utf-8")
         link_to_project(db, path)
 
 
@@ -419,16 +369,16 @@ def active_source_keys() -> tuple[str, ...]:
     return tuple(source.key for source in IMPLEMENTED if source.state() == "active")
 
 
-def has_generated(day: str) -> bool:
+def has_generated(key: str) -> bool:
     """
-    Tell whether a day was generated or is generating (failed runs do not count)
+    Tell whether a period was generated or is generating (failed runs do not count)
 
     Args:
-        day (str): "YYYY-MM-DD"
+        key (str): job key, "<span>/<first day>"
     Returns:
         bool: True when a run is pending, running or completed
     """
-    state = ActivityGenerationManager.latest_state(daily_key(day))
+    state = ActivityGenerationManager.latest_state(key)
     return state is not None and state != TaskStateEnum.FAILED
 
 
@@ -464,7 +414,7 @@ def start_scheduler() -> None:
             write=write_setting,
             active_sources=active_source_keys,
             has_run=has_generated,
-            queue=ActivityGenerationManager.request_daily,
+            queue=ActivityGenerationManager.request,
             agenda_titles=agenda_titles,
         )
     )

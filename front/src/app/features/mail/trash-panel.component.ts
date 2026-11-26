@@ -123,14 +123,14 @@ import { MailTrashStore } from './trash.store';
     }
     .time,
     .foot {
-      font-size: 12px;
+      font-size: calc(12px * var(--ac-font-scale));
     }
     .subject {
       font-weight: 600;
     }
     .body {
       overflow: hidden;
-      font-size: 13px;
+      font-size: calc(13px * var(--ac-font-scale));
       text-overflow: ellipsis;
       white-space: nowrap;
     }

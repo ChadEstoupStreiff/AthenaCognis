@@ -37,7 +37,7 @@ const COLLAPSED_COUNT = 6;
       align-items: baseline;
       gap: 6px;
       min-width: 0;
-      font-size: 12px;
+      font-size: calc(12px * var(--ac-font-scale));
     }
     .label {
       flex: none;

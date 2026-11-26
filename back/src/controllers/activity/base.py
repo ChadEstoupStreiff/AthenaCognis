@@ -17,7 +17,8 @@ from controllers.activity.filters import FILTER_FIELDS, ActivityFilter
 from controllers.activity.settings_io import clear_settings, write_setting
 from views.settings import get_setting
 
-MAX_RANGE = timedelta(days=31)
+# A month plus a daylight saving shift.
+MAX_RANGE = timedelta(days=32)
 DEFAULT_LIMIT = 200
 MAX_LIMIT = 1000
 MAX_INSTRUCTION_CHARS = 2000

@@ -77,7 +77,7 @@ import type { TodoItem } from '@domain/contracts';
     .handle {
       color: var(--ac-muted);
       cursor: grab;
-      font-size: 12px;
+      font-size: calc(12px * var(--ac-font-scale));
     }
     .text {
       flex: 1;
@@ -93,7 +93,7 @@ import type { TodoItem } from '@domain/contracts';
     }
     .empty {
       padding: 8px;
-      font-size: 13px;
+      font-size: calc(13px * var(--ac-font-scale));
     }
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,

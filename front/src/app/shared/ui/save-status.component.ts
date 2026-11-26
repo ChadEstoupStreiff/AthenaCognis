@@ -24,11 +24,11 @@ const LABELS: Readonly<Record<SaveStatus, { readonly icon: string; readonly text
       display: inline-flex;
       align-items: center;
       gap: 5px;
-      font-size: 12px;
+      font-size: calc(12px * var(--ac-font-scale));
       color: var(--ac-muted);
     }
     .status i {
-      font-size: 10px;
+      font-size: calc(10px * var(--ac-font-scale));
     }
     .error {
       color: var(--p-red-500);

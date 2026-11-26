@@ -110,6 +110,19 @@
         label="Resize preview height"
         (restore)="resetStageHeight()"
       />
+
+      @if (hasMediaText()) {
+        <section class="media-text ac-panel">
+          <ac-media-text
+            [path]="path()"
+            [kind]="kind()"
+            [ocrRecord]="ocrRecord.value() ?? null"
+            [ocr]="ocr()"
+            [(showBoxes)]="showBoxes"
+            [(showScores)]="showScores"
+          />
+        </section>
+      }
     </div>
 
     <ac-resize-handle
@@ -136,14 +149,7 @@
           /></p-tabpanel>
           <p-tabpanel value="ai">
             @if (activeTab() === 'ai') {
-              <ac-ai-tab
-                [path]="path()"
-                [kind]="kind()"
-                [ocrRecord]="ocrRecord.value() ?? null"
-                [ocr]="ocr()"
-                [(showBoxes)]="showBoxes"
-                [(showScores)]="showScores"
-              />
+              <ac-ai-tab [path]="path()" [kind]="kind()" />
             }
           </p-tabpanel>
           <p-tabpanel value="links">
