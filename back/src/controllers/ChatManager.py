@@ -8,7 +8,9 @@ from typing import Dict
 from db import ChatMessage, ChatSession, get_db
 from fastapi import HTTPException
 from tools.ai import (
+    ProviderNotFoundError,
     get_model_context_tokens,
+    provider_label,
     provider_supports_vision,
     request_chat_llm,
 )
@@ -145,6 +147,8 @@ class ChatManager:
 
     @staticmethod
     def _sanitize_error(e: Exception) -> str:
+        if isinstance(e, ProviderNotFoundError):
+            return str(e)
         text = str(e).lower()
         if "timeout" in text or isinstance(e, TimeoutError):
             return "The request to the language model timed out. Please try again."
@@ -207,7 +211,7 @@ class ChatManager:
                 cls._finalize(chat_id, "system-cancelled", "Generation cancelled by user.", persisted_files, calendars)
                 return
 
-            cls._finalize(chat_id, f"{ai_type} - {model}", answer, persisted_files, calendars)
+            cls._finalize(chat_id, f"{provider_label(ai_type)} - {model}", answer, persisted_files, calendars)
         except Exception as e:
             logging.error(f"CHAT >> Error generating response for session {chat_id}: {e}", exc_info=True)
             cls._finalize(chat_id, "system-error", cls._sanitize_error(e), None, None)

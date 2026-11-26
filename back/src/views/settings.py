@@ -49,6 +49,7 @@ default_settings = {
     "groq_api_key": "",
     "anthropic_api_key": "",
     "deepseek_api_key": "",
+    "custom_providers": [],
     "telemetry_enabled": None,
     "telemetry_uuid": "",
     "telemetry_last_sent": "",

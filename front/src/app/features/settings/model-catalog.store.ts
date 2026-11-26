@@ -17,6 +17,22 @@ export class ModelCatalogStore {
   readonly error = signal<string | null>(null);
   /** Incremented on each reload (installed Ollama models reload with it). */
   readonly reloads = signal(0);
+  /** Providers already asked for automatically (a failure is not retried in a loop). */
+  private readonly requested = new Set<string>();
+
+  /**
+   * Load the lists once for providers that have none yet.
+   *
+   * @param providers - Provider values.
+   */
+  async ensureListed(providers: readonly string[]): Promise<void> {
+    const missing = providers.filter((id) => !(id in this.catalog()) && !this.requested.has(id));
+    if (missing.length === 0) {
+      return;
+    }
+    missing.forEach((id) => this.requested.add(id));
+    await this.reload();
+  }
 
   /** Ask every provider for its models with the stored API keys. */
   async reload(): Promise<void> {

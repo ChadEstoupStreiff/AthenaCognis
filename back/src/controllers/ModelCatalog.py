@@ -1,11 +1,13 @@
 """Live model lists of the cloud AI providers, fetched with the stored API keys."""
 
 import logging
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 import requests
+
+from tools.custom_providers import CustomProvider
 
 REQUEST_TIMEOUT_SECONDS = 10
 PAGE_SIZE = 1000
@@ -48,6 +50,12 @@ GEMINI_PREFIX = "models/"
 # Groq models that are not chat models (speech, safety classifiers)
 GROQ_EXCLUDED = ("whisper", "tts", "guard", "orpheus")
 GROQ_VISION = ("llama-4", "vision")
+# `type` values of OpenAI-compatible model lists that cannot answer chat requests
+NON_CHAT_MODEL_TYPES = (
+    "automatic-speech-recognition",
+    "text-classification",
+    "text-embeddings-inference",
+)
 
 Json = Mapping[str, object]
 JsonGetter = Callable[[str, Mapping[str, str], Mapping[str, str]], Json]
@@ -320,6 +328,33 @@ def fetch_deepseek(api_key: str, get: JsonGetter) -> ProviderCatalog:
     )
 
 
+def custom_spec(provider: CustomProvider) -> ProviderSpec:
+    """
+    Describe how to list the models of a user-defined provider
+
+    Args:
+        provider (CustomProvider): provider
+    Returns:
+        ProviderSpec: spec, keyed by the provider id
+    """
+
+    def fetch_custom(api_key: str, get: JsonGetter) -> ProviderCatalog:
+        """
+        List the chat models of the provider
+
+        Args:
+            api_key (str): key
+            get (JsonGetter): HTTP getter
+        Returns:
+            ProviderCatalog: models
+        """
+        models = records(get(provider.models_url, bearer(api_key), {}), "data")
+        chat = (m for m in models if m.get("type") not in NON_CHAT_MODEL_TYPES)
+        return ProviderCatalog(text=sorted(unique_ids(chat)))
+
+    return ProviderSpec(provider.id, fetch_custom)
+
+
 # Keys are the provider values stored in `<task>_type` settings
 PROVIDERS: dict[str, ProviderSpec] = {
     "Mistral": ProviderSpec("mistral_api_key", fetch_mistral),
@@ -355,26 +390,31 @@ def list_one(spec: ProviderSpec, api_key: str, get: JsonGetter) -> ProviderCatal
 
 
 def list_all(
-    api_keys: Mapping[str, str], get: JsonGetter = http_get_json
+    api_keys: Mapping[str, str],
+    get: JsonGetter = http_get_json,
+    custom_providers: Sequence[CustomProvider] = (),
 ) -> dict[str, ProviderCatalog]:
     """
-    Model lists of every cloud provider, fetched in parallel (one call per API key)
+    Model lists of every provider, fetched in parallel (one call per API key)
 
     Args:
         api_keys (Mapping[str, str]): API key per key setting
         get (JsonGetter): HTTP getter (injected for tests)
+        custom_providers (Sequence[CustomProvider]): user-defined providers
     Returns:
         dict[str, ProviderCatalog]: catalog per provider value
     """
-    specs = {spec.key_setting: spec for spec in PROVIDERS.values()}
+    providers = {**PROVIDERS, **{p.id: custom_spec(p) for p in custom_providers}}
+    keys = {**api_keys, **{p.id: p.api_key for p in custom_providers}}
+    specs = {spec.key_setting: spec for spec in providers.values()}
     with ThreadPoolExecutor(max_workers=len(specs)) as pool:
         futures = {
-            setting: pool.submit(list_one, spec, api_keys.get(setting, ""), get)
+            setting: pool.submit(list_one, spec, keys.get(setting, ""), get)
             for setting, spec in specs.items()
         }
         by_setting = {setting: future.result() for setting, future in futures.items()}
     return {
-        provider: by_setting[spec.key_setting] for provider, spec in PROVIDERS.items()
+        provider: by_setting[spec.key_setting] for provider, spec in providers.items()
     }
 
 

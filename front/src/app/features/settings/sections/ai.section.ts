@@ -1,10 +1,24 @@
-import { ChangeDetectionStrategy, Component, computed, inject, resource } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  resource,
+  untracked,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { SelectModule } from 'primeng/select';
 import { TextareaModule } from 'primeng/textarea';
 import { ApiClient, backendUrl } from '../../../core/api/api-client';
 import { SettingsStore } from '../../../core/settings/settings.store';
 import { AI_TASKS, type AiTask, modelsFor, type ProviderOption, providersFor } from '../ai-routing';
+import {
+  CUSTOM_PROVIDERS_KEY,
+  type CustomProvider,
+  isCustomProvider,
+  parseCustomProviders,
+} from '../custom-providers';
 import { ModelCatalogStore } from '../model-catalog.store';
 import { SettingsSection } from './settings-section';
 
@@ -20,6 +34,7 @@ interface RoutingRow {
   readonly model: string;
   readonly providers: ProviderOption[];
   readonly models: string[];
+  readonly isCustom: boolean;
 }
 
 /** Which provider and model each AI task uses. */
@@ -32,7 +47,7 @@ interface RoutingRow {
       <p class="ac-muted intro">
         Pick the engine of each task. Cloud providers need an API key (Providers below). Ollama
         models must be installed first. Model lists are built in until you press “Reload models”
-        under Providers.
+        under Providers. Custom providers list theirs automatically; you can also type a model name.
       </p>
       <div class="matrix">
         @for (row of rows(); track row.task.key) {
@@ -50,13 +65,13 @@ interface RoutingRow {
               appendTo="body"
               [ariaLabel]="row.task.label + ' provider'"
             />
-            @if (row.models.length > 0) {
+            @if (row.models.length > 0 || row.isCustom) {
               <p-select
                 [options]="row.models"
                 [ngModel]="row.model"
                 (ngModelChange)="setModel(row, $event)"
                 [filter]="row.models.length > 8"
-                [editable]="row.provider === 'llama'"
+                [editable]="row.provider === 'llama' || row.isCustom"
                 appendTo="body"
                 [ariaLabel]="row.task.label + ' model'"
               />
@@ -105,9 +120,18 @@ export class AiSectionComponent extends SettingsSection {
 
   /** One row per task, recomputed only when settings or installed models change. */
   protected readonly rows = computed<readonly RoutingRow[]>(() => {
-    this.settings.values();
-    return AI_TASKS.map((task) => this.rowOf(task, this.installed()));
+    const custom = parseCustomProviders(this.settings.values()[CUSTOM_PROVIDERS_KEY]);
+    return AI_TASKS.map((task) => this.rowOf(task, this.installed(), custom));
   });
+
+  /** Load the model lists of custom providers, which have no built-in list. */
+  constructor() {
+    super();
+    effect(() => {
+      const custom = parseCustomProviders(this.settings.values()[CUSTOM_PROVIDERS_KEY]);
+      untracked(() => void this.models.ensureListed(custom.map((provider) => provider.id)));
+    });
+  }
 
   /**
    * Change provider and pick its first model.
@@ -118,8 +142,8 @@ export class AiSectionComponent extends SettingsSection {
   protected setProvider(task: AiTask, provider: string): void {
     this.save(`${task.key}_type`, provider, true);
     const first = modelsFor(task, provider, this.installed(), this.models.catalog())[0];
-    if (first !== undefined) {
-      this.save(`${task.key}_model`, first, true);
+    if (first !== undefined || isCustomProvider(provider)) {
+      this.save(`${task.key}_model`, first ?? '', true);
     }
   }
 
@@ -141,16 +165,26 @@ export class AiSectionComponent extends SettingsSection {
    *
    * @param task - Task.
    * @param installed - Installed Ollama models.
+   * @param custom - User-defined providers.
    * @returns Row.
    */
-  private rowOf(task: AiTask, installed: readonly string[]): RoutingRow {
+  private rowOf(
+    task: AiTask,
+    installed: readonly string[],
+    custom: readonly CustomProvider[],
+  ): RoutingRow {
     const own = this.text(`${task.key}_type`);
     const source = own === '' && task.fallbackKey !== undefined ? task.fallbackKey : task.key;
     const provider = this.text(`${source}_type`);
     const model = this.text(`${source}_model`);
     const list = modelsFor(task, provider, installed, this.models.catalog());
-    const models =
-      list.length === 0 || list.includes(model) || model === '' ? [...list] : [model, ...list];
-    return { task, provider, model, providers: [...providersFor(task)], models };
+    const isCustom = isCustomProvider(provider);
+    const isUnlisted = model !== '' && !list.includes(model) && (list.length > 0 || isCustom);
+    const models = isUnlisted ? [model, ...list] : [...list];
+    const providers = [...providersFor(task, custom)];
+    if (isCustom && !providers.some((option) => option.value === provider)) {
+      providers.push({ value: provider, label: 'Removed provider' });
+    }
+    return { task, provider, model, providers, models, isCustom };
   }
 }

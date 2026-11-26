@@ -198,3 +198,46 @@ def test_groq_vision_only_for_multimodal_models() -> None:
         "Groq", "meta-llama/llama-4-scout-17b-16e-instruct"
     )
     assert not ai.provider_supports_vision("Groq", "llama-3.3-70b-versatile")
+
+
+class UsageTailStream(FakeStream):
+    """Stream ending with chunks that carry no text, as Albert sends them."""
+
+    def iter_lines(self) -> Iterator[bytes]:
+        """
+        Yield one text chunk, then textless chunks
+
+        Returns:
+            Iterator[bytes]: lines
+        """
+        yield b'data: {"choices": [{"delta": {"content": "Hi"}}]}'
+        yield b'data: {"choices": [{"delta": {"content": null}}]}'
+        yield b'data: {"choices": [], "usage": {"total_tokens": 3}}'
+        yield b"data: [DONE]"
+
+
+@pytest.mark.parametrize("request_kind", ["chat", "prompt"])
+def test_textless_chunks_are_ignored_silently(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    request_kind: str,
+) -> None:
+    """
+    Do not warn about chunks without choices or content
+
+    Args:
+        monkeypatch (pytest.MonkeyPatch): pytest monkeypatch
+        caplog (pytest.LogCaptureFixture): captured logs
+        request_kind (str): chat or one-shot request
+    Returns:
+        None
+    """
+    monkeypatch.setattr(ai, "get_setting", fake_setting)
+    monkeypatch.setattr(ai.requests, "post", lambda *args, **kwargs: UsageTailStream())
+    if request_kind == "chat":
+        messages = [{"role": "user", "content": [{"type": "text", "text": "a"}]}]
+        answer = ai.request_chat_llm("chat", messages)[2]
+    else:
+        answer = ai.request_llm("chat", "a")[2]
+    assert answer == "Hi"
+    assert "Malformed" not in caplog.text

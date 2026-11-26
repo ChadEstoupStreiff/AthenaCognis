@@ -4,6 +4,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from controllers.ModelCatalog import PROVIDERS, ProviderCatalog, list_all
+from tools.custom_providers import SETTING_KEY, parse_custom_providers
 from views.settings import get_setting
 
 router = APIRouter(prefix="/ai", tags=["AI"])
@@ -45,7 +46,9 @@ def list_models() -> dict[str, ProviderModels]:
     """
     key_settings = {spec.key_setting for spec in PROVIDERS.values()}
     api_keys = {key: str(get_setting(key) or "") for key in key_settings}
+    custom_providers = parse_custom_providers(get_setting(SETTING_KEY, []))
+    catalogs = list_all(api_keys, custom_providers=custom_providers)
     return {
         provider: to_response(provider_catalog)
-        for provider, provider_catalog in list_all(api_keys).items()
+        for provider, provider_catalog in catalogs.items()
     }

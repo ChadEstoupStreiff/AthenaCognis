@@ -3,10 +3,16 @@ import json
 import logging
 import mimetypes
 import re
-from typing import Dict, List, Set
+from dataclasses import dataclass
+from typing import Any, Dict, List, Set
 
 import requests
 from bs4 import BeautifulSoup
+from tools.custom_providers import (
+    SETTING_KEY as CUSTOM_PROVIDERS_KEY,
+    is_custom_provider,
+    parse_custom_providers,
+)
 from tools.provider_errors import provider_error
 from tools.prompts import get_prompt
 from tools.style_instruction import (
@@ -79,6 +85,85 @@ DEFAULT_CONTEXT_WINDOWS = {
     "Gemini": 1000000,
     "Claude": 200000,
 }
+
+
+class ProviderNotFoundError(ValueError):
+    """Routing points to a custom provider that was deleted or is invalid."""
+
+
+@dataclass(frozen=True)
+class Endpoint:
+    """Where and how to call an OpenAI-compatible provider."""
+
+    label: str
+    url: str
+    api_key: str
+
+
+def is_openai_compatible(ai_type: str) -> bool:
+    """
+    Tell whether a provider speaks the OpenAI chat completions protocol
+
+    Args:
+        ai_type (str): provider value
+    Returns:
+        bool: True for built-in compatible and custom providers
+    """
+    return ai_type in OPENAI_COMPATIBLE or is_custom_provider(ai_type)
+
+
+def openai_endpoint(ai_type: str) -> Endpoint:
+    """
+    Find the URL and key of an OpenAI-compatible provider
+
+    Args:
+        ai_type (str): provider value
+    Returns:
+        Endpoint: endpoint
+    Raises:
+        ProviderNotFoundError: when the custom provider was removed or is invalid
+    """
+    if ai_type in OPENAI_COMPATIBLE:
+        url, key_setting = OPENAI_COMPATIBLE[ai_type]
+        return Endpoint(ai_type, url, get_setting(key_setting))
+    providers = parse_custom_providers(get_setting(CUSTOM_PROVIDERS_KEY, []))
+    for provider in providers:
+        if provider.id == ai_type:
+            return Endpoint(provider.name, provider.chat_url, provider.api_key)
+    raise ProviderNotFoundError(
+        "This AI provider no longer exists. Pick another one in AI routing."
+    )
+
+
+def provider_label(ai_type: str) -> str:
+    """
+    Name a provider for display
+
+    Args:
+        ai_type (str): provider value
+    Returns:
+        str: custom provider name, else the value itself
+    """
+    if not is_custom_provider(ai_type):
+        return ai_type
+    providers = parse_custom_providers(get_setting(CUSTOM_PROVIDERS_KEY, []))
+    return next((p.name for p in providers if p.id == ai_type), ai_type)
+
+
+def delta_text(data: dict[str, Any]) -> str:
+    """
+    Read the text of an OpenAI-compatible stream chunk
+
+    Args:
+        data (dict[str, Any]): decoded chunk
+    Returns:
+        str: text, empty for usage or reasoning-only chunks
+    """
+    choices = data.get("choices")
+    if not choices:
+        return ""
+    delta = choices[0].get("delta") or {}
+    return delta.get("content") or ""
 
 
 def get_model_context_tokens(ai_type: str, model: str) -> int:
@@ -220,11 +305,10 @@ def request_llm(
             return ai_type, model, output
 
     # ChatGPT / DeepSeek (OpenAI-compatible)
-    elif ai_type in OPENAI_COMPATIBLE:
-        url, key_setting = OPENAI_COMPATIBLE[ai_type]
-        api_key = get_setting(key_setting)
+    elif is_openai_compatible(ai_type):
+        endpoint = openai_endpoint(ai_type)
         headers = {
-            "Authorization": f"Bearer {api_key}",
+            "Authorization": f"Bearer {endpoint.api_key}",
             "Content-Type": "application/json",
         }
         payload = {
@@ -233,9 +317,9 @@ def request_llm(
             "stream": True,
         }
 
-        with requests.post(url, headers=headers, json=payload, stream=True, timeout=3600) as response:
+        with requests.post(endpoint.url, headers=headers, json=payload, stream=True, timeout=3600) as response:
             if response.status_code != 200:
-                raise provider_error(ai_type, response.status_code, response.text)
+                raise provider_error(endpoint.label, response.status_code, response.text)
 
             output = ""
             for line in response.iter_lines():
@@ -245,7 +329,7 @@ def request_llm(
                         break
                     try:
                         data = json.loads(line)
-                        chunk = data["choices"][0]["delta"].get("content", "")
+                        chunk = delta_text(data)
                         output += chunk
                         if stream_callback:
                             stream_callback(chunk)
@@ -396,14 +480,14 @@ def request_chat_llm(
             return ai_type, model, output
 
     # Mistral / ChatGPT / DeepSeek (OpenAI-compatible chat completions)
-    elif ai_type == "Mistral" or ai_type in OPENAI_COMPATIBLE:
-        url, key_setting = (
-            ("https://api.mistral.ai/v1/chat/completions", "mistral_api_key")
+    elif ai_type == "Mistral" or is_openai_compatible(ai_type):
+        endpoint = (
+            Endpoint("Mistral", "https://api.mistral.ai/v1/chat/completions", get_setting("mistral_api_key"))
             if ai_type == "Mistral"
-            else OPENAI_COMPATIBLE[ai_type]
+            else openai_endpoint(ai_type)
         )
-        api_key = get_setting(key_setting)
-        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        headers = {"Authorization": f"Bearer {endpoint.api_key}", "Content-Type": "application/json"}
+        is_text_only = ai_type in TEXT_ONLY_PROVIDERS or is_custom_provider(ai_type)
 
         api_messages = []
         for msg in messages:
@@ -418,16 +502,16 @@ def request_chat_llm(
                         content_parts.append({"type": "image_url", "image_url": data_url})
                     else:
                         content_parts.append({"type": "image_url", "image_url": {"url": data_url}})
-            if ai_type in TEXT_ONLY_PROVIDERS:
+            if is_text_only:
                 text = "\n".join(part["text"] for part in content_parts if part["type"] == "text")
                 api_messages.append({"role": msg["role"], "content": text})
             else:
                 api_messages.append({"role": msg["role"], "content": content_parts})
 
         payload = {"model": model, "messages": api_messages, "stream": True}
-        with requests.post(url, headers=headers, json=payload, stream=True, timeout=timeout) as response:
+        with requests.post(endpoint.url, headers=headers, json=payload, stream=True, timeout=timeout) as response:
             if response.status_code != 200:
-                raise provider_error(ai_type, response.status_code, response.text)
+                raise provider_error(endpoint.label, response.status_code, response.text)
 
             output = ""
             for line in response.iter_lines():
@@ -442,7 +526,7 @@ def request_chat_llm(
                     break
                 try:
                     data = json.loads(line)
-                    chunk = data["choices"][0]["delta"].get("content", "")
+                    chunk = delta_text(data)
                     if chunk:
                         output += chunk
                         if stream_callback:

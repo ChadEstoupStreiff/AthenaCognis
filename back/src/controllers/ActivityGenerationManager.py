@@ -56,7 +56,7 @@ from db import (
     TaskStateEnum,
     get_db,
 )
-from tools.ai import get_model_context_tokens, request_llm
+from tools.ai import get_model_context_tokens, provider_label, request_llm
 from views.settings import get_setting
 
 SETTING_PREFIX = "activity"
@@ -158,7 +158,7 @@ def routed_model() -> tuple[str, int]:
     prefix = routing_prefix()
     ai_type = str(get_setting(f"{prefix}_type") or "")
     model = str(get_setting(f"{prefix}_model") or "")
-    label = " · ".join(part for part in (ai_type, model) if part)
+    label = " · ".join(part for part in (provider_label(ai_type), model) if part)
     return label, get_model_context_tokens(ai_type, model)
 
 
