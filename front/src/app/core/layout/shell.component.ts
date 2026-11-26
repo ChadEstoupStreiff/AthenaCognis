@@ -23,6 +23,7 @@ import { fileKindOf, fileNameOf, FILE_KIND_ICONS } from '@domain/files';
 import { viewerCommands } from '../../shared/files/file-row';
 import { LastOpenedService } from '../files/last-opened.service';
 import { MailBadge } from '../mail/mail-badge';
+import { UpdateCheck } from '../update/update-check';
 import { PeekService } from '../files/peek.service';
 import { ShortcutService } from '../shortcuts/shortcut.service';
 import { TelemetryConsentComponent } from '../telemetry/telemetry-consent.component';
@@ -76,6 +77,8 @@ export class ShellComponent {
   private readonly lastOpened = inject(LastOpenedService);
   protected readonly telemetry = inject(TelemetryService);
   protected readonly mailBadge = inject(MailBadge);
+  /** Checks GitHub once per page load; drives the dot on Settings. */
+  protected readonly updateCheck = inject(UpdateCheck);
   protected readonly mailRoute = MAIL_ROUTE;
 
   private readonly settings = inject(SettingsStore);

@@ -86,6 +86,8 @@ services:
       - .env:/.env
       # LLM prompts, re-read on change.
       - ./prompts.yaml:/prompts.yaml:ro
+      # Git metadata, read-only: Settings compares the installed commit with GitHub.
+      - ./.git:/repo/.git:ro
       - ${DATA_PATH}/whisper_cache:/root/.cache
       - ${DATA_PATH}/paddle:/root/.paddle
       - ${DATA_PATH}/paddleocr:/root/.paddleocr

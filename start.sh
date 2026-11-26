@@ -1,6 +1,7 @@
 #!/bin/bash
 # Double-click launcher for AthenaCognis (Linux).
-# Checks Docker, creates .env interactively if missing, starts the app
+# Checks Docker, creates .env interactively if missing, pulls the latest
+# version (git), rebuilds and starts the app
 # detached, and opens it in your browser once it's confirmed running.
 set -e
 
@@ -123,7 +124,20 @@ set -o allexport
 source .env
 set +o allexport
 
-# --- 3. Launch detached --------------------------------------------------
+# --- 3. Update to the latest version ------------------------------------
+# Fast-forward only: never merges or touches local edits. Offline = keep current version.
+if command -v git >/dev/null 2>&1 && [ -d .git ]; then
+  echo "Checking for a new version..."
+  if git pull --ff-only; then
+    echo
+  else
+    echo "Could not download the new version (offline, or local changes)."
+    echo "Starting the installed version."
+    echo
+  fi
+fi
+
+# --- 4. Launch detached --------------------------------------------------
 echo "Starting AthenaCognis (first run can take a while while images download)..."
 if ! docker compose -p "athenacognis_${PROJECT_NAME:-athenacognis}" up -d --build; then
   echo
@@ -132,7 +146,7 @@ if ! docker compose -p "athenacognis_${PROJECT_NAME:-athenacognis}" up -d --buil
   pause_exit
 fi
 
-# --- 4. Confirm it actually came up --------------------------------------
+# --- 5. Confirm it actually came up --------------------------------------
 PORT="${FRONT_PORT:-8401}"
 URL="http://localhost:$PORT"
 

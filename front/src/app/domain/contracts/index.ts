@@ -13,3 +13,4 @@ export * from './settings';
 export * from './time';
 export * from './tree';
 export * from './work';
+export * from './update';

@@ -34,7 +34,20 @@ for /f "usebackq eol=# tokens=1,2 delims==" %%A in (".env") do (
   if "%%A"=="FRONT_PORT" set "FRONT_PORT=%%B"
 )
 
-:: --- 3. Launch detached ---------------------------------------------------
+:: --- 3. Update to the latest version -------------------------------------
+:: Fast-forward only: never merges or touches local edits. Offline = keep current version.
+where git >nul 2>nul
+if not errorlevel 1 if exist ".git" (
+  echo Checking for a new version...
+  git pull --ff-only
+  if errorlevel 1 (
+    echo Could not download the new version ^(offline, or local changes^).
+    echo Starting the installed version.
+  )
+  echo.
+)
+
+:: --- 4. Launch detached ---------------------------------------------------
 echo Starting AthenaCognis (first run can take a while while images download)...
 docker compose -p "athenacognis_!PROJECT_NAME!" up -d --build
 if errorlevel 1 (
@@ -45,7 +58,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-:: --- 4. Confirm it actually came up ---------------------------------------
+:: --- 5. Confirm it actually came up ---------------------------------------
 set "URL=http://localhost:!FRONT_PORT!"
 echo Waiting for AthenaCognis to come up at !URL! ...
 

@@ -4,6 +4,7 @@ import { InputNumberModule } from 'primeng/inputnumber';
 import { SelectButtonModule } from 'primeng/selectbutton';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import { SettingsSection } from './settings-section';
+import { ViewSettingComponent } from './view-setting';
 
 const AUTO_JOBS = [
   { key: 'enable_auto_preview', label: 'Previews', hint: 'Thumbnails of uploaded files.' },
@@ -17,13 +18,22 @@ const QUALITY_OPTIONS = [
   { value: 'high', label: '720p' },
 ];
 
-/** Automatic processing on upload and preview options. */
+/** Library page: default view, automatic processing on upload and file previews. */
 @Component({
-  selector: 'ac-processing-section',
-  imports: [FormsModule, InputNumberModule, SelectButtonModule, ToggleSwitchModule],
+  selector: 'ac-library-section',
+  imports: [
+    FormsModule,
+    InputNumberModule,
+    SelectButtonModule,
+    ToggleSwitchModule,
+    ViewSettingComponent,
+  ],
   template: `
-    <section class="group" id="processing">
-      <h2>Processing</h2>
+    <section class="group" id="library">
+      <h2>Library</h2>
+      <ac-view-setting key="explorer_default_representation_mode" label="Default view" />
+
+      <h3 class="subhead" id="processing">Processing on upload</h3>
       <p class="ac-muted intro">
         Run automatically on every upload. Engines are set in AI routing.
       </p>
@@ -40,6 +50,8 @@ const QUALITY_OPTIONS = [
           />
         </div>
       }
+
+      <h3 class="subhead" id="previews">Previews</h3>
       <div class="row">
         <div class="label"><strong>Preview quality</strong></div>
         <p-selectbutton
@@ -86,7 +98,7 @@ const QUALITY_OPTIONS = [
   styleUrl: './section.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class ProcessingSectionComponent extends SettingsSection {
+export class LibrarySectionComponent extends SettingsSection {
   protected readonly autoJobs = AUTO_JOBS;
   protected readonly qualities = QUALITY_OPTIONS;
 }

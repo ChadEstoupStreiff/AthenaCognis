@@ -75,11 +75,16 @@
           class="nav-item"
           [routerLink]="settingsNav.route"
           routerLinkActive="active"
-          [pTooltip]="settingsNav.label"
+          [pTooltip]="
+            updateCheck.available() ? 'Settings — new version available' : settingsNav.label
+          "
           tooltipPosition="right"
           [attr.aria-label]="settingsNav.label"
         >
           <i [class]="settingsNav.icon" aria-hidden="true"></i>
+          @if (updateCheck.available()) {
+            <span class="update-dot" aria-label="New version available"></span>
+          }
         </a>
         <ac-jobs-indicator />
         <p-button

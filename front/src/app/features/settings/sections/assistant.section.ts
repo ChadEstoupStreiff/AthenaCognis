@@ -7,6 +7,7 @@ import { TextareaModule } from 'primeng/textarea';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import { PresetsDialogComponent } from '../../assistant/presets-dialog.component';
 import { SettingsSection } from './settings-section';
+import { ViewSettingComponent } from './view-setting';
 
 /** Assistant defaults, retrieval and limits. */
 @Component({
@@ -19,6 +20,7 @@ import { SettingsSection } from './settings-section';
     TextareaModule,
     ToggleSwitchModule,
     PresetsDialogComponent,
+    ViewSettingComponent,
   ],
   template: `
     <section class="group" id="assistant">
@@ -107,6 +109,7 @@ import { SettingsSection } from './settings-section';
           ariaLabel="Answer timeout"
         />
       </div>
+      <ac-view-setting key="chat_files_default_representation_mode" label="File picker view" />
       <div class="row">
         <div class="label"><strong>Message presets</strong></div>
         <p-button

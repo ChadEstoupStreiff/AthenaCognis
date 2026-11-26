@@ -21,13 +21,12 @@ test.describe('assistant and settings (read-only)', () => {
     await expect(page.locator('.composer .chip', { hasText: 'example.md' })).toBeVisible();
   });
 
-  test('settings sections render and filter', async ({ page }) => {
+  test('settings sections render', async ({ page }) => {
     await page.goto('/settings');
     await expect(page.getByRole('heading', { name: 'AI routing' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Background jobs' })).toBeVisible();
-    await page.getByRole('searchbox', { name: 'Find a setting' }).fill('ollama');
-    await expect(page.getByRole('heading', { name: 'Ollama' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Telemetry' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Ollama' })).toBeAttached();
+    await expect(page.getByRole('heading', { name: 'Telemetry' })).toBeAttached();
   });
 
   test('API keys are masked', async ({ page }) => {

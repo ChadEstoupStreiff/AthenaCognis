@@ -214,6 +214,21 @@
 
 .rail-actions {
   justify-content: space-around;
+
+  .nav-item {
+    position: relative;
+  }
+}
+
+.update-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--p-red-500);
+  box-shadow: 0 0 0 2px var(--ac-rail-background);
 }
 
 .rail-tools .new-button {
