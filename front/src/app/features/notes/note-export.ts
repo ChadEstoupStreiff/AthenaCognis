@@ -85,7 +85,7 @@ async function fetchImage(source: string): Promise<Blob | null> {
  * @returns File name.
  */
 function fileName(title: string, extension: string): string {
-  return `${title.replaceAll(/[\\/:*?"<>|]/g, '-').trim() || 'note'}.${extension}`;
+  return `${title.replaceAll(/[\\/:*?"<>|]/g, '-').trim() || 'post-it'}.${extension}`;
 }
 
 /**

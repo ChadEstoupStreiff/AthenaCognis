@@ -55,6 +55,14 @@
   font-size: calc(12px * var(--ac-font-scale));
 }
 
+.version {
+  font-size: calc(12px * var(--ac-font-scale));
+
+  code {
+    font-family: monospace;
+  }
+}
+
 .sections {
   min-width: 0;
 

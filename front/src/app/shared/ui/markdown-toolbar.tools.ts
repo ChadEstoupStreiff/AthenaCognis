@@ -205,7 +205,7 @@ export const CHEATSHEET: readonly CheatsheetRow[] = [
   { syntax: '```mermaid', result: 'Diagram' },
   { syntax: '| a | b |', result: 'Table' },
   { syntax: '@name #tag +project', result: 'Link people, tags, projects' },
-  { syntax: '[[file', result: 'Link a note or file' },
+  { syntax: '[[file', result: 'Link a post-it or file' },
   { syntax: ':smile', result: 'Emoji' },
   { syntax: '⌘F', result: 'Find & replace' },
 ];

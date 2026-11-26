@@ -62,6 +62,7 @@ class UpdateStatus:
     state: UpdateState
     behind_by: int
     local_commit: str
+    local_branch: str
     reason: str
     checked_at: float
 
@@ -182,6 +183,7 @@ def compare_with_github(local: LocalRevision, fetch: Fetch) -> UpdateStatus:
         state=state,
         behind_by=behind_by,
         local_commit=local.commit,
+        local_branch=local.branch,
         reason="",
         checked_at=time.time(),
     )
@@ -200,19 +202,20 @@ def check_update(git_dir: Path, fetch: Fetch) -> UpdateStatus:
     try:
         local = read_local_revision(git_dir)
     except (UpdateCheckError, GitHubError, OSError) as error:
-        return unknown_status("", str(error))
+        return unknown_status("", "", str(error))
     try:
         return compare_with_github(local, fetch)
     except GitHubError as error:
-        return unknown_status(local.commit, str(error))
+        return unknown_status(local.commit, local.branch, str(error))
 
 
-def unknown_status(local_commit: str, reason: str) -> UpdateStatus:
+def unknown_status(local_commit: str, local_branch: str, reason: str) -> UpdateStatus:
     """
     Build the status of a failed check
 
     Args:
         local_commit (str): installed commit, "" when unknown
+        local_branch (str): installed branch, "" when unknown
         reason (str): why the check failed
     Returns:
         UpdateStatus: unknown status
@@ -222,6 +225,7 @@ def unknown_status(local_commit: str, reason: str) -> UpdateStatus:
         state="unknown",
         behind_by=0,
         local_commit=local_commit,
+        local_branch=local_branch,
         reason=reason,
         checked_at=time.time(),
     )

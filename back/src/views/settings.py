@@ -70,6 +70,7 @@ default_settings = {
     "mail_trash_retention_days": 30,  # deleted mail and drafts kept in the Trash  # flags before it count for the day before
     "work_max_visible_columns": 6,  # board columns sharing the width; more scroll (front-only)
     "work_card_inline": ["projects", "tags", "people"],  # rendered on cards, others in details (front-only)
+    "home_daily_text_enabled": True,  # daily text at the top of Home (front-only)
     "home_daily_text_kind": "quote",  # greeting | motivation | quote | joke (front-only)
     "home_daily_text_language": "en",  # fr | en (front-only)
     "api_ninjas_api_key": "",  # optional, extra English quotes and motivation

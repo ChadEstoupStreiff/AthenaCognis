@@ -55,12 +55,12 @@ import { diffLines } from '../../shared/text/text-diff';
           @if (selected()) {
             <p class="legend ac-muted">
               <span class="removed">− only in this version</span>
-              <span class="added">+ only in the current note</span>
+              <span class="added">+ only in the current post-it</span>
             </p>
             <pre>@for (line of diff(); track $index) {<span [class]="line.kind">{{ line.kind === 'added' ? '+ ' : line.kind === 'removed' ? '− ' : '  ' }}{{ line.text }}
 </span>}</pre>
           } @else {
-            <p class="ac-muted">Pick a version to compare it with the current note.</p>
+            <p class="ac-muted">Pick a version to compare it with the current post-it.</p>
           }
         </section>
       </div>

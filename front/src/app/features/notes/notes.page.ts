@@ -85,7 +85,7 @@ const SYNC_SCROLL_KEY = 'ac.notes.syncScroll';
 const SIDEBAR_COLLAPSED_KEY = 'ac.notes.sidebarCollapsed';
 /** No stored width: editor and preview split the space evenly. */
 const EVEN_SPLIT = 0;
-const NEW_NOTE = '# New note\n\n';
+const NEW_NOTE = '# New post-it\n\n';
 const MAX_NOTE_BYTES = 5_242_880;
 const DAY_MS = 86_400_000;
 const HEADING_SELECTOR = 'h1, h2, h3, h4, h5, h6';
@@ -254,7 +254,7 @@ export class NotesPage {
   protected readonly uploadFile: FileUploader = async (file) => {
     const path = this.notePath();
     if (path === null) {
-      throw new Error('No note is open.');
+      throw new Error('No post-it is open.');
     }
     try {
       return await this.files.uploadNoteAsset(path, file);
@@ -320,7 +320,7 @@ export class NotesPage {
     try {
       await this.details.setPinned(path, pinned);
     } catch (error) {
-      this.notify.error(pinned ? 'Note not pinned.' : 'Note not unpinned.', messageOf(error));
+      this.notify.error(pinned ? 'Post-it not pinned.' : 'Post-it not unpinned.', messageOf(error));
     }
   }
 
@@ -391,7 +391,7 @@ export class NotesPage {
     const target = extensionOf(name) === '' ? `${name}.md` : name;
     const newPath = await this.files.move({ path, name: target });
     this.relations.forget(path);
-    this.notify.success('Note renamed.');
+    this.notify.success('Post-it renamed.');
     this.open(newPath);
   }
 
@@ -522,7 +522,7 @@ export class NotesPage {
    * @param format - Format.
    */
   protected async exportNote(format: ExportFormat): Promise<void> {
-    const title = splitExtension(fileNameOf(this.notePath() ?? 'note')).stem;
+    const title = splitExtension(fileNameOf(this.notePath() ?? 'post-it')).stem;
     try {
       await this.exporter.export(this.content(), title, format);
     } catch (error) {
@@ -563,7 +563,7 @@ export class NotesPage {
     this.autosave.status.set('idle');
     this.loaded.set(!head.truncated);
     if (head.truncated) {
-      this.notify.warn('This note is too large to edit here.');
+      this.notify.warn('This post-it is too large to edit here.');
       return;
     }
     this.history.snapshot(path, true).catch((error: unknown) => {

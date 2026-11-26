@@ -5,15 +5,15 @@
         icon="pi pi-angle-double-right"
         [text]="true"
         severity="secondary"
-        pTooltip="Show notes"
-        ariaLabel="Expand notes sidebar"
+        pTooltip="Show post-its"
+        ariaLabel="Expand post-its sidebar"
         (onClick)="toggleSidebar()"
       />
       <p-button
         icon="pi pi-plus"
         [text]="true"
-        pTooltip="New note"
-        ariaLabel="New note"
+        pTooltip="New post-it"
+        ariaLabel="New post-it"
         (onClick)="createNote()"
       />
     </aside>
@@ -26,23 +26,23 @@
             pInputText
             type="search"
             class="search"
-            placeholder="Search notes…"
+            placeholder="Search post-its…"
             [ngModel]="query()"
             (ngModelChange)="query.set($event)"
-            aria-label="Search notes"
+            aria-label="Search post-its"
           />
         </p-iconfield>
         <p-button
           icon="pi pi-angle-double-left"
           [text]="true"
           severity="secondary"
-          pTooltip="Hide notes"
-          ariaLabel="Collapse notes sidebar"
+          pTooltip="Hide post-its"
+          ariaLabel="Collapse post-its sidebar"
           (onClick)="toggleSidebar()"
         />
       </div>
-      <p-button label="New note" icon="pi pi-plus" [fluid]="true" (onClick)="createNote()" />
-      <nav class="list" aria-label="Notes">
+      <p-button label="New post-it" icon="pi pi-plus" [fluid]="true" (onClick)="createNote()" />
+      <nav class="list" aria-label="Post-its">
         @if (pinnedNotes().length > 0) {
           <h3 class="day pinned-head"><i class="pi pi-thumbtack" aria-hidden="true"></i>Pinned</h3>
           @for (note of pinnedNotes(); track note) {
@@ -61,7 +61,11 @@
           @if (pinnedNotes().length === 0) {
             <p class="ac-muted empty">
               {{
-                notes.isLoading() ? 'Loading…' : query() ? 'No matching notes.' : 'No notes yet.'
+                notes.isLoading()
+                  ? 'Loading…'
+                  : query()
+                    ? 'No matching post-its.'
+                    : 'No post-its yet.'
               }}
             </p>
           }
@@ -89,7 +93,7 @@
             type="button"
             class="pin-toggle"
             [class.pinned]="pinnedSet().has(note)"
-            [attr.aria-label]="pinnedSet().has(note) ? 'Unpin note' : 'Pin note'"
+            [attr.aria-label]="pinnedSet().has(note) ? 'Unpin post-it' : 'Pin post-it'"
             [title]="pinnedSet().has(note) ? 'Unpin' : 'Pin to top'"
             (click)="togglePin(note, $event)"
             (keydown.enter)="$event.stopPropagation()"
@@ -126,7 +130,7 @@
           (ngModelChange)="renaming.set($event)"
           (blur)="rename()"
           (keydown.enter)="rename()"
-          aria-label="Note name"
+          aria-label="Post-it name"
         />
         <ac-save-status [status]="autosave.status()" />
         <span class="stats ac-muted" [pTooltip]="stats().characters + ' characters'">
@@ -259,12 +263,12 @@
     } @else {
       <div class="ac-panel intro">
         <i class="pi pi-pen-to-square" aria-hidden="true"></i>
-        <h2>Pick a note or start a new one</h2>
+        <h2>Pick a post-it or start a new one</h2>
         <p class="ac-muted">
-          Notes are Markdown files stored in the <code>notes</code> folder, listed newest first.
+          Post-its are Markdown files stored in the <code>notes</code> folder, listed newest first.
           They save automatically.
         </p>
-        <p-button label="New note" icon="pi pi-plus" (onClick)="createNote()" />
+        <p-button label="New post-it" icon="pi pi-plus" (onClick)="createNote()" />
       </div>
     }
   </section>

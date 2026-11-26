@@ -13,7 +13,7 @@ export const MAIN_NAV: readonly NavItem[] = [
   { label: 'Activity', icon: 'pi pi-bolt', route: '/activity', shortcut: 'y' },
   { label: 'Mail', icon: 'pi pi-envelope', route: '/mail', shortcut: 'm' },
   { label: 'Library', icon: 'pi pi-folder-open', route: '/library', shortcut: 'l' },
-  { label: 'Notes', icon: 'pi pi-pen-to-square', route: '/notes', shortcut: 'n' },
+  { label: 'Post-it', icon: 'pi pi-pen-to-square', route: '/notes', shortcut: 'n' },
   { label: 'Time', icon: 'pi pi-calendar', route: '/time', shortcut: 't' },
   { label: 'Work', icon: 'pi pi-th-large', route: '/work', shortcut: 'w' },
   { label: 'Projects', icon: 'pi pi-briefcase', route: '/projects', shortcut: 'p' },

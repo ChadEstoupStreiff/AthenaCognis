@@ -9,6 +9,11 @@
       }
     </nav>
     <small class="ac-muted saved">Changes are saved automatically.</small>
+    @if (updateCheck.version(); as version) {
+      <small class="ac-muted version" title="Installed version (branch-commit)"
+        >Version: <code>{{ version }}</code></small
+      >
+    }
   </aside>
 
   <div class="sections">

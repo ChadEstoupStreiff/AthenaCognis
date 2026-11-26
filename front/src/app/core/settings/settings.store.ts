@@ -23,6 +23,7 @@ interface KnownSettings {
   readonly mail_pinned_first: boolean;
   readonly mail_activity_reset_time: string;
   readonly work_max_visible_columns: number;
+  readonly home_daily_text_enabled: boolean;
   readonly home_daily_text_kind: string;
   readonly home_daily_text_language: string;
 }
@@ -46,6 +47,7 @@ export const SETTING_DEFAULTS: KnownSettings = {
   mail_pinned_first: true,
   mail_activity_reset_time: '04:00',
   work_max_visible_columns: 6,
+  home_daily_text_enabled: true,
   home_daily_text_kind: 'quote',
   home_daily_text_language: 'en',
 };

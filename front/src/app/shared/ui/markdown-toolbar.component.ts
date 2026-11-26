@@ -183,7 +183,7 @@ export class MarkdownToolbarComponent {
       },
     },
     {
-      label: 'Note or file ([[)',
+      label: 'Post-it or file ([[)',
       icon: 'pi pi-file',
       command: (): void => {
         this.complete('[[');

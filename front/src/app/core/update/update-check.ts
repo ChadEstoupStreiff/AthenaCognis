@@ -12,6 +12,22 @@ export function isUpdateAvailable(status: UpdateStatus | null): boolean {
   return status !== null && status.behind_by > 0;
 }
 
+/** Characters of the commit SHA shown in the version label. */
+const SHORT_SHA_LENGTH = 7;
+
+/**
+ * Installed version label, `<branch>-<short commit>`.
+ *
+ * @param status - Update check result, `null` before it arrives or when it failed.
+ * @returns Version label, empty when the installed commit is unknown.
+ */
+export function formatVersion(status: UpdateStatus | null): string {
+  if (status === null || status.local_commit === '') {
+    return '';
+  }
+  return `${status.local_branch}-${status.local_commit.slice(0, SHORT_SHA_LENGTH)}`;
+}
+
 /** New-version check, run once when the web page opens (dot on Settings, banner on the page). */
 @Injectable({ providedIn: 'root' })
 export class UpdateCheck {
@@ -22,6 +38,8 @@ export class UpdateCheck {
   readonly behindBy = computed(() => this.status()?.behind_by ?? 0);
   /** Whether a new version is available. */
   readonly available = computed(() => isUpdateAvailable(this.status()));
+  /** Installed version label, empty when unknown. */
+  readonly version = computed(() => formatVersion(this.status()));
 
   /** Ask the backend once; a failed check simply shows nothing. */
   constructor() {

@@ -77,7 +77,7 @@ export const ACTION_ITEMS: readonly PaletteItem[] = [
   {
     id: 'a:note',
     section: 'Actions',
-    label: 'New note',
+    label: 'New post-it',
     hint: 'n',
     icon: 'pi pi-pen-to-square',
     target: { kind: 'action', action: 'new-note' },

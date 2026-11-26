@@ -109,7 +109,7 @@ export class ShellComponent {
   protected readonly isMac = /Mac|iPhone|iPad/.test(navigator.userAgent);
   protected readonly newItems: MenuItem[] = [
     {
-      label: 'Note',
+      label: 'Post-it',
       icon: 'pi pi-pen-to-square',
       command: (): void => void this.router.navigate(['/notes'], { queryParams: { create: '1' } }),
     },

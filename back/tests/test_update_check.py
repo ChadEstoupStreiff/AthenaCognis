@@ -77,6 +77,7 @@ def test_new_commits_on_github_mean_behind(tmp_path: Path) -> None:
     calls: list[str] = []
     status = check_update(make_repo(tmp_path), fake_fetch({"status": "ahead", "ahead_by": 3}, calls))
     assert (status.state, status.behind_by, status.local_commit) == ("behind", 3, LOCAL_SHA)
+    assert status.local_branch == "main"
     assert calls == [f"https://api.github.com/repos/owner/project/compare/{LOCAL_SHA}...main"]
 
 
@@ -89,6 +90,7 @@ def test_missing_repo_is_unknown(tmp_path: Path) -> None:
     status = check_update(tmp_path / ".git", fake_fetch({}, []))
     assert status.state == "unknown"
     assert "no git repository" in status.reason
+    assert (status.local_commit, status.local_branch) == ("", "")
 
 
 def test_github_error_is_unknown(tmp_path: Path) -> None:
@@ -97,6 +99,7 @@ def test_github_error_is_unknown(tmp_path: Path) -> None:
 
     status = check_update(make_repo(tmp_path), failing)
     assert (status.state, status.reason, status.local_commit) == ("unknown", "not found", LOCAL_SHA)
+    assert status.local_branch == "main"
 
 
 def test_checker_caches_until_forced(tmp_path: Path) -> None:

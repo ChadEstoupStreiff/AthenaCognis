@@ -15,6 +15,6 @@ def update_status(force: bool = False) -> dict[str, object]:
     Args:
         force (bool): skip the 10-minute cache
     Returns:
-        dict[str, object]: state, behind_by, local_commit, reason, checked_at
+        dict[str, object]: state, behind_by, local_commit, local_branch, reason, checked_at
     """
     return asdict(UPDATE_CHECKER.status(force))

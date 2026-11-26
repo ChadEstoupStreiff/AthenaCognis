@@ -87,10 +87,13 @@ export class HomePage {
   private readonly now = new Date();
   protected readonly todayLabel = DATE_FORMAT.format(this.now);
   private readonly dailyResource = resource({
-    params: () => ({
-      kind: parseDailyTextKind(this.settings.get('home_daily_text_kind')),
-      language: parseDailyTextLanguage(this.settings.get('home_daily_text_language')),
-    }),
+    params: () =>
+      this.settings.get('home_daily_text_enabled')
+        ? {
+            kind: parseDailyTextKind(this.settings.get('home_daily_text_kind')),
+            language: parseDailyTextLanguage(this.settings.get('home_daily_text_language')),
+          }
+        : undefined,
     loader: ({ params, abortSignal }) => this.loadDaily(params.kind, params.language, abortSignal),
   });
   /** Undefined until the first answer. */

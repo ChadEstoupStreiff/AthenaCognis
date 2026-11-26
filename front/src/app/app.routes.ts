@@ -37,7 +37,7 @@ export const routes: Routes = [
       },
       {
         path: 'notes',
-        title: 'Notes · AthenaCognis',
+        title: 'Post-it · AthenaCognis',
         loadComponent: () => import('./features/notes/notes.page').then((m) => m.NotesPage),
       },
       { path: 'upload', canActivate: [openUploadRedirect], children: [] },

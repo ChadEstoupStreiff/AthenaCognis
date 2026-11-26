@@ -50,7 +50,7 @@ test.describe('core pages (read-only)', () => {
 
   test('notes page lists a day', async ({ page }) => {
     await page.goto('/notes');
-    await expect(page.getByText('Pick a note or start a new one')).toBeVisible();
+    await expect(page.getByText('Pick a post-it or start a new one')).toBeVisible();
   });
 
   test('palette and upload dialog open from the keyboard', async ({ page }) => {
