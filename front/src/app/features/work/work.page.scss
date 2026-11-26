@@ -48,7 +48,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  /* Share the board width between up to 6 columns; more scroll (the add button is extra). */
+  /* Share the board width between the visible columns (setting); more scroll (the add button is extra). */
   flex: 0 0
     calc(
       (100% - (var(--ac-visible-columns, 1) - 1) * var(--ac-column-gap)) /
@@ -160,10 +160,75 @@
   color: var(--p-red-500);
 }
 
-.people {
+.chips,
+.pills {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  min-width: 0;
+}
+
+.heads {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+
+  > * {
+    flex: none;
+  }
+}
+
+.chip-link {
+  display: inline-flex;
+  max-width: 100%;
+  border-radius: 999px;
+  text-decoration: none;
+
+  &:hover,
+  &:focus-visible {
+    outline: 1px solid var(--p-primary-color);
+  }
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 1px 8px 1px 2px;
+  border: 1px solid var(--ac-panel-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--p-text-color);
+  font: inherit;
+  font-size: calc(12px * var(--ac-font-scale));
+  line-height: 20px;
+  text-decoration: none;
+  cursor: pointer;
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &:hover,
+  &:focus-visible {
+    border-color: var(--p-primary-color);
+    color: var(--p-primary-color);
+    outline: none;
+  }
+
+  &.file {
+    padding-left: 8px;
+
+    i {
+      color: var(--ac-muted);
+      font-size: calc(11px * var(--ac-font-scale));
+    }
+  }
 }
 
 .add-column {

@@ -13,7 +13,7 @@ import {
   untracked,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { ConfirmationService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { ColorPickerModule } from 'primeng/colorpicker';
@@ -24,24 +24,29 @@ import { SelectModule } from 'primeng/select';
 import { SelectButtonModule } from 'primeng/selectbutton';
 import { TooltipModule } from 'primeng/tooltip';
 import { TASK_PRIORITIES, type KanbanColumn, type TaskDetail } from '@domain/contracts';
+import { fileKindOf, fileNameOf, FILE_KIND_ICONS } from '@domain/files';
 import { formatLocalDate } from '@domain/time';
 import { CatalogStore } from '../../core/catalog/catalog.store';
+import { PeekService } from '../../core/files/peek.service';
+import { SettingsStore } from '../../core/settings/settings.store';
 import { DataSync } from '../../core/state/data-sync.service';
 import { WorkApi } from '../../core/work/work.api';
 import { ContactAvatarComponent } from '../../shared/ui/contact-avatar.component';
 import { EmptyStateComponent } from '../../shared/ui/empty-state.component';
-import { RelationChipsComponent } from '../../shared/ui/relation-chips.component';
+import { TagChipComponent } from '../../shared/ui/tag-chip.component';
 import { monthWeeks } from '../time/time-model';
 import { TaskDialogComponent } from './task-dialog.component';
 import { MarkdownViewComponent } from '../../shared/ui/markdown-view.component';
 import {
   blockersOf,
+  cardInlineFields,
   columnSwaps,
   dueDay,
   matchesFilters,
   priorityOf,
   type TaskFilters,
   timelineGroups,
+  visibleColumnCount,
 } from './work-model';
 
 /** Views of a board. */
@@ -61,13 +66,13 @@ const VIEWS = [
 ];
 const DEFAULT_COLUMN_COLOR = '#7700a7';
 const CARD_DESCRIPTION_LINES = 8;
-const MAX_VISIBLE_COLUMNS = 6;
 
 /** Work: kanban boards with drag and drop, plus calendar and timeline views of due dates. */
 @Component({
   selector: 'ac-work-page',
   imports: [
     NgTemplateOutlet,
+    RouterLink,
     DragDropModule,
     FormsModule,
     ButtonModule,
@@ -80,7 +85,7 @@ const MAX_VISIBLE_COLUMNS = 6;
     TooltipModule,
     ContactAvatarComponent,
     EmptyStateComponent,
-    RelationChipsComponent,
+    TagChipComponent,
     TaskDialogComponent,
     MarkdownViewComponent,
   ],
@@ -93,7 +98,9 @@ export class WorkPage {
   private readonly sync = inject(DataSync);
   private readonly router = inject(Router);
   private readonly confirm = inject(ConfirmationService);
+  private readonly settings = inject(SettingsStore);
   protected readonly catalog = inject(CatalogStore);
+  protected readonly peek = inject(PeekService);
 
   /** Query parameter: board id. */
   readonly board = input<string | undefined>(undefined);
@@ -105,7 +112,11 @@ export class WorkPage {
   protected readonly views = VIEWS;
   protected readonly descriptionLines = CARD_DESCRIPTION_LINES;
   protected readonly visibleColumns = computed(() =>
-    Math.max(1, Math.min(MAX_VISIBLE_COLUMNS, this.columns().length)),
+    visibleColumnCount(this.settings.get('work_max_visible_columns'), this.columns().length),
+  );
+  /** Relations rendered in full on cards (the others show a count). */
+  protected readonly inline = computed(() =>
+    cardInlineFields(this.settings.values()['work_card_inline']),
   );
   protected readonly priorities = [...TASK_PRIORITIES];
   protected readonly today = formatLocalDate(new Date());
@@ -241,6 +252,26 @@ export class WorkPage {
    */
   protected contactName(id: string): string {
     return this.catalog.contactList().find((contact) => contact.id === id)?.name ?? id;
+  }
+
+  /**
+   * Display name of a file.
+   *
+   * @param path - File path.
+   * @returns Name.
+   */
+  protected fileName(path: string): string {
+    return fileNameOf(path);
+  }
+
+  /**
+   * Icon of a file kind.
+   *
+   * @param path - File path.
+   * @returns PrimeIcons class.
+   */
+  protected fileIcon(path: string): string {
+    return FILE_KIND_ICONS[fileKindOf(path)];
   }
 
   /**

@@ -15,6 +15,7 @@ import { ResearchSectionComponent } from './sections/research.section';
 import { TagsSectionComponent } from './sections/tags.section';
 import { TelemetrySectionComponent } from './sections/telemetry.section';
 import { TimeSectionComponent } from './sections/time.section';
+import { WorkSectionComponent } from './sections/work.section';
 import { SettingsWriter } from './settings-writer';
 
 /** Navigation entry of a section. */
@@ -67,6 +68,11 @@ const SECTIONS: readonly SectionEntry[] = [
     icon: 'pi pi-calendar',
   },
   {
+    id: 'work',
+    label: 'Work',
+    icon: 'pi pi-th-large',
+  },
+  {
     id: 'projects',
     label: 'Projects',
     icon: 'pi pi-briefcase',
@@ -107,6 +113,7 @@ const SECTIONS: readonly SectionEntry[] = [
     TagsSectionComponent,
     TelemetrySectionComponent,
     TimeSectionComponent,
+    WorkSectionComponent,
   ],
   providers: [SettingsWriter],
   templateUrl: './settings.page.html',

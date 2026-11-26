@@ -71,6 +71,7 @@ ask_path() {
 if [ ! -f .env ]; then
   echo "No .env file found - let's create one."
   echo "Press Enter on any question to accept the default shown in [brackets]."
+  echo "!!! IF YOU DON'T KNOW WHAT TO SET, JUST PRESS ENTER TO DO DEFAULT, IT WILL WORK !!!"
   echo
 
   ask PROJECT_NAME "Project name (letters, numbers, - or _)" "athenacognis"

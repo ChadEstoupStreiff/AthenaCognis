@@ -1,11 +1,13 @@
 import type { TaskDetail } from '@domain/contracts';
 import {
   blockersOf,
+  cardInlineFields,
   columnSwaps,
   dependentsOf,
   matchesFilters,
   timelineGroups,
   toUpsert,
+  visibleColumnCount,
 } from './work-model';
 
 const task = (id: string, patch: Partial<TaskDetail> = {}): TaskDetail => ({
@@ -68,5 +70,21 @@ describe('work model', () => {
   it('plans column swaps', () => {
     expect(columnSwaps(0, 2)).toEqual(['right', 'right']);
     expect(columnSwaps(3, 1)).toEqual(['left', 'left']);
+  });
+
+  it('reads the card inline fields', () => {
+    expect([...cardInlineFields(undefined)]).toEqual(['projects', 'tags', 'people']);
+    expect([...cardInlineFields('files')]).toEqual(['projects', 'tags', 'people']);
+    expect([...cardInlineFields(['files', 'bogus', 'tags'])]).toEqual(['tags', 'files']);
+    expect([...cardInlineFields([])]).toEqual([]);
+  });
+
+  it('limits the visible columns', () => {
+    expect(visibleColumnCount(6, 3)).toBe(3);
+    expect(visibleColumnCount(4, 9)).toBe(4);
+    expect(visibleColumnCount(0, 9)).toBe(1);
+    expect(visibleColumnCount(99, 20)).toBe(12);
+    expect(visibleColumnCount(Number.NaN, 9)).toBe(6);
+    expect(visibleColumnCount(6, 0)).toBe(1);
   });
 });

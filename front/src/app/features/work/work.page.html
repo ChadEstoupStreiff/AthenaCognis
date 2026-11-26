@@ -290,15 +290,44 @@
       @if (blockedBy(task).length > 0 && !task.completed) {
         <span class="blocked"><i class="pi pi-lock"></i>{{ blockedBy(task).length }}</span>
       }
-      @if (task.files.length > 0) {
-        <span class="ac-muted"><i class="pi pi-paperclip"></i>{{ task.files.length }}</span>
+      @if (!inline().has('projects') && task.projects.length > 0) {
+        <span class="ac-muted" [pTooltip]="task.projects.join(', ')"
+          ><i class="pi pi-briefcase"></i>{{ task.projects.length }}</span
+        >
+      }
+      @if (!inline().has('tags') && task.tags.length > 0) {
+        <span class="ac-muted" [pTooltip]="task.tags.join(', ')"
+          ><i class="pi pi-tag"></i>{{ task.tags.length }}</span
+        >
+      }
+      @if (!inline().has('files') && task.files.length > 0) {
+        <span class="ac-muted" pTooltip="Files"
+          ><i class="pi pi-paperclip"></i>{{ task.files.length }}</span
+        >
       }
     </div>
-    @if (task.projects.length + task.tags.length > 0) {
-      <ac-relation-chips [projects]="task.projects" [tags]="task.tags" />
+    @if (inline().has('projects') && task.projects.length > 0) {
+      <div class="chips">
+        @for (project of task.projects; track project) {
+          <a
+            class="chip-link"
+            [routerLink]="['/projects', project]"
+            (click)="$event.stopPropagation()"
+            (keydown.enter)="$event.stopPropagation()"
+            ><ac-tag-chip [name]="project" kind="project"
+          /></a>
+        }
+      </div>
     }
-    @if (task.contacts.length > 0) {
-      <div class="people">
+    @if (inline().has('tags') && task.tags.length > 0) {
+      <div class="chips">
+        @for (tag of task.tags; track tag) {
+          <ac-tag-chip [name]="tag" />
+        }
+      </div>
+    }
+    @if (!inline().has('people') && task.contacts.length > 0) {
+      <div class="heads">
         @for (contactId of task.contacts; track contactId) {
           <ac-contact-avatar
             [contactId]="contactId"
@@ -306,6 +335,40 @@
             [size]="22"
             [pTooltip]="contactName(contactId)"
           />
+        }
+      </div>
+    }
+    @if (inline().has('people') && task.contacts.length > 0) {
+      <div class="pills">
+        @for (contactId of task.contacts; track contactId) {
+          <a
+            class="pill"
+            [routerLink]="['/people', contactId]"
+            (click)="$event.stopPropagation()"
+            (keydown.enter)="$event.stopPropagation()"
+          >
+            <ac-contact-avatar
+              [contactId]="contactId"
+              [name]="contactName(contactId)"
+              [size]="18"
+            />
+            <span>{{ contactName(contactId) }}</span>
+          </a>
+        }
+      </div>
+    }
+    @if (inline().has('files') && task.files.length > 0) {
+      <div class="pills">
+        @for (path of task.files; track path) {
+          <button
+            type="button"
+            class="pill file"
+            [pTooltip]="fileName(path)"
+            (click)="$event.stopPropagation(); peek.open(path)"
+            (keydown.enter)="$event.stopPropagation()"
+          >
+            <i [class]="fileIcon(path)" aria-hidden="true"></i><span>{{ fileName(path) }}</span>
+          </button>
         }
       </div>
     }

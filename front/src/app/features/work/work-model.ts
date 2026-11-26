@@ -1,4 +1,5 @@
 import {
+  type SettingValue,
   TASK_PRIORITIES,
   type TaskDetail,
   type TaskSummary,
@@ -24,6 +25,20 @@ export interface TimelineGroup {
   readonly tone: 'overdue' | 'today' | 'soon' | 'week' | 'later';
   readonly tasks: readonly TaskDetail[];
 }
+
+/** Task relations a card can render in full (otherwise a count, full list in the details). */
+export const CARD_FIELDS = ['projects', 'tags', 'people', 'files'] as const;
+
+/** One card relation. */
+export type CardField = (typeof CARD_FIELDS)[number];
+
+/** Relations rendered on cards when the setting is unset. */
+export const DEFAULT_CARD_INLINE: readonly CardField[] = ['projects', 'tags', 'people'];
+
+/** Default and bounds of the visible board columns setting. */
+export const DEFAULT_VISIBLE_COLUMNS = 6;
+export const MIN_VISIBLE_COLUMNS = 1;
+export const MAX_VISIBLE_COLUMNS = 12;
 
 const ISO_DATE_LENGTH = 10;
 const SOON_DAYS = 1;
@@ -188,4 +203,31 @@ export function toUpsert(task: TaskDetail, patch: Partial<TaskUpsert> = {}): Tas
 export function columnSwaps(from: number, to: number): ('left' | 'right')[] {
   const steps = Math.abs(to - from);
   return Array.from({ length: steps }, () => (to > from ? 'right' : 'left'));
+}
+
+/**
+ * Relations rendered in full on cards.
+ *
+ * @param value - Stored `work_card_inline` setting.
+ * @returns Known fields of the list (defaults when not a list).
+ */
+export function cardInlineFields(value: SettingValue | undefined): ReadonlySet<CardField> {
+  if (!Array.isArray(value)) {
+    return new Set(DEFAULT_CARD_INLINE);
+  }
+  return new Set(CARD_FIELDS.filter((field) => value.includes(field)));
+}
+
+/**
+ * Number of columns sharing the board width.
+ *
+ * @param setting - Stored `work_max_visible_columns` setting.
+ * @param columnCount - Columns of the board.
+ * @returns Columns shown at once (the others scroll), at least one.
+ */
+export function visibleColumnCount(setting: number, columnCount: number): number {
+  const limit = Number.isFinite(setting)
+    ? Math.min(MAX_VISIBLE_COLUMNS, Math.max(MIN_VISIBLE_COLUMNS, Math.round(setting)))
+    : DEFAULT_VISIBLE_COLUMNS;
+  return Math.max(MIN_VISIBLE_COLUMNS, Math.min(limit, columnCount));
 }

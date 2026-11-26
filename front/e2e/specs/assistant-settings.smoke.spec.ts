@@ -27,6 +27,7 @@ test.describe('assistant and settings (read-only)', () => {
     await expect(page.getByRole('heading', { name: 'Background jobs' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Ollama' })).toBeAttached();
     await expect(page.getByRole('heading', { name: 'Telemetry' })).toBeAttached();
+    await expect(page.getByRole('heading', { name: 'Task cards' })).toBeAttached();
   });
 
   test('API keys are masked', async ({ page }) => {
