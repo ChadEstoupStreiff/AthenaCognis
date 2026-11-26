@@ -125,7 +125,7 @@ set +o allexport
 
 # --- 3. Launch detached --------------------------------------------------
 echo "Starting AthenaCognis (first run can take a while while images download)..."
-if ! docker compose -p "superdiary_${PROJECT_NAME:-athenacognis}" up -d --build; then
+if ! docker compose -p "athenacognis_${PROJECT_NAME:-athenacognis}" up -d --build; then
   echo
   echo "docker compose failed to start the app. Check the errors above, and"
   echo "double-check your .env file (DATA_PATH, DATABASE_PASSWORD, ports)."
@@ -149,7 +149,7 @@ done
 if [ "$READY" != "1" ]; then
   echo
   echo "AthenaCognis did not come up at $URL in time. Current container status:"
-  docker compose -p "superdiary_${PROJECT_NAME:-athenacognis}" ps
+  docker compose -p "athenacognis_${PROJECT_NAME:-athenacognis}" ps
   echo
   echo "Something is likely wrong - check your .env file (DATA_PATH, DATABASE_PASSWORD,"
   echo "or a port already in use), and see the logs with:"

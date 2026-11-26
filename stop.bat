@@ -20,7 +20,7 @@ if exist ".env" (
     if "%%A"=="PROJECT_NAME" set "PROJECT_NAME=%%B"
   )
 )
-set "PROJECT=superdiary_!PROJECT_NAME!"
+set "PROJECT=athenacognis_!PROJECT_NAME!"
 
 echo Stopping AthenaCognis ^(!PROJECT!^)...
 docker compose -p "!PROJECT!" down

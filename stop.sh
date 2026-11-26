@@ -24,7 +24,7 @@ if [ -f .env ]; then
   source .env
   set +o allexport
 fi
-PROJECT="superdiary_${PROJECT_NAME:-$DEFAULT_PROJECT_NAME}"
+PROJECT="athenacognis_${PROJECT_NAME:-$DEFAULT_PROJECT_NAME}"
 
 echo "Stopping AthenaCognis ($PROJECT)..."
 if ! docker compose -p "$PROJECT" down; then

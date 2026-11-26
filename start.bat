@@ -36,7 +36,7 @@ for /f "usebackq eol=# tokens=1,2 delims==" %%A in (".env") do (
 
 :: --- 3. Launch detached ---------------------------------------------------
 echo Starting AthenaCognis (first run can take a while while images download)...
-docker compose -p "superdiary_!PROJECT_NAME!" up -d --build
+docker compose -p "athenacognis_!PROJECT_NAME!" up -d --build
 if errorlevel 1 (
   echo.
   echo docker compose failed to start the app. Check the errors above, and
@@ -64,7 +64,7 @@ for /l %%i in (1,1,60) do (
 if "!READY!"=="0" (
   echo.
   echo AthenaCognis did not come up at !URL! in time. Current container status:
-  docker compose -p "superdiary_!PROJECT_NAME!" ps
+  docker compose -p "athenacognis_!PROJECT_NAME!" ps
   echo.
   echo Something is likely wrong - check your .env file ^(DATA_PATH, DATABASE_PASSWORD,
   echo or a port already in use^), and see the logs with:
