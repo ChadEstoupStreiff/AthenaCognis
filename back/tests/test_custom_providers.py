@@ -6,7 +6,7 @@ from typing import Self
 import pytest
 
 from controllers.ChatManager import ChatManager
-from controllers.ModelCatalog import Json, list_all
+from controllers.ModelCatalog import Json, ProviderCatalog, list_all, list_custom
 from tools import ai
 from tools.custom_providers import CustomProvider, parse_custom_providers
 
@@ -212,3 +212,199 @@ def test_chat_explains_a_deleted_provider() -> None:
     """
     error = ai.ProviderNotFoundError("This AI provider no longer exists.")
     assert ChatManager._sanitize_error(error) == "This AI provider no longer exists."
+
+
+def models_answer(
+    url: str, headers: Mapping[str, str], params: Mapping[str, str]
+) -> Json:
+    """
+    Answer a model list announcing context windows (vLLM and OpenRouter fields)
+
+    Args:
+        url (str): URL
+        headers (Mapping[str, str]): headers
+        params (Mapping[str, str]): query
+    Returns:
+        Json: body
+    """
+    return {
+        "data": [
+            {"id": "albert-large", "max_model_len": 128000},
+            {"id": "router-model", "context_length": 32768},
+            {"id": "unknown"},
+            {"id": "broken", "max_model_len": "big"},
+        ]
+    }
+
+
+@pytest.mark.parametrize(
+    ("stored", "expected"),
+    [(32000, 32000), ("64000", 64000), (0, None), ("big", None), (True, None), (None, None)],
+)
+def test_parses_the_optional_context_size(stored: object, expected: int | None) -> None:
+    """
+    Keep a positive typed context size only
+
+    Args:
+        stored (object): stored value
+        expected (int | None): parsed value
+    Returns:
+        None
+    """
+    providers = parse_custom_providers([{**ALBERT, "context_tokens": stored}])
+    assert providers[0].context_tokens == expected
+
+
+def test_lists_the_context_windows_announced_by_the_provider() -> None:
+    """
+    Read `max_model_len` or `context_length` of each model
+
+    Returns:
+        None
+    """
+    catalogs = list_custom(parse_custom_providers([ALBERT]), get=models_answer)
+    assert catalogs["custom:albert"].context_tokens == {
+        "albert-large": 128000,
+        "router-model": 32768,
+    }
+
+
+def test_lists_custom_providers_only() -> None:
+    """
+    Ask no built-in provider when only custom lists are wanted
+
+    Returns:
+        None
+    """
+    asked: list[str] = []
+
+    def fake_get(
+        url: str, headers: Mapping[str, str], params: Mapping[str, str]
+    ) -> Json:
+        """
+        Record the URL and answer an empty list
+
+        Args:
+            url (str): URL
+            headers (Mapping[str, str]): headers
+            params (Mapping[str, str]): query
+        Returns:
+            Json: body
+        """
+        asked.append(url)
+        return {"data": []}
+
+    catalogs = list_custom(parse_custom_providers([ALBERT]), get=fake_get)
+    assert list(catalogs) == ["custom:albert"]
+    assert asked == ["https://albert.example/v1/models"]
+    assert list_custom([], get=fake_get) == {}
+
+
+@pytest.fixture
+def albert_settings(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
+    """
+    Route settings to a dict holding Albert, and start with an empty context cache
+
+    Args:
+        monkeypatch (pytest.MonkeyPatch): pytest monkeypatch
+    Returns:
+        dict[str, object]: settings, editable by the test
+    """
+    settings: dict[str, object] = {"custom_providers": [ALBERT]}
+    monkeypatch.setattr(
+        ai, "get_setting", lambda key, default=None: settings.get(key, default)
+    )
+    monkeypatch.setattr(ai, "_custom_context_cache", {})
+    return settings
+
+
+def test_custom_context_uses_the_announced_window_once(
+    monkeypatch: pytest.MonkeyPatch, albert_settings: dict[str, object]
+) -> None:
+    """
+    Read the window from `/models`, fetch it once, and fall back for unknown models
+
+    Args:
+        monkeypatch (pytest.MonkeyPatch): pytest monkeypatch
+        albert_settings (dict[str, object]): settings
+    Returns:
+        None
+    """
+    fetches: list[str] = []
+
+    def fake_list_custom(
+        providers: list[CustomProvider],
+    ) -> dict[str, ProviderCatalog]:
+        """
+        Answer the catalog of the asked provider
+
+        Args:
+            providers (list[CustomProvider]): providers
+        Returns:
+            dict[str, ProviderCatalog]: catalogs
+        """
+        fetches.append(providers[0].id)
+        return list_custom(providers, get=models_answer)
+
+    monkeypatch.setattr(ai, "list_custom", fake_list_custom)
+    assert ai.get_model_context_tokens("custom:albert", "albert-large") == 128000
+    assert ai.get_model_context_tokens("custom:albert", "unknown") == ai.FALLBACK_CONTEXT_TOKENS
+    assert fetches == ["custom:albert"]
+
+
+def test_custom_context_prefers_the_typed_size(
+    monkeypatch: pytest.MonkeyPatch, albert_settings: dict[str, object]
+) -> None:
+    """
+    Use the size typed in the provider form without asking the provider
+
+    Args:
+        monkeypatch (pytest.MonkeyPatch): pytest monkeypatch
+        albert_settings (dict[str, object]): settings
+    Returns:
+        None
+    """
+    albert_settings["custom_providers"] = [{**ALBERT, "context_tokens": 65536}]
+    monkeypatch.setattr(ai, "list_custom", pytest.fail)
+    assert ai.get_model_context_tokens("custom:albert", "albert-large") == 65536
+
+
+def test_custom_context_falls_back_when_the_list_fails(
+    monkeypatch: pytest.MonkeyPatch, albert_settings: dict[str, object]
+) -> None:
+    """
+    Fall back to the default window, and retry the list on the next request
+
+    Args:
+        monkeypatch (pytest.MonkeyPatch): pytest monkeypatch
+        albert_settings (dict[str, object]): settings
+    Returns:
+        None
+    """
+    failed = {"custom:albert": ProviderCatalog(error="Provider timed out")}
+    monkeypatch.setattr(ai, "list_custom", lambda providers: failed)
+    assert ai.get_model_context_tokens("custom:albert", "albert-large") == ai.FALLBACK_CONTEXT_TOKENS
+    assert ai._custom_context_cache == {}
+    assert ai.get_model_context_tokens("custom:gone", "m") == ai.FALLBACK_CONTEXT_TOKENS
+
+
+def test_refuses_a_custom_provider_without_model(
+    albert_settings: dict[str, object],
+) -> None:
+    """
+    Explain the missing model instead of sending an empty one
+
+    Args:
+        albert_settings (dict[str, object]): settings
+    Returns:
+        None
+    """
+    albert_settings.update(chat_type="custom:albert", chat_model="")
+    messages = [{"role": "user", "content": [{"type": "text", "text": "hello"}]}]
+    with pytest.raises(ai.ModelNotSelectedError) as raised:
+        ai.request_chat_llm("chat", messages)
+    assert ChatManager._sanitize_error(raised.value) == (
+        "No model selected for this task. Pick one in AI routing."
+    )
+    albert_settings["chat_model"] = "albert-large"
+    assert ai.read_routing("chat") == ("custom:albert", "albert-large")

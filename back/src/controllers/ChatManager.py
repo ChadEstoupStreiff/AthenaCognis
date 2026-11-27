@@ -8,6 +8,7 @@ from typing import Dict
 from db import ChatMessage, ChatSession, get_db
 from fastapi import HTTPException
 from tools.ai import (
+    ModelNotSelectedError,
     ProviderNotFoundError,
     get_model_context_tokens,
     provider_label,
@@ -147,7 +148,7 @@ class ChatManager:
 
     @staticmethod
     def _sanitize_error(e: Exception) -> str:
-        if isinstance(e, ProviderNotFoundError):
+        if isinstance(e, (ProviderNotFoundError, ModelNotSelectedError)):
             return str(e)
         text = str(e).lower()
         if "timeout" in text or isinstance(e, TimeoutError):

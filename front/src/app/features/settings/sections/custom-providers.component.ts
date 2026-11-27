@@ -12,6 +12,7 @@ import {
   type CustomProvider,
   type CustomProviderDraft,
   draftError,
+  draftOf,
   EMPTY_DRAFT,
   newProviderId,
   parseCustomProviders,
@@ -84,6 +85,15 @@ import { ModelCatalogStore } from '../model-catalog.store';
           autocomplete="off"
           ariaLabel="Provider API key"
         />
+        <input
+          pInputText
+          name="context_tokens"
+          inputmode="numeric"
+          placeholder="Context size in tokens (optional, read from the provider when empty)"
+          [ngModel]="form.context_tokens"
+          (ngModelChange)="change({ context_tokens: $event })"
+          aria-label="Provider context size in tokens"
+        />
         @if (problem(); as message) {
           <small class="ac-muted">{{ message }}</small>
         }
@@ -142,7 +152,7 @@ export class CustomProvidersComponent {
    */
   protected edit(provider: CustomProvider): void {
     this.editedId.set(provider.id);
-    this.draft.set(provider);
+    this.draft.set(draftOf(provider));
   }
 
   /**
@@ -186,7 +196,7 @@ export class CustomProvidersComponent {
   }
 
   /**
-   * Write the list, then reload the model lists.
+   * Write the list, then reload the model lists of the custom providers.
    *
    * @param providers - Providers.
    * @returns True when saved.
@@ -198,7 +208,7 @@ export class CustomProvidersComponent {
       this.notify.error('Could not save the providers.');
       return false;
     }
-    void this.models.reload();
+    void this.models.reloadCustom();
     return true;
   }
 }

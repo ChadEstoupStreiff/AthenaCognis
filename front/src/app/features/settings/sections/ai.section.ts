@@ -134,13 +134,19 @@ export class AiSectionComponent extends SettingsSection {
   }
 
   /**
-   * Change provider and pick its first model.
+   * Change provider and pick its first model (a custom provider's list is loaded first).
    *
    * @param task - Task.
    * @param provider - Provider.
    */
-  protected setProvider(task: AiTask, provider: string): void {
+  protected async setProvider(task: AiTask, provider: string): Promise<void> {
     this.save(`${task.key}_type`, provider, true);
+    if (isCustomProvider(provider)) {
+      await this.models.ensureListed([provider]);
+      if (this.text(`${task.key}_type`) !== provider) {
+        return;
+      }
+    }
     const first = modelsFor(task, provider, this.installed(), this.models.catalog())[0];
     if (first !== undefined || isCustomProvider(provider)) {
       this.save(`${task.key}_model`, first ?? '', true);

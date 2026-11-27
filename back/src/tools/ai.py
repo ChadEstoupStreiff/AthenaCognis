@@ -8,8 +8,10 @@ from typing import Any, Dict, List, Set
 
 import requests
 from bs4 import BeautifulSoup
+from controllers.ModelCatalog import list_custom
 from tools.custom_providers import (
     SETTING_KEY as CUSTOM_PROVIDERS_KEY,
+    CustomProvider,
     is_custom_provider,
     parse_custom_providers,
 )
@@ -85,10 +87,52 @@ DEFAULT_CONTEXT_WINDOWS = {
     "Gemini": 1000000,
     "Claude": 200000,
 }
+# Context window assumed when neither the user nor the provider gives one
+FALLBACK_CONTEXT_TOKENS = 8192
+
+# Context windows announced by each custom provider's model list (fetched once)
+_custom_context_cache: dict[CustomProvider, dict[str, int]] = {}
 
 
 class ProviderNotFoundError(ValueError):
     """Routing points to a custom provider that was deleted or is invalid."""
+
+
+class ModelNotSelectedError(ValueError):
+    """Routing points to a custom provider without a model."""
+
+
+def find_custom_provider(ai_type: str) -> CustomProvider | None:
+    """
+    Find a stored custom provider by its id
+
+    Args:
+        ai_type (str): provider value
+    Returns:
+        CustomProvider | None: provider, or None when missing or invalid
+    """
+    providers = parse_custom_providers(get_setting(CUSTOM_PROVIDERS_KEY, []))
+    return next((p for p in providers if p.id == ai_type), None)
+
+
+def read_routing(setting_prefix: str) -> tuple[str, str]:
+    """
+    Read the provider and model routed for a task
+
+    Args:
+        setting_prefix (str): task prefix of the `<task>_type` / `<task>_model` settings
+    Returns:
+        tuple[str, str]: provider value, model
+    Raises:
+        ModelNotSelectedError: when a custom provider has no model selected
+    """
+    ai_type = get_setting(f"{setting_prefix}_type")
+    model = get_setting(f"{setting_prefix}_model")
+    if is_custom_provider(ai_type) and not str(model or "").strip():
+        raise ModelNotSelectedError(
+            "No model selected for this task. Pick one in AI routing."
+        )
+    return ai_type, model
 
 
 @dataclass(frozen=True)
@@ -126,13 +170,12 @@ def openai_endpoint(ai_type: str) -> Endpoint:
     if ai_type in OPENAI_COMPATIBLE:
         url, key_setting = OPENAI_COMPATIBLE[ai_type]
         return Endpoint(ai_type, url, get_setting(key_setting))
-    providers = parse_custom_providers(get_setting(CUSTOM_PROVIDERS_KEY, []))
-    for provider in providers:
-        if provider.id == ai_type:
-            return Endpoint(provider.name, provider.chat_url, provider.api_key)
-    raise ProviderNotFoundError(
-        "This AI provider no longer exists. Pick another one in AI routing."
-    )
+    provider = find_custom_provider(ai_type)
+    if provider is None:
+        raise ProviderNotFoundError(
+            "This AI provider no longer exists. Pick another one in AI routing."
+        )
+    return Endpoint(provider.name, provider.chat_url, provider.api_key)
 
 
 def provider_label(ai_type: str) -> str:
@@ -146,8 +189,8 @@ def provider_label(ai_type: str) -> str:
     """
     if not is_custom_provider(ai_type):
         return ai_type
-    providers = parse_custom_providers(get_setting(CUSTOM_PROVIDERS_KEY, []))
-    return next((p.name for p in providers if p.id == ai_type), ai_type)
+    provider = find_custom_provider(ai_type)
+    return ai_type if provider is None else provider.name
 
 
 def delta_text(data: dict[str, Any]) -> str:
@@ -166,6 +209,41 @@ def delta_text(data: dict[str, Any]) -> str:
     return delta.get("content") or ""
 
 
+def announced_context_windows(provider: CustomProvider) -> dict[str, int]:
+    """
+    Context windows announced by a custom provider's model list (cached once fetched)
+
+    Args:
+        provider (CustomProvider): provider
+    Returns:
+        dict[str, int]: tokens per model id, empty when the list failed
+    """
+    if provider in _custom_context_cache:
+        return _custom_context_cache[provider]
+    catalog = list_custom([provider])[provider.id]
+    if catalog.error is None:
+        _custom_context_cache[provider] = catalog.context_tokens
+    return catalog.context_tokens
+
+
+def custom_context_tokens(ai_type: str, model: str) -> int:
+    """
+    Context window of a custom provider model
+
+    Args:
+        ai_type (str): custom provider id
+        model (str): model
+    Returns:
+        int: typed size, else size announced by `/models`, else the fallback
+    """
+    provider = find_custom_provider(ai_type)
+    if provider is None:
+        return FALLBACK_CONTEXT_TOKENS
+    if provider.context_tokens is not None:
+        return provider.context_tokens
+    return announced_context_windows(provider).get(model, FALLBACK_CONTEXT_TOKENS)
+
+
 def get_model_context_tokens(ai_type: str, model: str) -> int:
     """Approximate context window size in tokens, used for chat history budgeting."""
     if ai_type == "llama":
@@ -173,7 +251,9 @@ def get_model_context_tokens(ai_type: str, model: str) -> int:
             return parse_token_count(str(get_context_size(model)))
         except Exception:
             return 4096
-    return DEFAULT_CONTEXT_WINDOWS.get(ai_type, 8192)
+    if is_custom_provider(ai_type):
+        return custom_context_tokens(ai_type, model)
+    return DEFAULT_CONTEXT_WINDOWS.get(ai_type, FALLBACK_CONTEXT_TOKENS)
 
 
 def encode_image_b64(image_path: str):
@@ -226,8 +306,7 @@ def request_llm(
     Request a language model (LLM) to process the prompt and return the response.
     Returns a tuple of (AI type, model, response).
     """
-    ai_type = get_setting(f"{setting_prefix}_type")
-    model = get_setting(f"{setting_prefix}_model")
+    ai_type, model = read_routing(setting_prefix)
 
     if input_text is not None:
         prompt = prompt.replace("{input}", input_text)
@@ -418,8 +497,7 @@ def request_chat_llm(
     ]}]
     Returns a tuple of (AI type, model, response).
     """
-    ai_type = get_setting(f"{setting_prefix}_type")
-    model = get_setting(f"{setting_prefix}_model")
+    ai_type, model = read_routing(setting_prefix)
     timeout = get_setting("chat_llm_timeout_seconds", 300)
     messages = apply_to_messages(style_instruction(), messages)
 
@@ -660,8 +738,7 @@ def request_vision_llm(
     Request a vision-capable LLM to analyze an image.
     Returns a tuple of (AI type, model, response).
     """
-    ai_type = get_setting(f"{setting_prefix}_type")
-    model = get_setting(f"{setting_prefix}_model")
+    ai_type, model = read_routing(setting_prefix)
 
     mime_type, image_data = encode_image_b64(image_path)
 

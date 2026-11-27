@@ -56,6 +56,8 @@ NON_CHAT_MODEL_TYPES = (
     "text-classification",
     "text-embeddings-inference",
 )
+# Context window fields of OpenAI-compatible model lists (vLLM, OpenRouter)
+CONTEXT_WINDOW_KEYS = ("max_model_len", "context_length")
 
 Json = Mapping[str, object]
 JsonGetter = Callable[[str, Mapping[str, str], Mapping[str, str]], Json]
@@ -70,6 +72,7 @@ class ProviderCatalog:
     text: list[str] = field(default_factory=list)
     vision: list[str] = field(default_factory=list)
     transcription: list[str] = field(default_factory=list)
+    context_tokens: dict[str, int] = field(default_factory=dict)
     error: str | None = None
 
 
@@ -328,6 +331,37 @@ def fetch_deepseek(api_key: str, get: JsonGetter) -> ProviderCatalog:
     )
 
 
+def context_window(item: Json) -> int | None:
+    """
+    Read the context window a model list announces for one model
+
+    Args:
+        item (Json): model
+    Returns:
+        int | None: tokens, or None when not announced
+    """
+    for key in CONTEXT_WINDOW_KEYS:
+        value = item.get(key)
+        if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+            return value
+    return None
+
+
+def context_windows(items: Iterable[Json]) -> dict[str, int]:
+    """
+    Context window per model id, for models that announce one
+
+    Args:
+        items (Iterable[Json]): models
+    Returns:
+        dict[str, int]: tokens per model id
+    """
+    windows = {str(item.get("id", "")).strip(): context_window(item) for item in items}
+    return {
+        model_id: tokens for model_id, tokens in windows.items() if model_id and tokens
+    }
+
+
 def custom_spec(provider: CustomProvider) -> ProviderSpec:
     """
     Describe how to list the models of a user-defined provider
@@ -349,8 +383,10 @@ def custom_spec(provider: CustomProvider) -> ProviderSpec:
             ProviderCatalog: models
         """
         models = records(get(provider.models_url, bearer(api_key), {}), "data")
-        chat = (m for m in models if m.get("type") not in NON_CHAT_MODEL_TYPES)
-        return ProviderCatalog(text=sorted(unique_ids(chat)))
+        chat = [m for m in models if m.get("type") not in NON_CHAT_MODEL_TYPES]
+        return ProviderCatalog(
+            text=sorted(unique_ids(chat)), context_tokens=context_windows(chat)
+        )
 
     return ProviderSpec(provider.id, fetch_custom)
 
@@ -407,15 +443,49 @@ def list_all(
     providers = {**PROVIDERS, **{p.id: custom_spec(p) for p in custom_providers}}
     keys = {**api_keys, **{p.id: p.api_key for p in custom_providers}}
     specs = {spec.key_setting: spec for spec in providers.values()}
+    by_setting = list_parallel(specs, keys, get)
+    return {
+        provider: by_setting[spec.key_setting] for provider, spec in providers.items()
+    }
+
+
+def list_custom(
+    custom_providers: Sequence[CustomProvider], get: JsonGetter = http_get_json
+) -> dict[str, ProviderCatalog]:
+    """
+    Model lists of the user-defined providers only, fetched in parallel
+
+    Args:
+        custom_providers (Sequence[CustomProvider]): user-defined providers
+        get (JsonGetter): HTTP getter (injected for tests)
+    Returns:
+        dict[str, ProviderCatalog]: catalog per provider id
+    """
+    specs = {p.id: custom_spec(p) for p in custom_providers}
+    return list_parallel(specs, {p.id: p.api_key for p in custom_providers}, get)
+
+
+def list_parallel(
+    specs: Mapping[str, ProviderSpec], keys: Mapping[str, str], get: JsonGetter
+) -> dict[str, ProviderCatalog]:
+    """
+    Run one model list per key setting in parallel
+
+    Args:
+        specs (Mapping[str, ProviderSpec]): spec per key setting
+        keys (Mapping[str, str]): API key per key setting
+        get (JsonGetter): HTTP getter
+    Returns:
+        dict[str, ProviderCatalog]: catalog per key setting
+    """
+    if not specs:
+        return {}
     with ThreadPoolExecutor(max_workers=len(specs)) as pool:
         futures = {
             setting: pool.submit(list_one, spec, keys.get(setting, ""), get)
             for setting, spec in specs.items()
         }
-        by_setting = {setting: future.result() for setting, future in futures.items()}
-    return {
-        provider: by_setting[spec.key_setting] for provider, spec in providers.items()
-    }
+        return {setting: future.result() for setting, future in futures.items()}
 
 
 def describe_error(error: Exception) -> str:

@@ -4,6 +4,7 @@ export const CUSTOM_PROVIDERS_KEY = 'custom_providers';
 const ID_PREFIX = 'custom:';
 const BASE_URL_PATTERN = /^https?:\/\/[^\s/]+\S*$/i;
 const ID_RADIX = 36;
+const WHOLE_NUMBER_PATTERN = /^\d+$/;
 
 /** One OpenAI-compatible provider, stored as is. */
 export interface CustomProvider {
@@ -11,12 +12,52 @@ export interface CustomProvider {
   readonly name: string;
   readonly base_url: string;
   readonly api_key: string;
+  /** Context window in tokens typed by the user (absent = read from the provider). */
+  readonly context_tokens?: number;
 }
 
 /** Fields the user types. */
-export type CustomProviderDraft = Omit<CustomProvider, 'id'>;
+export interface CustomProviderDraft {
+  readonly name: string;
+  readonly base_url: string;
+  readonly api_key: string;
+  /** Context window as typed, empty when unknown. */
+  readonly context_tokens: string;
+}
 
-export const EMPTY_DRAFT: CustomProviderDraft = { name: '', base_url: '', api_key: '' };
+export const EMPTY_DRAFT: CustomProviderDraft = {
+  name: '',
+  base_url: '',
+  api_key: '',
+  context_tokens: '',
+};
+
+/**
+ * Form fields of a stored provider.
+ *
+ * @param provider - Provider.
+ * @returns Typed fields.
+ */
+export function draftOf(provider: CustomProvider): CustomProviderDraft {
+  return {
+    name: provider.name,
+    base_url: provider.base_url,
+    api_key: provider.api_key,
+    context_tokens: provider.context_tokens?.toString() ?? '',
+  };
+}
+
+/**
+ * Context window of a draft.
+ *
+ * @param draft - Typed fields.
+ * @returns Positive token count, undefined when empty or invalid.
+ */
+function contextTokensOf(draft: CustomProviderDraft): number | undefined {
+  const typed = draft.context_tokens.trim();
+  const tokens = WHOLE_NUMBER_PATTERN.test(typed) ? Number(typed) : 0;
+  return tokens > 0 ? tokens : undefined;
+}
 
 /**
  * Whether a provider value names a user-defined provider.
@@ -62,9 +103,12 @@ export function draftError(draft: CustomProviderDraft): string | null {
   if (draft.name.trim() === '' || draft.api_key.trim() === '') {
     return 'Name, base URL and API key are required.';
   }
-  return BASE_URL_PATTERN.test(draft.base_url.trim())
+  if (!BASE_URL_PATTERN.test(draft.base_url.trim())) {
+    return 'The base URL must start with http:// or https://.';
+  }
+  return draft.context_tokens.trim() === '' || contextTokensOf(draft) !== undefined
     ? null
-    : 'The base URL must start with http:// or https://.';
+    : 'The context size must be a positive whole number of tokens.';
 }
 
 /**
@@ -95,11 +139,13 @@ export function upsertProvider(
   id: string,
   draft: CustomProviderDraft,
 ): CustomProvider[] {
+  const contextTokens = contextTokensOf(draft);
   const saved: CustomProvider = {
     id,
     name: draft.name.trim(),
     base_url: draft.base_url.trim().replace(/\/+$/, ''),
     api_key: draft.api_key.trim(),
+    ...(contextTokens === undefined ? {} : { context_tokens: contextTokens }),
   };
   return providers.some((provider) => provider.id === id)
     ? providers.map((provider) => (provider.id === id ? saved : provider))

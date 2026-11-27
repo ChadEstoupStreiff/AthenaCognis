@@ -7,6 +7,7 @@ SETTING_KEY = "custom_providers"
 ID_PREFIX = "custom:"
 ALLOWED_SCHEMES = ("http://", "https://")
 REQUIRED_FIELDS = ("id", "name", "base_url", "api_key")
+CONTEXT_FIELD = "context_tokens"
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,7 @@ class CustomProvider:
     name: str
     base_url: str
     api_key: str
+    context_tokens: int | None = None
 
     @property
     def chat_url(self) -> str:
@@ -57,6 +59,24 @@ def is_custom_provider(provider_id: object) -> bool:
     return isinstance(provider_id, str) and provider_id.startswith(ID_PREFIX)
 
 
+def parse_context_tokens(value: object) -> int | None:
+    """
+    Read the optional context window typed by the user
+
+    Args:
+        value (object): stored value
+    Returns:
+        int | None: positive token count, or None when unset or invalid
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        return None
+    try:
+        tokens = int(value)
+    except ValueError:
+        return None
+    return tokens if tokens > 0 else None
+
+
 def parse_provider(entry: object) -> CustomProvider | None:
     """
     Validate one stored provider
@@ -74,7 +94,9 @@ def parse_provider(entry: object) -> CustomProvider | None:
         return None
     if not values["base_url"].lower().startswith(ALLOWED_SCHEMES):
         return None
-    return CustomProvider(**values)
+    return CustomProvider(
+        **values, context_tokens=parse_context_tokens(entry.get(CONTEXT_FIELD))
+    )
 
 
 def parse_custom_providers(raw: object) -> list[CustomProvider]:
