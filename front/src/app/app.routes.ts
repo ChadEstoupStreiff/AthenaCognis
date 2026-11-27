@@ -48,7 +48,7 @@ export const routes: Routes = [
       },
       {
         path: 'work',
-        title: 'Work · AthenaCognis',
+        title: 'Boards · AthenaCognis',
         loadComponent: () => import('./features/work/work.page').then((m) => m.WorkPage),
       },
       {

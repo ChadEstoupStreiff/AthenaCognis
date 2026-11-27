@@ -8,11 +8,15 @@ from pydantic import BaseModel, Field
 
 from controllers.activity.base import to_naive_utc
 from controllers.activity.generation import (
+    ACTIVITY_PROJECT,
+    CLOCK_FORMAT,
     DAY_FORMAT,
     SPAN_TITLES,
+    SUMMARY_ONLY,
     Basis,
     GenerationRequest,
     GenerationRequestError,
+    Output,
     Span,
     job_key,
     note_path,
@@ -29,8 +33,9 @@ from controllers.activity.off_days import (
     supported_countries,
 )
 from controllers.ActivityGenerationManager import ActivityGenerationManager
+from controllers.calendar_links import links_of, record_ids_in_project
 from controllers.JobManager import JobAlreadyQueuedError
-from db import ActivityGenerationTask, get_db
+from db import ActivityGenerationTask, CalendarRecord, get_db
 from views.settings import get_setting
 
 HTTP_BAD_REQUEST = 400
@@ -53,6 +58,8 @@ class GenerationBody(BaseModel):
     sources: list[str] = Field(default_factory=list)
     instruction: str = ""
     fill_daily: bool = False
+    # Time entries ("time") for daily requests only.
+    outputs: list[Output] = Field(default_factory=lambda: list(SUMMARY_ONLY))
 
 
 def task_label(file: str) -> str:
@@ -117,6 +124,45 @@ def latest_task(file: str) -> JsonDict | None:
         }
 
 
+def generated_records(date: datetime) -> list[JsonDict]:
+    """
+    Generated time entries of a day, by start time
+
+    Args:
+        date (datetime): local midnight
+    Returns:
+        list[JsonDict]: id, start ("HH:MM" or None), hours, title, description,
+            projects (Activity left out), tags
+    """
+    with get_db() as db:
+        records = (
+            db.query(CalendarRecord)
+            .filter(
+                CalendarRecord.id.in_(record_ids_in_project(db, ACTIVITY_PROJECT)),
+                CalendarRecord.date == date,
+            )
+            .order_by(CalendarRecord.start_time)
+            .all()
+        )
+        links = links_of(db, records)
+        return [
+            {
+                "id": record.id,
+                "start": record.start_time.strftime(CLOCK_FORMAT)
+                if record.start_time
+                else None,
+                "hours": record.time_spent,
+                "title": record.title,
+                "description": record.description or "",
+                "projects": [
+                    name for name in links[record.id].projects if name != ACTIVITY_PROJECT
+                ],
+                "tags": list(links[record.id].tags),
+            }
+            for record in records
+        ]
+
+
 def generation_request(body: GenerationBody) -> GenerationRequest:
     """
     Validate a generation request body
@@ -139,6 +185,7 @@ def generation_request(body: GenerationBody) -> GenerationRequest:
             sources=tuple(body.sources),
             instruction=body.instruction,
             fill_daily=body.fill_daily,
+            outputs=tuple(body.outputs),
         )
     except GenerationRequestError as error:
         raise HTTPException(HTTP_BAD_REQUEST, str(error)) from error
@@ -272,21 +319,28 @@ def list_tasks() -> list[JsonDict]:
 @router.get("/{span}/{day}")
 def read_generation(span: Span, day: str) -> JsonDict:
     """
-    What was generated for a period: latest run and note
+    What was generated for a period: latest run, note and (daily) time entries
 
     Args:
         span (Span): time span
         day (str): first day, "YYYY-MM-DD"
     Returns:
-        JsonDict: span, day, task (or None), note (path and content, or None)
+        JsonDict: span, day, task (or None), note (path and content, or None),
+            records (time entries, empty for weekly and monthly)
     Raises:
         HTTPException: 400 malformed day
     """
-    parse_day(day)
+    date = parse_day(day)
     path = note_path(ActivityGenerationManager.root, span, day)
     note = (
         {"path": str(path), "content": path.read_text(encoding="utf-8")}
         if path.is_file()
         else None
     )
-    return {"span": span, "day": day, "task": latest_task(job_key(span, day)), "note": note}
+    return {
+        "span": span,
+        "day": day,
+        "task": latest_task(job_key(span, day)),
+        "note": note,
+        "records": generated_records(date) if span == "daily" else [],
+    }

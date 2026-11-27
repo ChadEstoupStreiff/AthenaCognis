@@ -36,6 +36,7 @@ describe('generationRequest', () => {
     fillWithDaily: true,
     sources: ['github'],
     instruction: ' Brief ',
+    outputs: ['summary', 'time'],
   } as const;
 
   it('sends the local day as instants with its UTC offset', () => {
@@ -49,6 +50,7 @@ describe('generationRequest', () => {
     expect(request.sources).toEqual(['github']);
     expect(request.instruction).toBe('Brief');
     expect(request.fill_daily).toBe(false);
+    expect(request.outputs).toEqual(['summary', 'time']);
   });
 
   it('drops sources from generated contexts', () => {
@@ -57,6 +59,7 @@ describe('generationRequest', () => {
     expect(request.day).toBe('2026-11-01');
     expect(request.sources).toEqual([]);
     expect(request.fill_daily).toBe(true);
+    expect(request.outputs).toEqual(['summary']);
   });
 });
 

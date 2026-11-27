@@ -28,13 +28,13 @@ const MODE_OPTIONS = [
   { value: 'details', label: 'In details' },
 ];
 
-/** Work page: board width and what task cards show. */
+/** Boards page: board width and what task cards show. */
 @Component({
   selector: 'ac-work-section',
   imports: [FormsModule, InputNumberModule, SelectButtonModule],
   template: `
     <section class="group" id="work">
-      <h2>Work</h2>
+      <h2>Boards</h2>
       <div class="row">
         <div class="label">
           <strong>Visible columns</strong

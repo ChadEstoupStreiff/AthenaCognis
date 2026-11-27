@@ -1,4 +1,4 @@
-"""Activity generation daemon: daily, weekly and monthly summary notes."""
+"""Activity generation daemon: daily, weekly and monthly summary notes, daily time entries."""
 
 import logging
 from collections.abc import Callable
@@ -22,6 +22,7 @@ from controllers.activity.generation import (
     ACTIVITY_PROJECT,
     ACTIVITY_PROJECT_COLOR,
     ACTIVITY_PROJECT_DESCRIPTION,
+    DAY_FORMAT,
     GenerationRequest,
     GenerationRequestError,
     SourceSection,
@@ -29,7 +30,6 @@ from controllers.activity.generation import (
     has_activity,
     note_markdown,
     note_path,
-    strip_fence,
 )
 from controllers.activity.generation_context import generated_sections
 from controllers.activity.generation_prompt import (
@@ -38,8 +38,10 @@ from controllers.activity.generation_prompt import (
     PromptStats,
     build_prompt,
     part_stats,
+    split_answer,
 )
 from controllers.activity.generation_schedule import GenerationScheduler, SchedulerHooks
+from controllers.activity.generation_time import Catalog, TimeEntry, parse_time_entries
 from controllers.activity.registry import (
     IMPLEMENTED,
     IncomingSourceError,
@@ -47,12 +49,15 @@ from controllers.activity.registry import (
     get_source,
 )
 from controllers.activity.settings_io import write_setting
+from controllers.calendar_links import record_ids_in_project, set_record_links
 from controllers.JobManager import JobManager
 from db import (
     ActivityGenerationTask,
+    CalendarRecord,
     JobTask,
     Project,
     ProjectFile,
+    Tag,
     TaskStateEnum,
     get_db,
 )
@@ -63,6 +68,8 @@ SETTING_PREFIX = "activity"
 FALLBACK_SETTING_PREFIX = "summarization"
 NO_ACTIVITY = "No activity in the picked data sources."
 NO_SUMMARY = "No generated summary in this period."
+# Clock-only datetimes of time entries use this date (see views/calendar.py).
+CLOCK_DATE = datetime(1900, 1, 1)
 SOURCE_ERRORS = (
     SourceUnavailableError,
     InvalidSettingError,
@@ -105,11 +112,13 @@ def ask_activity_llm(prompt: str) -> str:
 
 @dataclass(frozen=True)
 class PreparedPrompt:
-    """Prompt of a request and whether its context holds anything."""
+    """Prompt of a request with what reading its answer needs."""
 
     prompt: Prompt
     # Why nothing can be summarized, "" when the context holds something.
     empty_reason: str
+    # Projects and tags allowed in time entries (empty without time entries).
+    catalog: Catalog
 
 
 def read_context(
@@ -130,22 +139,24 @@ def read_context(
     return [read_section(key, window) for key in request.sources], []
 
 
-def prepare_prompt(request: GenerationRequest, root: Path) -> PreparedPrompt:
+def prepare_prompt(db: Session, request: GenerationRequest, root: Path) -> PreparedPrompt:
     """
     Read the context of a request and build its single prompt
 
     Args:
+        db (Session): session
         request (GenerationRequest): request
         root (Path): shared root holding generated notes
     Returns:
-        PreparedPrompt: prompt, and why it is empty ("" when not)
+        PreparedPrompt: prompt, why it is empty ("" when not), catalog
     """
     sources, summaries = read_context(request, root)
     if request.basis == "sources":
         reason = "" if has_activity(sources) else NO_ACTIVITY
     else:
         reason = "" if summaries else NO_SUMMARY
-    return PreparedPrompt(build_prompt(request, sources, summaries), reason)
+    catalog = load_catalog(db) if "time" in request.outputs else Catalog()
+    return PreparedPrompt(build_prompt(request, sources, summaries, catalog), reason, catalog)
 
 
 def routed_model() -> tuple[str, int]:
@@ -205,6 +216,58 @@ def read_section(key: str, window: TimeRange) -> SourceSection:
     return SourceSection(label, source.instruction(), tuple(activities))
 
 
+def load_catalog(db: Session) -> Catalog:
+    """
+    Projects (but Activity) and tags the LLM may give to time entries
+
+    Args:
+        db (Session): session
+    Returns:
+        Catalog: names (and project descriptions), sorted
+    """
+    projects = db.query(Project).order_by(Project.name).all()
+    tags = db.query(Tag).order_by(Tag.name).all()
+    return Catalog(
+        tuple(
+            (str(project.name), str(project.description or ""))
+            for project in projects
+            if project.name != ACTIVITY_PROJECT
+        ),
+        tuple(str(tag.name) for tag in tags),
+    )
+
+
+def replace_time_entries(db: Session, day: str, entries: list[TimeEntry]) -> None:
+    """
+    Replace the generated time entries of a day (those linked to the Activity project)
+
+    Args:
+        db (Session): session
+        day (str): "YYYY-MM-DD"
+        entries (list[TimeEntry]): new entries, with their projects and tags
+    Returns:
+        None
+    """
+    date = datetime.strptime(day, DAY_FORMAT)
+    generated = record_ids_in_project(db, ACTIVITY_PROJECT)
+    for record in db.query(CalendarRecord).filter(
+        CalendarRecord.id.in_(generated), CalendarRecord.date == date
+    ):
+        db.delete(record)
+    db.flush()
+    for entry in entries:
+        record = CalendarRecord(
+            date=date,
+            start_time=datetime.combine(CLOCK_DATE, entry.start),
+            time_spent=entry.hours,
+            title=entry.title,
+            description=entry.description,
+        )
+        db.add(record)
+        db.flush()
+        set_record_links(db, record, [ACTIVITY_PROJECT, *entry.projects], entry.tags)
+
+
 def link_to_project(db: Session, path: Path) -> None:
     """
     Add a file to the Activity project when not already in it
@@ -221,7 +284,7 @@ def link_to_project(db: Session, path: Path) -> None:
 
 
 class ActivityGenerationManager(JobManager):
-    """Generate activity summaries (`file` = "<span>/<first day>")."""
+    """Generate activity summaries and daily time entries (`file` = "<span>/<first day>")."""
 
     name = "ACTIVITY"
     task_model = ActivityGenerationTask
@@ -286,7 +349,7 @@ class ActivityGenerationManager(JobManager):
     @classmethod
     def process(cls, file: str, db: Session) -> str:
         """
-        Generate the summary note of a period
+        Generate the requested outputs of a period: summary note, daily time entries
 
         Args:
             file (str): job key
@@ -295,18 +358,30 @@ class ActivityGenerationManager(JobManager):
             str: what was generated
         Raises:
             GenerationRequestError: bad request, or nothing to summarize
-            ValueError: empty answer
+            ValueError: answer misses a section, empty summary, or time entries not JSON
+            TypeError: time entries answer is not a JSON array
         """
         request = cls.running_request(db, file)
-        prepared = prepare_prompt(request, cls.root)
+        prepared = prepare_prompt(db, request, cls.root)
         if prepared.empty_reason:
             raise GenerationRequestError(prepared.empty_reason)
-        summary = strip_fence(cls.llm(prepared.prompt.text()))
-        if not summary:
+        # One call for every output; read it all first so a bad answer writes nothing.
+        answers = split_answer(cls.llm(prepared.prompt.text()), request.outputs)
+        summary = answers.get("summary")
+        if summary is not None and not summary:
             raise ValueError("The model answered an empty summary.")
+        entries = (
+            parse_time_entries(answers["time"], prepared.catalog) if "time" in answers else None
+        )
         ensure_activity_project(db)
-        cls.write_note(db, request, summary)
-        return "Generated summary note."
+        done: list[str] = []
+        if summary is not None:
+            cls.write_note(db, request, summary)
+            done.append("summary note")
+        if entries is not None:
+            replace_time_entries(db, request.day, entries)
+            done.append(f"{len(entries)} time entries")
+        return f"Generated {' and '.join(done)}."
 
     @classmethod
     def dry_run(cls, request: GenerationRequest) -> DryRun:
@@ -318,7 +393,8 @@ class ActivityGenerationManager(JobManager):
         Returns:
             DryRun: prompt, its size overall and per block, routed model
         """
-        prompt = prepare_prompt(request, cls.root).prompt
+        with get_db() as db:
+            prompt = prepare_prompt(db, request, cls.root).prompt
         text = prompt.text()
         model, context_tokens = routed_model()
         return DryRun(

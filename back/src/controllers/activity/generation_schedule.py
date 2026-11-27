@@ -13,11 +13,14 @@ from sqlalchemy.exc import SQLAlchemyError
 from controllers.activity.generation import (
     BASES,
     DAY_FORMAT,
+    OUTPUTS,
     SPANS,
+    SUMMARY_ONLY,
     WEEK_DAYS,
     Basis,
     GenerationRequest,
     GenerationRequestError,
+    Output,
     Span,
     job_key,
 )
@@ -67,6 +70,8 @@ class SpanSchedule:
     # Data source keys; empty = every enabled source.
     sources: tuple[str, ...]
     instruction: str
+    # What to generate; time entries for the daily schedule only.
+    outputs: tuple[Output, ...]
     # Key of the last period queued by the scheduler, "" when never.
     last: str
 
@@ -180,6 +185,23 @@ def read_text(value: object) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
+def read_outputs(value: object, span: Span) -> tuple[Output, ...]:
+    """
+    Outputs stored for a span
+
+    Args:
+        value (object): stored value
+        span (Span): time span
+    Returns:
+        tuple[Output, ...]: daily: stored outputs (both when unset); others: summary only
+    """
+    if span != "daily":
+        return SUMMARY_ONLY
+    if not isinstance(value, list):
+        return OUTPUTS
+    return tuple(output for output in OUTPUTS if output in read_names(value))
+
+
 def read_schedule(read: SettingReader, span: Span) -> SpanSchedule:
     """
     Read the schedule settings of a span
@@ -200,6 +222,7 @@ def read_schedule(read: SettingReader, span: Span) -> SpanSchedule:
         fill_daily=read(span_key(span, "fill_daily")) is True,
         sources=read_names(read(span_key(span, "sources"))),
         instruction=read_text(read(span_key(span, "instruction"))),
+        outputs=read_outputs(read(span_key(span, "outputs")), span),
         last=read_text(read(span_key(span, "last"))),
     )
 
@@ -285,7 +308,7 @@ def period_request(
     Returns:
         GenerationRequest: request with the window in naive UTC
     Raises:
-        GenerationRequestError: data sources context without source
+        GenerationRequestError: data sources context without source, or no output
     """
     offset = period.start.utcoffset() or timedelta()
     return GenerationRequest(
@@ -298,6 +321,7 @@ def period_request(
         sources=sources if schedule.basis == "sources" else (),
         instruction=schedule.instruction,
         fill_daily=schedule.fill_daily,
+        outputs=schedule.outputs,
     )
 
 

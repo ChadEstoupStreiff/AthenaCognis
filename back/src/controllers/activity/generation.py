@@ -1,4 +1,7 @@
-"""Activity generation: request, LLM context and note of a daily, weekly or monthly summary."""
+"""Activity generation: request, LLM context and note of a daily, weekly or monthly summary.
+
+Daily requests may also ask time entries (see generation_time.py).
+"""
 
 import json
 import re
@@ -9,10 +12,10 @@ from typing import Literal, cast
 
 from controllers.activity.base import Activity
 
-# Non-editable project holding every generated note.
+# Non-editable project holding every generated note and time entry.
 ACTIVITY_PROJECT = "⚡ Activity"
 ACTIVITY_PROJECT_COLOR = "#F5B700"
-ACTIVITY_PROJECT_DESCRIPTION = "Notes generated from the Activity page."
+ACTIVITY_PROJECT_DESCRIPTION = "Notes and time entries generated from the Activity page."
 NOTES_FOLDER = "notes"
 DAY_FORMAT = "%Y-%m-%d"
 MONTH_FORMAT = "%Y-%m"
@@ -44,10 +47,14 @@ MAX_WINDOWS: dict[Span, timedelta] = {
     "monthly": timedelta(days=32),
 }
 SPAN_TITLES: dict[Span, str] = {"daily": "Daily", "weekly": "Weekly", "monthly": "Monthly"}
+# What a generation produces; time entries for daily requests only.
+Output = Literal["summary", "time"]
+OUTPUTS: tuple[Output, ...] = ("summary", "time")
+SUMMARY_ONLY: tuple[Output, ...] = ("summary",)
 
 
 class GenerationRequestError(ValueError):
-    """Generation request is malformed (bad span, day, window, offset, context)."""
+    """Generation request is malformed (bad span, day, window, offset, context, outputs)."""
 
 
 def parse_day(day: str) -> date:
@@ -86,6 +93,8 @@ class GenerationRequest:
     instruction: str = ""
     # Monthly from weekly: days no weekly summary covers use their daily summary.
     fill_daily: bool = False
+    # What to generate; "time" (time entries) for daily requests only.
+    outputs: tuple[Output, ...] = SUMMARY_ONLY
 
     def __post_init__(self) -> None:
         """
@@ -94,7 +103,8 @@ class GenerationRequest:
         Returns:
             None
         Raises:
-            GenerationRequestError: bad span, day, window, offset, context or instruction
+            GenerationRequestError: bad span, day, window, offset, context, instruction
+                or outputs
         """
         if self.span not in SPANS:
             raise GenerationRequestError(f"Bad span '{self.span}'.")
@@ -113,6 +123,10 @@ class GenerationRequest:
             raise GenerationRequestError(
                 f"Custom instruction exceeds {MAX_INSTRUCTION_LENGTH} characters."
             )
+        if not self.outputs or any(item not in OUTPUTS for item in self.outputs):
+            raise GenerationRequestError("Pick a summary, time entries or both.")
+        if self.span != "daily" and "time" in self.outputs:
+            raise GenerationRequestError("Time entries are generated for days only.")
 
     @property
     def key(self) -> str:
@@ -169,6 +183,7 @@ class GenerationRequest:
                 sources=tuple(str(item) for item in data.get("sources", [])),
                 instruction=str(data.get("instruction", "")),
                 fill_daily=data.get("fill_daily") is True,
+                outputs=tuple(cast(Output, item) for item in data.get("outputs", SUMMARY_ONLY)),
             )
         except (KeyError, TypeError, ValueError) as error:
             raise GenerationRequestError(f"Bad stored request: {error}") from error

@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, time
 from pathlib import Path
 
 import pytest
@@ -21,9 +21,16 @@ from controllers.activity.generation import (
     period_days,
 )
 from controllers.activity.generation_context import generated_sections
-from controllers.activity.generation_prompt import build_prompt, part_stats
+from controllers.activity.generation_prompt import (
+    OUTPUT_MARKERS,
+    build_prompt,
+    part_stats,
+    split_answer,
+)
+from controllers.activity.generation_time import Catalog, parse_time_entries
 from controllers.ActivityGenerationManager import ActivityGenerationManager
-from db import Project, ProjectFile, TaskStateEnum
+from controllers.calendar_links import links_of
+from db import CalendarRecord, Project, ProjectFile, Tag, TaskStateEnum
 
 DAY = "2026-11-19"
 # Local day in UTC+1: 2026-11-18 23:00 → 2026-11-19 23:00 UTC.
@@ -33,19 +40,41 @@ OFFSET = 60
 WEEK = "2026-11-16"
 MONTH = "2026-11-01"
 SUMMARY_ANSWER = "```markdown\nCoded the **Activity** page.\n```"
+TIME_ANSWER = """```json
+[{"start": "09:00", "end": "10:30", "title": "Mail triage", "description": "Inbox",
+  "projects": ["alpha", "Unknown"], "tags": ["Deep", "deep"]},
+ {"start": "10:00", "end": "11:00", "title": "Overlap", "description": ""},
+ {"start": "14:00", "end": "13:00", "title": "Backwards", "description": ""},
+ {"start": "14:00", "end": "15:15", "title": "Activity page", "description": "Code"}]
+```"""
+SUMMARY_MARKER = OUTPUT_MARKERS["summary"]
+TIME_MARKER = OUTPUT_MARKERS["time"]
 INSTRUCTION = "Write in French."
+BOTH = ("summary", "time")
+CATALOG = Catalog((("Alpha", "Main work"), ("Beta", "")), ("Deep",))
 
 
-def request(instruction: str = "") -> GenerationRequest:
+def request(instruction: str = "", outputs: tuple[str, ...] = ("summary",)) -> GenerationRequest:
     """
     Build a valid daily request
 
     Args:
         instruction (str): custom instruction
+        outputs (tuple[str, ...]): outputs to generate
     Returns:
         GenerationRequest: request
     """
-    return GenerationRequest("daily", DAY, START, END, OFFSET, "sources", ("github",), instruction)
+    return GenerationRequest(
+        "daily",
+        DAY,
+        START,
+        END,
+        OFFSET,
+        "sources",
+        ("github",),
+        instruction,
+        outputs=outputs,  # type: ignore[arg-type]
+    )
 
 
 def weekly(basis: str = "generated") -> GenerationRequest:
@@ -169,7 +198,7 @@ class Llm:
 
     def __call__(self, prompt: str) -> str:
         """
-        Answer a fenced summary
+        Answer a fenced summary, or the sections the prompt asks with markers
 
         Args:
             prompt (str): prompt
@@ -177,7 +206,25 @@ class Llm:
             str: answer
         """
         self.prompts.append(prompt)
-        return SUMMARY_ANSWER
+        sections = []
+        if SUMMARY_MARKER in prompt:
+            sections.append(f"{SUMMARY_MARKER}\n{SUMMARY_ANSWER}")
+        if TIME_MARKER in prompt:
+            sections.append(f"{TIME_MARKER}\n{TIME_ANSWER}")
+        return "\n".join(sections) or SUMMARY_ANSWER
+
+
+@pytest.fixture
+def catalog(session_factory: SessionFactory) -> None:
+    """
+    Create the projects and tags offered to the LLM
+
+    Args:
+        session_factory (SessionFactory): test database
+    """
+    with session_factory() as db:
+        db.add_all([Project(name="Alpha", color="#000"), Tag(name="Deep", color="#111")])
+        db.commit()
 
 
 @pytest.fixture
@@ -238,8 +285,27 @@ def test_request_validation() -> None:
         GenerationRequest("daily", DAY, START, datetime(2026, 11, 25), OFFSET, "sources", ("a",))
     with pytest.raises(GenerationRequestError, match="instruction"):
         request("x" * 2001)
-    for stored in (request(INSTRUCTION), weekly(), monthly("generated", fill_daily=True)):
-        assert GenerationRequest.from_json(stored.to_json()) == stored
+    with pytest.raises(GenerationRequestError, match="both"):
+        request(outputs=())
+    with pytest.raises(GenerationRequestError, match="both"):
+        request(outputs=("bogus",))
+    stored = (request(INSTRUCTION, BOTH), weekly(), monthly("generated", fill_daily=True))
+    for item in stored:
+        assert GenerationRequest.from_json(item.to_json()) == item
+
+
+def test_time_entries_for_days_only() -> None:
+    assert request(outputs=("time",)).outputs == ("time",)
+    with pytest.raises(GenerationRequestError, match="days only"):
+        GenerationRequest(
+            "weekly",
+            WEEK,
+            datetime(2026, 11, 15, 23),
+            datetime(2026, 11, 22, 23),
+            OFFSET,
+            "generated",
+            outputs=BOTH,  # type: ignore[arg-type]
+        )
 
 
 def test_old_stored_request_reads_as_daily_from_sources() -> None:
@@ -247,7 +313,9 @@ def test_old_stored_request_reads_as_daily_from_sources() -> None:
         '{"day": "2026-11-19", "start": "2026-11-18T23:00:00", "end": "2026-11-19T23:00:00",'
         ' "utc_offset_minutes": 60, "sources": ["github"], "outputs": ["summary", "time"]}'
     )
-    assert GenerationRequest.from_json(raw) == request()
+    assert GenerationRequest.from_json(raw) == request(outputs=BOTH)
+    without_outputs = raw.replace(', "outputs": ["summary", "time"]', "")
+    assert GenerationRequest.from_json(without_outputs) == request()
 
 
 def test_period_days() -> None:
@@ -274,6 +342,50 @@ def test_daily_prompt_uses_local_times_and_keeps_errors() -> None:
     assert "time entries" not in text.lower()
 
 
+def test_daily_prompt_with_time_entries_lists_catalog_and_markers() -> None:
+    text = build_prompt(request(outputs=BOTH), SECTIONS, [], CATALOG).text()
+    assert "Do every task below." in text
+    assert "SUMMARY: Write the user's end-of-day journal" in text
+    assert "TIME ENTRIES: Turn the activity into the time entries" in text
+    assert text.index(SUMMARY_MARKER) < text.index(TIME_MARKER)
+    assert "<projects_and_tags>" in text and "- Alpha: Main work" in text
+    assert text.index("<projects_and_tags>") < text.index("Do every task below.")
+
+
+def test_time_only_prompt_skips_journal_task() -> None:
+    text = build_prompt(request(outputs=("time",)), SECTIONS, [], CATALOG).text()
+    assert TIME_MARKER in text and SUMMARY_MARKER not in text
+    assert "end-of-day journal" not in text
+
+
+def test_split_answer_reads_each_section() -> None:
+    answer = f"{SUMMARY_MARKER}\n# Day\n\n{TIME_MARKER}\n```json\n[]\n```"
+    assert split_answer(answer, BOTH) == {"summary": "# Day", "time": "[]"}  # type: ignore[arg-type]
+    assert split_answer("== time entries ==\n[]", ("time",)) == {"time": "[]"}
+    assert split_answer("```\nPlain journal\n```", ("summary",)) == {"summary": "Plain journal"}
+    with pytest.raises(ValueError, match="time"):
+        split_answer(f"{SUMMARY_MARKER}\nOnly this", BOTH)  # type: ignore[arg-type]
+
+
+def test_time_entries_drop_fences_overlaps_and_bad_blocks() -> None:
+    entries = parse_time_entries(TIME_ANSWER, CATALOG)
+    assert [(entry.start, entry.title, entry.hours) for entry in entries] == [
+        (time(9), "Mail triage", 1.5),
+        (time(14), "Activity page", 1.25),
+    ]
+    assert (entries[0].projects, entries[0].tags) == (("Alpha",), ("Deep",))
+    assert (entries[1].projects, entries[1].tags) == ((), ())
+    with pytest.raises(ValueError):
+        parse_time_entries("Sorry, no JSON", CATALOG)
+    with pytest.raises(TypeError):
+        parse_time_entries('{"start": "09:00"}', CATALOG)
+
+
+def test_catalog_lists_projects_and_tags() -> None:
+    assert CATALOG.text() == "Projects:\n- Alpha: Main work\n- Beta\nTags:\n- Deep"
+    assert Catalog().text() == "Projects:\n(none)\nTags:\n(none)"
+
+
 def test_prompt_adds_custom_instruction() -> None:
     text = build_prompt(request(f"  {INSTRUCTION}  "), SECTIONS, []).text()
     assert "Custom instruction from the user for this journal" in text
@@ -292,13 +404,14 @@ def test_weekly_prompt_dates_activities_and_lists_summaries() -> None:
 
 
 def test_part_stats_measure_each_block() -> None:
-    prompt = build_prompt(request(), SECTIONS, [SummarySection("Week", "Text")])
+    prompt = build_prompt(request(outputs=BOTH), SECTIONS, [SummarySection("Week", "Text")])
     stats = part_stats(prompt)
     assert [(item.label, item.kind) for item in stats] == [
         ("Instructions", "instructions"),
         ("GitHub", "source"),
         ("Calendars", "source"),
         ("Week", "summary"),
+        ("Projects and tags", "catalog"),
     ]
     github = stats[1]
     assert github.activities == 2
@@ -349,6 +462,45 @@ def test_daily_generation_writes_note(
         assert db.get(Project, ACTIVITY_PROJECT) is not None
         assert db.get(ProjectFile, (ACTIVITY_PROJECT, str(note))) is not None
     assert len(llm.prompts) == 1
+
+
+def test_daily_generation_writes_note_and_time_entries(
+    session_factory: SessionFactory,
+    catalog: None,
+    source: FakeSource,
+    llm: Llm,
+    tmp_path: Path,
+) -> None:
+    run(request(outputs=BOTH))
+    note = tmp_path / DAY / "notes" / "Daily activity.md"
+    assert note.read_text(encoding="utf-8").startswith(f"# ⚡ Daily activity — {DAY}")
+    task = ActivityGenerationManager.list_tasks()[0]
+    assert task.result == "Generated summary note and 2 time entries."
+    with session_factory() as db:
+        records = db.query(CalendarRecord).order_by(CalendarRecord.start_time).all()
+        assert [(record.title, record.time_spent) for record in records] == [
+            ("Mail triage", 1.5),
+            ("Activity page", 1.25),
+        ]
+        assert all(record.project == ACTIVITY_PROJECT for record in records)
+        links = links_of(db, records)
+        assert links[records[0].id].projects == (ACTIVITY_PROJECT, "Alpha")
+        assert links[records[0].id].tags == ("Deep",)
+        assert links[records[1].id].projects == (ACTIVITY_PROJECT,)
+    assert len(llm.prompts) == 1
+    assert "- Alpha" in llm.prompts[0] and "- Deep" in llm.prompts[0]
+    assert f"- {ACTIVITY_PROJECT}" not in llm.prompts[0]
+
+
+def test_regeneration_replaces_time_entries(
+    session_factory: SessionFactory, catalog: None, source: FakeSource, llm: Llm, tmp_path: Path
+) -> None:
+    run(request(outputs=("time",)))
+    run(request(outputs=("time",)))
+    assert not (tmp_path / DAY).exists()
+    with session_factory() as db:
+        assert db.query(CalendarRecord).count() == 2
+    assert len(llm.prompts) == 2
 
 
 def test_weekly_and_monthly_generation_write_notes(
@@ -427,14 +579,42 @@ def test_api_queues_and_reads_periods(
     day = api.get(f"/activity-generation/daily/{DAY}").json()
     assert day["task"]["state"] == "COMPLETED"
     assert day["note"]["content"].startswith("# ⚡ Daily activity")
-    assert "records" not in day
+    assert day["records"] == []
     assert INSTRUCTION in llm.prompts[0]
     assert api.get("/activity-generation/tasks").json()[0]["label"] == f"Daily · {DAY}"
     write_note(tmp_path, "weekly", WEEK, "A week.")
     week = api.get(f"/activity-generation/weekly/{WEEK}").json()
     assert week["note"]["content"].endswith("A week.\n")
+    assert week["records"] == []
     assert api.get(f"/activity-generation/yearly/{WEEK}").status_code == 422
     assert api.post("/activity-generation/generate", json={**BODY, "sources": []}).status_code == 400
+
+
+def test_api_generates_and_reads_time_entries(
+    session_factory: SessionFactory, catalog: None, source: FakeSource, llm: Llm
+) -> None:
+    api = client()
+    api.post("/activity-generation/generate", json={**BODY, "outputs": list(BOTH)})
+    ActivityGenerationManager.handle(f"daily/{DAY}")
+    day = api.get(f"/activity-generation/daily/{DAY}").json()
+    assert [
+        (item["start"], item["title"], item["projects"], item["tags"])
+        for item in day["records"]
+    ] == [
+        ("09:00", "Mail triage", ["Alpha"], ["Deep"]),
+        ("14:00", "Activity page", [], []),
+    ]
+    assert api.post("/activity-generation/generate", json={**BODY, "outputs": []}).status_code == 400
+    weekly_time = {
+        **BODY,
+        "span": "weekly",
+        "day": WEEK,
+        "start": "2026-11-15T23:00:00Z",
+        "end": "2026-11-22T23:00:00Z",
+        "basis": "generated",
+        "outputs": list(BOTH),
+    }
+    assert api.post("/activity-generation/generate", json=weekly_time).status_code == 400
 
 
 def test_api_queues_a_month_from_weekly(session_factory: SessionFactory, llm: Llm) -> None:
@@ -472,3 +652,15 @@ def test_dry_run_builds_prompt_without_llm(
     assert result["context_tokens"] > 0
     bad = {**BODY, "sources": []}
     assert api.post("/activity-generation/dry-run", json=bad).status_code == 400
+
+
+def test_dry_run_with_time_entries_lists_catalog(
+    session_factory: SessionFactory, catalog: None, source: FakeSource, llm: Llm
+) -> None:
+    body = {**BODY, "outputs": list(BOTH)}
+    result = client().post("/activity-generation/dry-run", json=body).json()
+    assert llm.prompts == []
+    assert SUMMARY_MARKER in result["prompt"] and TIME_MARKER in result["prompt"]
+    assert "- Alpha" in result["prompt"] and "- Deep" in result["prompt"]
+    kinds = [part["kind"] for part in result["parts"]]
+    assert "catalog" in kinds

@@ -14,6 +14,7 @@ import {
   GENERATION_SPANS,
   type DataSourceInfo,
   type DayState,
+  type GenerationOutput,
   type GenerationSpan,
   type SettingValue,
 } from '@domain/contracts';
@@ -38,11 +39,13 @@ import {
   type CalendarCell,
 } from '../../core/activity/day-status';
 import {
+  BOTH_OUTPUTS,
   DAILY_WEEKDAY_OPTIONS,
   DAY_START_SETTING,
   TIMEZONE_SETTING,
   FILL_WITH_DAILY_LABEL,
   MAX_INSTRUCTION_LENGTH,
+  OUTPUT_OPTIONS,
   WEEK_START_SETTING,
   contextOptions,
   offersFillWithDaily,
@@ -190,6 +193,16 @@ const DAYS_PER_WEEK = 7;
     textarea {
       width: 100%;
     }
+    .output {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+    .outputs {
+      display: grid;
+      gap: 6px;
+    }
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -210,6 +223,7 @@ export class GenerationSidebarComponent extends SettingsSection {
     label: SPAN_LABELS[value],
   }));
   protected readonly maxInstructionLength = MAX_INSTRUCTION_LENGTH;
+  protected readonly outputOptions = OUTPUT_OPTIONS;
   protected readonly fillWithDailyLabel = FILL_WITH_DAILY_LABEL;
   protected readonly weekdays = WEEKDAYS;
   protected readonly legend = LEGEND;
@@ -303,6 +317,26 @@ export class GenerationSidebarComponent extends SettingsSection {
    */
   protected instruction(): string {
     return this.text(this.key('instruction'));
+  }
+
+  /**
+   * Outputs of the daily schedule (weekly and monthly make the summary only).
+   *
+   * @returns Picked outputs (both by default).
+   */
+  protected dailyOutputs(): readonly string[] {
+    return this.stableList(spanSetting('daily', 'outputs'), BOTH_OUTPUTS);
+  }
+
+  /**
+   * Add or remove an output of the daily schedule.
+   *
+   * @param value - Output.
+   * @param checked - Wanted.
+   */
+  protected toggleOutput(value: GenerationOutput, checked: boolean): void {
+    const current = this.dailyOutputs().filter((item) => item !== value);
+    this.saveSchedule(spanSetting('daily', 'outputs'), checked ? [...current, value] : current);
   }
 
   /**

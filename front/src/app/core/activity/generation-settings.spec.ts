@@ -41,20 +41,26 @@ describe('generation settings', () => {
       fillWithDaily: false,
       sources: [],
       instruction: '',
+      outputs: ['summary', 'time'],
     });
     const values = {
+      [spanSetting('daily', 'outputs')]: ['time', 'bogus'],
       [spanSetting('weekly', 'basis')]: 'sources',
       [spanSetting('weekly', 'sources')]: ['github'],
       [spanSetting('weekly', 'instruction')]: 'In French.',
+      [spanSetting('weekly', 'outputs')]: ['summary', 'time'],
       [spanSetting('monthly', 'instruction')]: 3,
     };
+    expect(scheduleDefaults(values, 'daily').outputs).toEqual(['time']);
     expect(scheduleDefaults(values, 'weekly')).toEqual({
       basis: 'sources',
       fillWithDaily: false,
       sources: ['github'],
       instruction: 'In French.',
+      outputs: ['summary'],
     });
     expect(scheduleDefaults(values, 'monthly').instruction).toBe('');
+    expect(scheduleDefaults(values, 'monthly').outputs).toEqual(['summary']);
   });
 
   it('offers daily summaries as monthly context only', () => {

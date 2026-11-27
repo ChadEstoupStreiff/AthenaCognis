@@ -10,29 +10,32 @@ import {
   untracked,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import type { DataSourceInfo, GenerationSpan } from '@domain/contracts';
+import type { DataSourceInfo, GenerationOutput, GenerationSpan } from '@domain/contracts';
 import type { GenerationContext } from '../../core/activity/activity-period';
 import {
   FILL_WITH_DAILY_LABEL,
   MAX_INSTRUCTION_LENGTH,
+  OUTPUT_OPTIONS,
   contextOptions,
   offersFillWithDaily,
   type GenerationBasis,
   type ScheduleDefaults,
 } from '../../core/activity/generation-settings';
 import { ButtonModule } from 'primeng/button';
+import { CheckboxModule } from 'primeng/checkbox';
 import { DialogModule } from 'primeng/dialog';
 import { MultiSelectModule } from 'primeng/multiselect';
 import { SelectButtonModule } from 'primeng/selectbutton';
 import { TextareaModule } from 'primeng/textarea';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
 
-/** Form asking the context and custom instruction of an activity summary. */
+/** Form asking the context, outputs (daily) and custom instruction of an activity generation. */
 @Component({
   selector: 'ac-generation-dialog',
   imports: [
     FormsModule,
     ButtonModule,
+    CheckboxModule,
     DialogModule,
     MultiSelectModule,
     SelectButtonModule,
@@ -87,6 +90,23 @@ import { ToggleSwitchModule } from 'primeng/toggleswitch';
             />
           </section>
         }
+        @if (isDaily()) {
+          <section>
+            <h3>Generate</h3>
+            @for (option of outputOptions; track option.value) {
+              <label class="output">
+                <p-checkbox
+                  [binary]="true"
+                  [ngModel]="outputs().includes(option.value)"
+                  (ngModelChange)="toggleOutput(option.value, $event)"
+                  [ariaLabel]="option.label"
+                />
+                <i class="pi pi-bolt" aria-hidden="true"></i>
+                {{ option.label }}
+              </label>
+            }
+          </section>
+        }
         <section>
           <h3>Custom instruction</h3>
           <textarea
@@ -139,6 +159,16 @@ import { ToggleSwitchModule } from 'primeng/toggleswitch';
       margin-top: 12px;
       cursor: pointer;
     }
+    .output {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 0;
+      cursor: pointer;
+    }
+    .output .pi-bolt {
+      color: var(--p-primary-color);
+    }
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -159,6 +189,7 @@ export class GenerationDialogComponent {
   readonly dryRun = output<GenerationContext>();
 
   protected readonly maxInstructionLength = MAX_INSTRUCTION_LENGTH;
+  protected readonly outputOptions = OUTPUT_OPTIONS;
   protected readonly fillWithDailyLabel = FILL_WITH_DAILY_LABEL;
   /** Sources as a mutable array (PrimeNG options). */
   protected readonly sourceOptions = computed(() => [...this.sources()]);
@@ -166,6 +197,9 @@ export class GenerationDialogComponent {
   protected readonly fillWithDaily = signal(false);
   protected readonly picked = signal<readonly string[]>([]);
   protected readonly instruction = signal('');
+  protected readonly outputs = signal<readonly GenerationOutput[]>([]);
+  /** Time entries are generated for days only. */
+  protected readonly isDaily = computed(() => this.span() === 'daily');
   /** Context choices as a mutable array (PrimeNG options). */
   protected readonly contextChoices = computed(() => [...contextOptions(this.span())]);
   protected readonly hasContextChoice = computed(() => this.contextChoices().length > 0);
@@ -175,7 +209,9 @@ export class GenerationDialogComponent {
   protected readonly showsFillWithDaily = computed(() =>
     offersFillWithDaily(this.span(), this.basis()),
   );
-  protected readonly canGenerate = computed(() => this.hasSourcesWhenNeeded());
+  protected readonly canGenerate = computed(
+    () => this.hasSourcesWhenNeeded() && (!this.isDaily() || this.outputs().length > 0),
+  );
 
   constructor() {
     effect(() => {
@@ -187,6 +223,18 @@ export class GenerationDialogComponent {
     });
   }
 
+  /**
+   * Add or remove an output.
+   *
+   * @param value - Output.
+   * @param checked - Wanted.
+   */
+  protected toggleOutput(value: GenerationOutput, checked: boolean): void {
+    this.outputs.update((current) =>
+      checked ? [...current, value] : current.filter((item) => item !== value),
+    );
+  }
+
   /** Send the choice and close. */
   protected submit(): void {
     this.generate.emit(this.choice());
@@ -196,7 +244,7 @@ export class GenerationDialogComponent {
   /**
    * Choice made in the form.
    *
-   * @returns Context, fill toggle, sources and custom instruction.
+   * @returns Context, fill toggle, sources, custom instruction and outputs.
    */
   protected choice(): GenerationContext {
     return {
@@ -204,6 +252,7 @@ export class GenerationDialogComponent {
       fillWithDaily: this.showsFillWithDaily() && this.fillWithDaily(),
       sources: this.picked(),
       instruction: this.instruction(),
+      outputs: this.outputs(),
     };
   }
 
@@ -225,5 +274,6 @@ export class GenerationDialogComponent {
     this.fillWithDaily.set(defaults.fillWithDaily);
     this.picked.set(scheduled.length > 0 ? scheduled : active);
     this.instruction.set(defaults.instruction);
+    this.outputs.set(defaults.outputs);
   }
 }

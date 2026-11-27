@@ -1,4 +1,9 @@
-import type { GenerationBasis, GenerationRequest, GenerationSpan } from '@domain/contracts';
+import type {
+  GenerationBasis,
+  GenerationOutput,
+  GenerationRequest,
+  GenerationSpan,
+} from '@domain/contracts';
 import { formatLocalDate } from '@domain/time';
 
 /** Local period an activity summary covers, [start, end). */
@@ -141,7 +146,12 @@ export interface GenerationContext {
   /** Data source keys, read with the `sources` context. */
   readonly sources: readonly string[];
   readonly instruction: string;
+  /** What to generate; time entries kept for daily periods only. */
+  readonly outputs: readonly GenerationOutput[];
 }
+
+/** Weekly and monthly generations produce the summary alone. */
+const SUMMARY_ONLY: readonly GenerationOutput[] = ['summary'];
 
 /**
  * Generation request of a period.
@@ -165,5 +175,6 @@ export function generationRequest(
     sources: usesSources ? context.sources : [],
     instruction: context.instruction.trim(),
     fill_daily: !usesSources && context.fillWithDaily,
+    outputs: period.span === 'daily' ? context.outputs : SUMMARY_ONLY,
   };
 }

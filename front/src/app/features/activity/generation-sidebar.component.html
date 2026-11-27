@@ -163,6 +163,26 @@
     </div>
   }
 
+  @if (span() === 'daily') {
+    <div class="row stacked">
+      <div class="label"><strong>Generate</strong></div>
+      <div class="outputs">
+        @for (option of outputOptions; track option.value) {
+          <label class="output">
+            <p-checkbox
+              [binary]="true"
+              [ngModel]="dailyOutputs().includes(option.value)"
+              (ngModelChange)="toggleOutput(option.value, $event)"
+              [ariaLabel]="option.label"
+            />
+            <i class="pi pi-bolt" aria-hidden="true"></i>
+            {{ option.label }}
+          </label>
+        }
+      </div>
+    </div>
+  }
+
   <div class="row stacked">
     <div class="label">
       <strong>Custom instruction</strong>

@@ -69,7 +69,7 @@ const SECTIONS: readonly SectionEntry[] = [
   },
   {
     id: 'work',
-    label: 'Work',
+    label: 'Boards',
     icon: 'pi pi-th-large',
   },
   {

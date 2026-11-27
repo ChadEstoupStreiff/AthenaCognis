@@ -15,7 +15,7 @@ export const MAIN_NAV: readonly NavItem[] = [
   { label: 'Library', icon: 'pi pi-folder-open', route: '/library', shortcut: 'l' },
   { label: 'Post-it', icon: 'pi pi-pen-to-square', route: '/notes', shortcut: 'n' },
   { label: 'Time', icon: 'pi pi-calendar', route: '/time', shortcut: 't' },
-  { label: 'Work', icon: 'pi pi-th-large', route: '/work', shortcut: 'w' },
+  { label: 'Boards', icon: 'pi pi-th-large', route: '/work', shortcut: 'b' },
   { label: 'Projects', icon: 'pi pi-briefcase', route: '/projects', shortcut: 'p' },
   { label: 'People', icon: 'pi pi-users', route: '/people', shortcut: 'c' },
   { label: 'Research', icon: 'pi pi-book', route: '/research', shortcut: 'r' },

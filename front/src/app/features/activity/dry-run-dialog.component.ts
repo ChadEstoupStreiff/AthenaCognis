@@ -18,6 +18,7 @@ const KIND_ICONS: Readonly<Record<PromptPartKind, string>> = {
   instructions: 'pi pi-align-left',
   source: 'pi pi-database',
   summary: 'pi pi-bolt',
+  catalog: 'pi pi-tags',
 };
 
 /** Popup building the single prompt of a generation and showing it with its size per block. */

@@ -31,17 +31,18 @@ def schedule(
     Returns:
         SpanSchedule: schedule
     """
-    basis = "sources" if span == "daily" else "generated"
+    is_daily = span == "daily"
     return SpanSchedule(
         span,  # type: ignore[arg-type]
         enabled,
         PARIS,
         day_start,
         1,
-        basis,  # type: ignore[arg-type]
+        "sources" if is_daily else "generated",
         False,
         ("github",),
         "",
+        ("summary", "time") if is_daily else ("summary",),
         last,
     )
 
@@ -93,6 +94,7 @@ def test_read_schedule_defaults() -> None:
         "",
     )
     assert str(daily.zone) == "UTC"
+    assert daily.outputs == ("summary", "time")
     assert read_schedule(settings.get, "monthly").basis == "generated"
     settings.update(
         {
@@ -104,6 +106,8 @@ def test_read_schedule_defaults() -> None:
             "activity_generation_monthly_fill_daily": True,
             "activity_generation_monthly_instruction": "  Be brief.  ",
             "activity_generation_daily_weekdays": ["mon", "fri", "bogus", 3],
+            "activity_generation_daily_outputs": ["time", "bogus"],
+            "activity_generation_weekly_outputs": ["summary", "time"],
         }
     )
     weekly = read_schedule(settings.get, "weekly")
@@ -120,6 +124,8 @@ def test_read_schedule_defaults() -> None:
         "Be brief.",
     )
     assert read_rules(settings.get).weekdays == ("mon", "fri")
+    assert read_schedule(settings.get, "daily").outputs == ("time",)
+    assert (weekly.outputs, monthly.outputs) == (("summary",), ("summary",))
 
 
 @dataclass
@@ -160,6 +166,7 @@ def test_run_due_queues_once_with_active_sources() -> None:
     [request] = fake.queued
     assert (request.span, request.basis) == ("daily", "sources")
     assert request.sources == ("mail", "github")
+    assert request.outputs == ("summary", "time")
     assert (request.start, request.end) == (
         datetime(2026, 11, 17, 23, 0),
         datetime(2026, 11, 18, 23, 0),
@@ -241,6 +248,11 @@ def test_run_due_queues_daily_then_weekly_then_monthly() -> None:
     queued = run_due(datetime(2026, 11, 2, 5, 0, tzinfo=UTC), fake.hooks())
     assert queued == ["daily/2026-11-01", "weekly/2026-10-26", "monthly/2026-10-01"]
     week, month = fake.queued[1], fake.queued[2]
+    assert [item.outputs for item in fake.queued] == [
+        ("summary", "time"),
+        ("summary",),
+        ("summary",),
+    ]
     assert (week.basis, week.sources, week.start) == ("generated", (), datetime(2026, 10, 25, 23))
     assert (month.basis, month.sources, month.instruction) == (
         "sources",

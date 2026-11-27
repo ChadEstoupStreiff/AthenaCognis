@@ -1,6 +1,6 @@
 import type { JobState } from './jobs';
 
-/** Non-editable project holding generated notes. */
+/** Non-editable project holding generated notes and time entries. */
 export const ACTIVITY_PROJECT = '⚡ Activity';
 
 /** Time spans an activity summary covers. */
@@ -14,6 +14,9 @@ export type GenerationSpan = (typeof GENERATION_SPANS)[number];
  * or daily summaries (`generated_daily`, monthly only).
  */
 export type GenerationBasis = 'generated' | 'generated_daily' | 'sources';
+
+/** What a generation produces; time entries (`time`) for daily generations only. */
+export type GenerationOutput = 'summary' | 'time';
 
 /** Generation request (`POST /activity-generation/generate` and `/dry-run`). */
 export interface GenerationRequest {
@@ -32,6 +35,8 @@ export interface GenerationRequest {
   readonly instruction: string;
   /** Monthly from weekly: days no weekly summary covers use their daily summary. */
   readonly fill_daily: boolean;
+  /** What to generate; `time` (time entries) for daily requests only. */
+  readonly outputs: readonly GenerationOutput[];
 }
 
 /** Size of a prompt. */
@@ -44,9 +49,9 @@ export interface PromptStats {
 }
 
 /** Kind of a prompt block. */
-export type PromptPartKind = 'instructions' | 'source' | 'summary';
+export type PromptPartKind = 'instructions' | 'source' | 'summary' | 'catalog';
 
-/** Size of one block of the prompt (instructions, a data source, a summary). */
+/** Size of one block of the prompt (instructions, a data source, a summary, the catalog). */
 export interface PromptPartStat {
   readonly label: string;
   readonly kind: PromptPartKind;
@@ -77,6 +82,19 @@ export interface GenerationRun {
   readonly result: string | null;
 }
 
+/** Generated time entry. */
+export interface GeneratedRecord {
+  readonly id: string;
+  /** Local start, `HH:MM`. */
+  readonly start: string | null;
+  readonly hours: number;
+  readonly title: string;
+  readonly description: string;
+  /** Projects picked by the AI (the Activity project left out). */
+  readonly projects: readonly string[];
+  readonly tags: readonly string[];
+}
+
 /** What was generated for a period (`GET /activity-generation/{span}/{day}`). */
 export interface PeriodGeneration {
   readonly span: GenerationSpan;
@@ -84,6 +102,8 @@ export interface PeriodGeneration {
   readonly day: string;
   readonly task: GenerationRun | null;
   readonly note: { readonly path: string; readonly content: string } | null;
+  /** Generated time entries (always empty for weekly and monthly). */
+  readonly records: readonly GeneratedRecord[];
 }
 
 /** What happened to a day: generated, failed, generating, or skipped by the scheduler. */

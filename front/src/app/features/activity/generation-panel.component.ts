@@ -27,9 +27,10 @@ import { periodOptions, scheduleDefaults } from '../../core/activity/generation-
 import { SettingsStore } from '../../core/settings/settings.store';
 import { DataSync } from '../../core/state/data-sync.service';
 import { MarkdownViewComponent } from '../../shared/ui/markdown-view.component';
+import { TagChipComponent } from '../../shared/ui/tag-chip.component';
 import { DryRunDialogComponent } from './dry-run-dialog.component';
 import { GenerationDialogComponent } from './generation-dialog.component';
-import { isGenerating, noteBody } from './generation-model';
+import { isGenerating, noteBody, recordRange } from './generation-model';
 
 /** Refresh of a running generation. */
 const GENERATION_POLL_MS = 3000;
@@ -41,6 +42,7 @@ const GENERATION_POLL_MS = 3000;
     ButtonModule,
     ProgressBarModule,
     MarkdownViewComponent,
+    TagChipComponent,
     GenerationDialogComponent,
     DryRunDialogComponent,
   ],
@@ -62,6 +64,7 @@ export class GenerationPanelComponent {
   readonly picked = input.required<Date>();
 
   protected readonly noteBody = noteBody;
+  protected readonly recordRange = recordRange;
   protected readonly period = computed(() =>
     periodOf(this.span(), this.picked(), periodOptions(this.settings.values())),
   );
@@ -83,7 +86,10 @@ export class GenerationPanelComponent {
   );
   protected readonly run = computed(() => this.generation()?.task ?? null);
   protected readonly generating = computed(() => isGenerating(this.run()));
-  protected readonly hasResults = computed(() => (this.generation()?.note ?? null) !== null);
+  protected readonly hasResults = computed(() => {
+    const generation = this.generation();
+    return generation !== null && (generation.note !== null || generation.records.length > 0);
+  });
 
   constructor() {
     effect((onCleanup) => {
@@ -95,8 +101,8 @@ export class GenerationPanelComponent {
       }, GENERATION_POLL_MS);
       onCleanup(() => {
         clearInterval(timer);
-        // Finished: notes, projects and the calendar dots changed.
-        this.sync.invalidate('notes', 'projects', 'generation');
+        // Finished: notes, time entries, projects and the calendar dots changed.
+        this.sync.invalidate('notes', 'calendar', 'projects', 'generation');
       });
     });
   }
@@ -104,7 +110,7 @@ export class GenerationPanelComponent {
   /**
    * Queue the generation asked by the form.
    *
-   * @param context - Context and custom instruction.
+   * @param context - Context, outputs and custom instruction.
    */
   protected async generate(context: GenerationContext): Promise<void> {
     await this.api.generate(generationRequest(this.period(), context));
@@ -115,7 +121,7 @@ export class GenerationPanelComponent {
   /**
    * Preview the prompt of the generation asked by the form.
    *
-   * @param context - Context and custom instruction.
+   * @param context - Context, outputs and custom instruction.
    */
   protected previewPrompts(context: GenerationContext): void {
     this.dryRunRequest.set(generationRequest(this.period(), context));
