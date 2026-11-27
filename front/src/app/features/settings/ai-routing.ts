@@ -1,3 +1,5 @@
+import type { CustomProvider } from './custom-providers';
+
 /** How a task picks its model. */
 export type TaskKind = 'text' | 'vision' | 'transcription';
 
@@ -243,16 +245,23 @@ export function modelCount(models: RemoteModels): number {
  * Providers available for a task.
  *
  * @param task - Task.
+ * @param custom - User-defined providers (text tasks only).
  * @returns Providers.
  */
-export function providersFor(task: AiTask): readonly ProviderOption[] {
+export function providersFor(
+  task: AiTask,
+  custom: readonly CustomProvider[] = [],
+): readonly ProviderOption[] {
   if (task.kind === 'transcription') {
     return TRANSCRIPTION_PROVIDERS;
   }
   if (task.kind === 'vision' && task.localKey !== undefined) {
     return [{ value: task.localKey, label: task.localLabel ?? 'Local' }, ...VISION_PROVIDERS];
   }
-  return TEXT_PROVIDERS;
+  if (task.kind !== 'text') {
+    return TEXT_PROVIDERS;
+  }
+  return [...TEXT_PROVIDERS, ...custom.map(({ id, name }) => ({ value: id, label: name }))];
 }
 
 /**

@@ -3,10 +3,18 @@ import json
 import logging
 import mimetypes
 import re
-from typing import Dict, List, Set
+from dataclasses import dataclass
+from typing import Any, Dict, List, Set
 
 import requests
 from bs4 import BeautifulSoup
+from controllers.ModelCatalog import list_custom
+from tools.custom_providers import (
+    SETTING_KEY as CUSTOM_PROVIDERS_KEY,
+    CustomProvider,
+    is_custom_provider,
+    parse_custom_providers,
+)
 from tools.provider_errors import provider_error
 from tools.prompts import get_prompt
 from tools.style_instruction import (
@@ -79,6 +87,161 @@ DEFAULT_CONTEXT_WINDOWS = {
     "Gemini": 1000000,
     "Claude": 200000,
 }
+# Context window assumed when neither the user nor the provider gives one
+FALLBACK_CONTEXT_TOKENS = 8192
+
+# Context windows announced by each custom provider's model list (fetched once)
+_custom_context_cache: dict[CustomProvider, dict[str, int]] = {}
+
+
+class ProviderNotFoundError(ValueError):
+    """Routing points to a custom provider that was deleted or is invalid."""
+
+
+class ModelNotSelectedError(ValueError):
+    """Routing points to a custom provider without a model."""
+
+
+def find_custom_provider(ai_type: str) -> CustomProvider | None:
+    """
+    Find a stored custom provider by its id
+
+    Args:
+        ai_type (str): provider value
+    Returns:
+        CustomProvider | None: provider, or None when missing or invalid
+    """
+    providers = parse_custom_providers(get_setting(CUSTOM_PROVIDERS_KEY, []))
+    return next((p for p in providers if p.id == ai_type), None)
+
+
+def read_routing(setting_prefix: str) -> tuple[str, str]:
+    """
+    Read the provider and model routed for a task
+
+    Args:
+        setting_prefix (str): task prefix of the `<task>_type` / `<task>_model` settings
+    Returns:
+        tuple[str, str]: provider value, model
+    Raises:
+        ModelNotSelectedError: when a custom provider has no model selected
+    """
+    ai_type = get_setting(f"{setting_prefix}_type")
+    model = get_setting(f"{setting_prefix}_model")
+    if is_custom_provider(ai_type) and not str(model or "").strip():
+        raise ModelNotSelectedError(
+            "No model selected for this task. Pick one in AI routing."
+        )
+    return ai_type, model
+
+
+@dataclass(frozen=True)
+class Endpoint:
+    """Where and how to call an OpenAI-compatible provider."""
+
+    label: str
+    url: str
+    api_key: str
+
+
+def is_openai_compatible(ai_type: str) -> bool:
+    """
+    Tell whether a provider speaks the OpenAI chat completions protocol
+
+    Args:
+        ai_type (str): provider value
+    Returns:
+        bool: True for built-in compatible and custom providers
+    """
+    return ai_type in OPENAI_COMPATIBLE or is_custom_provider(ai_type)
+
+
+def openai_endpoint(ai_type: str) -> Endpoint:
+    """
+    Find the URL and key of an OpenAI-compatible provider
+
+    Args:
+        ai_type (str): provider value
+    Returns:
+        Endpoint: endpoint
+    Raises:
+        ProviderNotFoundError: when the custom provider was removed or is invalid
+    """
+    if ai_type in OPENAI_COMPATIBLE:
+        url, key_setting = OPENAI_COMPATIBLE[ai_type]
+        return Endpoint(ai_type, url, get_setting(key_setting))
+    provider = find_custom_provider(ai_type)
+    if provider is None:
+        raise ProviderNotFoundError(
+            "This AI provider no longer exists. Pick another one in AI routing."
+        )
+    return Endpoint(provider.name, provider.chat_url, provider.api_key)
+
+
+def provider_label(ai_type: str) -> str:
+    """
+    Name a provider for display
+
+    Args:
+        ai_type (str): provider value
+    Returns:
+        str: custom provider name, else the value itself
+    """
+    if not is_custom_provider(ai_type):
+        return ai_type
+    provider = find_custom_provider(ai_type)
+    return ai_type if provider is None else provider.name
+
+
+def delta_text(data: dict[str, Any]) -> str:
+    """
+    Read the text of an OpenAI-compatible stream chunk
+
+    Args:
+        data (dict[str, Any]): decoded chunk
+    Returns:
+        str: text, empty for usage or reasoning-only chunks
+    """
+    choices = data.get("choices")
+    if not choices:
+        return ""
+    delta = choices[0].get("delta") or {}
+    return delta.get("content") or ""
+
+
+def announced_context_windows(provider: CustomProvider) -> dict[str, int]:
+    """
+    Context windows announced by a custom provider's model list (cached once fetched)
+
+    Args:
+        provider (CustomProvider): provider
+    Returns:
+        dict[str, int]: tokens per model id, empty when the list failed
+    """
+    if provider in _custom_context_cache:
+        return _custom_context_cache[provider]
+    catalog = list_custom([provider])[provider.id]
+    if catalog.error is None:
+        _custom_context_cache[provider] = catalog.context_tokens
+    return catalog.context_tokens
+
+
+def custom_context_tokens(ai_type: str, model: str) -> int:
+    """
+    Context window of a custom provider model
+
+    Args:
+        ai_type (str): custom provider id
+        model (str): model
+    Returns:
+        int: typed size, else size announced by `/models`, else the fallback
+    """
+    provider = find_custom_provider(ai_type)
+    if provider is None:
+        return FALLBACK_CONTEXT_TOKENS
+    if provider.context_tokens is not None:
+        return provider.context_tokens
+    return announced_context_windows(provider).get(model, FALLBACK_CONTEXT_TOKENS)
 
 
 def get_model_context_tokens(ai_type: str, model: str) -> int:
@@ -88,7 +251,9 @@ def get_model_context_tokens(ai_type: str, model: str) -> int:
             return parse_token_count(str(get_context_size(model)))
         except Exception:
             return 4096
-    return DEFAULT_CONTEXT_WINDOWS.get(ai_type, 8192)
+    if is_custom_provider(ai_type):
+        return custom_context_tokens(ai_type, model)
+    return DEFAULT_CONTEXT_WINDOWS.get(ai_type, FALLBACK_CONTEXT_TOKENS)
 
 
 def encode_image_b64(image_path: str):
@@ -141,8 +306,7 @@ def request_llm(
     Request a language model (LLM) to process the prompt and return the response.
     Returns a tuple of (AI type, model, response).
     """
-    ai_type = get_setting(f"{setting_prefix}_type")
-    model = get_setting(f"{setting_prefix}_model")
+    ai_type, model = read_routing(setting_prefix)
 
     if input_text is not None:
         prompt = prompt.replace("{input}", input_text)
@@ -220,11 +384,10 @@ def request_llm(
             return ai_type, model, output
 
     # ChatGPT / DeepSeek (OpenAI-compatible)
-    elif ai_type in OPENAI_COMPATIBLE:
-        url, key_setting = OPENAI_COMPATIBLE[ai_type]
-        api_key = get_setting(key_setting)
+    elif is_openai_compatible(ai_type):
+        endpoint = openai_endpoint(ai_type)
         headers = {
-            "Authorization": f"Bearer {api_key}",
+            "Authorization": f"Bearer {endpoint.api_key}",
             "Content-Type": "application/json",
         }
         payload = {
@@ -233,9 +396,9 @@ def request_llm(
             "stream": True,
         }
 
-        with requests.post(url, headers=headers, json=payload, stream=True, timeout=3600) as response:
+        with requests.post(endpoint.url, headers=headers, json=payload, stream=True, timeout=3600) as response:
             if response.status_code != 200:
-                raise provider_error(ai_type, response.status_code, response.text)
+                raise provider_error(endpoint.label, response.status_code, response.text)
 
             output = ""
             for line in response.iter_lines():
@@ -245,7 +408,7 @@ def request_llm(
                         break
                     try:
                         data = json.loads(line)
-                        chunk = data["choices"][0]["delta"].get("content", "")
+                        chunk = delta_text(data)
                         output += chunk
                         if stream_callback:
                             stream_callback(chunk)
@@ -334,8 +497,7 @@ def request_chat_llm(
     ]}]
     Returns a tuple of (AI type, model, response).
     """
-    ai_type = get_setting(f"{setting_prefix}_type")
-    model = get_setting(f"{setting_prefix}_model")
+    ai_type, model = read_routing(setting_prefix)
     timeout = get_setting("chat_llm_timeout_seconds", 300)
     messages = apply_to_messages(style_instruction(), messages)
 
@@ -396,14 +558,14 @@ def request_chat_llm(
             return ai_type, model, output
 
     # Mistral / ChatGPT / DeepSeek (OpenAI-compatible chat completions)
-    elif ai_type == "Mistral" or ai_type in OPENAI_COMPATIBLE:
-        url, key_setting = (
-            ("https://api.mistral.ai/v1/chat/completions", "mistral_api_key")
+    elif ai_type == "Mistral" or is_openai_compatible(ai_type):
+        endpoint = (
+            Endpoint("Mistral", "https://api.mistral.ai/v1/chat/completions", get_setting("mistral_api_key"))
             if ai_type == "Mistral"
-            else OPENAI_COMPATIBLE[ai_type]
+            else openai_endpoint(ai_type)
         )
-        api_key = get_setting(key_setting)
-        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        headers = {"Authorization": f"Bearer {endpoint.api_key}", "Content-Type": "application/json"}
+        is_text_only = ai_type in TEXT_ONLY_PROVIDERS or is_custom_provider(ai_type)
 
         api_messages = []
         for msg in messages:
@@ -418,16 +580,16 @@ def request_chat_llm(
                         content_parts.append({"type": "image_url", "image_url": data_url})
                     else:
                         content_parts.append({"type": "image_url", "image_url": {"url": data_url}})
-            if ai_type in TEXT_ONLY_PROVIDERS:
+            if is_text_only:
                 text = "\n".join(part["text"] for part in content_parts if part["type"] == "text")
                 api_messages.append({"role": msg["role"], "content": text})
             else:
                 api_messages.append({"role": msg["role"], "content": content_parts})
 
         payload = {"model": model, "messages": api_messages, "stream": True}
-        with requests.post(url, headers=headers, json=payload, stream=True, timeout=timeout) as response:
+        with requests.post(endpoint.url, headers=headers, json=payload, stream=True, timeout=timeout) as response:
             if response.status_code != 200:
-                raise provider_error(ai_type, response.status_code, response.text)
+                raise provider_error(endpoint.label, response.status_code, response.text)
 
             output = ""
             for line in response.iter_lines():
@@ -442,7 +604,7 @@ def request_chat_llm(
                     break
                 try:
                     data = json.loads(line)
-                    chunk = data["choices"][0]["delta"].get("content", "")
+                    chunk = delta_text(data)
                     if chunk:
                         output += chunk
                         if stream_callback:
@@ -576,8 +738,7 @@ def request_vision_llm(
     Request a vision-capable LLM to analyze an image.
     Returns a tuple of (AI type, model, response).
     """
-    ai_type = get_setting(f"{setting_prefix}_type")
-    model = get_setting(f"{setting_prefix}_model")
+    ai_type, model = read_routing(setting_prefix)
 
     mime_type, image_data = encode_image_b64(image_path)
 

@@ -12,6 +12,7 @@ import { BytesPipe } from '../../../shared/pipes/bytes.pipe';
 import { API_KEYS, modelCount } from '../ai-routing';
 import { ModelCatalogStore } from '../model-catalog.store';
 import { checkApiKey, type KeyCheck } from '../key-check';
+import { CustomProvidersComponent } from './custom-providers.component';
 import { SettingsSection } from './settings-section';
 
 /** Installed Ollama model. */
@@ -32,6 +33,7 @@ interface OllamaModel {
     TagModule,
     TooltipModule,
     BytesPipe,
+    CustomProvidersComponent,
   ],
   templateUrl: './providers.section.html',
   styleUrl: './section.scss',

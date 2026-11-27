@@ -5,15 +5,18 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Dict
 
-import tiktoken
 from db import ChatMessage, ChatSession, get_db
 from fastapi import HTTPException
 from tools.ai import (
+    ModelNotSelectedError,
+    ProviderNotFoundError,
     get_model_context_tokens,
+    provider_label,
     provider_supports_vision,
     request_chat_llm,
 )
 from tools.prompts import get_prompt
+from tools.token_count import count_tokens
 from utils import guess_mime, read_content
 from views.settings import get_setting
 
@@ -104,16 +107,14 @@ class ChatManager:
         latest_calendars = json.loads(history[-1]["calendar"]) if history[-1]["calendar"] else []
         latest_query_text = history[-1]["content"]
 
-        encoder = tiktoken.encoding_for_model("gpt-4")
-
         def turn_tokens(turn):
             return sum(
-                len(encoder.encode(part["text"])) if part["type"] == "text" else 300
+                count_tokens(part["text"]) if part["type"] == "text" else 300
                 for part in turn["content"]
             )
 
         budget = int(get_model_context_tokens(ai_type, model) * 0.7)
-        remaining = budget - len(encoder.encode(system_text))
+        remaining = budget - count_tokens(system_text)
 
         kept = []
         for i, turn in enumerate(reversed(turns)):
@@ -147,6 +148,8 @@ class ChatManager:
 
     @staticmethod
     def _sanitize_error(e: Exception) -> str:
+        if isinstance(e, (ProviderNotFoundError, ModelNotSelectedError)):
+            return str(e)
         text = str(e).lower()
         if "timeout" in text or isinstance(e, TimeoutError):
             return "The request to the language model timed out. Please try again."
@@ -209,7 +212,7 @@ class ChatManager:
                 cls._finalize(chat_id, "system-cancelled", "Generation cancelled by user.", persisted_files, calendars)
                 return
 
-            cls._finalize(chat_id, f"{ai_type} - {model}", answer, persisted_files, calendars)
+            cls._finalize(chat_id, f"{provider_label(ai_type)} - {model}", answer, persisted_files, calendars)
         except Exception as e:
             logging.error(f"CHAT >> Error generating response for session {chat_id}: {e}", exc_info=True)
             cls._finalize(chat_id, "system-error", cls._sanitize_error(e), None, None)
