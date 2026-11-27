@@ -102,11 +102,12 @@ exit /b 0
 :create_env
 echo No .env file found - let's create one.
 echo Press Enter on any question to accept the default shown in [brackets].
-echo !!! IF YOU DON'T KNOW WHAT TO SET, JUST PRESS ENTER TO DO DEFAULT, IT WILL WORK !!!
+echo *** IF YOU DON'T KNOW WHAT TO SET, JUST PRESS ENTER TO DO DEFAULT, IT WILL WORK ***
 echo.
 
 call :ask PROJECT_NAME "Project name (letters, numbers, - or _)" "athenacognis"
-for /f %%P in ('powershell -NoProfile -Command "('!PROJECT_NAME!').ToLower() -replace '[^a-z0-9_-]','-'"') do set "PROJECT_NAME=%%P"
+:: No "!" on this line: delayed expansion would strip the "^" from the regex.
+for /f %%P in ('powershell -NoProfile -Command "$env:PROJECT_NAME.ToLower() -replace '[^a-z0-9_-]','-'"') do set "PROJECT_NAME=%%P"
 if "!PROJECT_NAME!"=="" set "PROJECT_NAME=athenacognis"
 
 call :ask DATA_PATH "Folder to store your data - documents, database, AI models (avoid spaces)" "%USERPROFILE%\AthenaCognisData"
@@ -159,7 +160,8 @@ goto :eof
 :ask_port
 call :ask %1 %2 %3
 set "PORT_VALUE=!%~1!"
-echo !PORT_VALUE!| findstr /r "^[0-9][0-9]*$" >nul
+:: No "!" on this line: delayed expansion would strip the "^" from the regex.
+echo %PORT_VALUE%| findstr /r "^[0-9][0-9]*$" >nul
 if errorlevel 1 goto :ask_port_retry
 if !PORT_VALUE! LSS 1 goto :ask_port_retry
 if !PORT_VALUE! GTR 65535 goto :ask_port_retry

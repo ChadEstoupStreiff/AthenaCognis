@@ -164,11 +164,9 @@ launcher script for your OS and drop it in the same folder as
 
 | File | Platform | Download |
 |------|----------|----------|
-| `start.sh` | Linux | [raw link](https://raw.githubusercontent.com/ChadEstoupStreiff/athenacognis/main/start.sh) |
-| `start.command` | macOS | [raw link](https://raw.githubusercontent.com/ChadEstoupStreiff/athenacognis/main/start.command) |
+| `start.sh` | Linux & macOS | [raw link](https://raw.githubusercontent.com/ChadEstoupStreiff/athenacognis/main/start.sh) |
 | `start.bat` | Windows | [raw link](https://raw.githubusercontent.com/ChadEstoupStreiff/athenacognis/main/start.bat) |
-| `stop.sh` | Linux | [raw link](https://raw.githubusercontent.com/ChadEstoupStreiff/athenacognis/main/stop.sh) |
-| `stop.command` | macOS | [raw link](https://raw.githubusercontent.com/ChadEstoupStreiff/athenacognis/main/stop.command) |
+| `stop.sh` | Linux & macOS | [raw link](https://raw.githubusercontent.com/ChadEstoupStreiff/athenacognis/main/stop.sh) |
 | `stop.bat` | Windows | [raw link](https://raw.githubusercontent.com/ChadEstoupStreiff/athenacognis/main/stop.bat) |
 
 ```bash
@@ -193,9 +191,10 @@ Double-clicking it will:
 Closing the window afterwards does **not** stop the app — see
 [Stopping](#stopping) below.
 
-> **Linux note:** most file managers won't run a `.sh` file on double-click
-> until it's marked executable and "allowed to run as a program" (Properties
-> → Permissions, varies by desktop environment).
+> **Linux / macOS note:** run it from a terminal with `./start.sh` (or
+> `bash start.sh`). On Linux, most file managers only run a `.sh` file on
+> double-click once it's marked executable and "allowed to run as a program"
+> (Properties → Permissions, varies by desktop environment).
 
 ## 6. (Optional) Pull a local LLM model
 
@@ -223,14 +222,14 @@ Set `ATHENACOGNIS_VERSION` in `.env` to pin to a specific release, or leave it a
 
 ## Stopping
 
-Double-click the `stop` script for your OS (`stop.sh`, `stop.command`, `stop.bat`), or:
+Double-click the `stop` script for your OS (`stop.sh` on Linux & macOS, `stop.bat` on Windows), or:
 
 ```bash
 docker compose down
 ```
 
-Started with a launcher? The launcher uses the project name `superdiary_<PROJECT_NAME>`, so from
-a terminal run `docker compose -p superdiary_<PROJECT_NAME> down` instead (the `stop` script does
+Started with a launcher? The launcher uses the project name `athenacognis_<PROJECT_NAME>`, so from
+a terminal run `docker compose -p athenacognis_<PROJECT_NAME> down` instead (the `stop` script does
 this for you).
 
 Your data stays on disk under `DATA_PATH` and is untouched by `down`.

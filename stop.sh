@@ -1,5 +1,7 @@
 #!/bin/bash
-# Double-click stopper for AthenaCognis (Linux).
+# Re-run under bash if started with sh/dash (e.g. `sh start.sh`).
+[ -z "$BASH_VERSION" ] && exec bash "$0" "$@"
+# Stopper for AthenaCognis (Linux & macOS).
 # Stops and removes the app containers. Your data (DATA_PATH) is kept.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -25,6 +27,12 @@ if [ -f .env ]; then
   set +o allexport
 fi
 PROJECT="athenacognis_${PROJECT_NAME:-$DEFAULT_PROJECT_NAME}"
+# Older launchers used this prefix: stop such a stack too.
+LEGACY_PROJECT="superdiary_${PROJECT_NAME:-$DEFAULT_PROJECT_NAME}"
+if [ -n "$(docker compose -p "$LEGACY_PROJECT" ps -q 2>/dev/null)" ]; then
+  echo "Stopping the stack started by an older launcher ($LEGACY_PROJECT)..."
+  docker compose -p "$LEGACY_PROJECT" down
+fi
 
 echo "Stopping AthenaCognis ($PROJECT)..."
 if ! docker compose -p "$PROJECT" down; then

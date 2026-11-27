@@ -155,9 +155,8 @@ The easiest way. Double-click the launcher for your OS at the repository root:
 
 | Start | Stop | Platform |
 |-------|------|----------|
-| `start.command` | `stop.command` | macOS |
+| `start.sh` | `stop.sh` | Linux & macOS |
 | `start.bat` | `stop.bat` | Windows |
-| `start.sh` | `stop.sh` | Linux |
 
 1. If Docker isn't installed, it opens the Docker download page for you.
 2. If `.env` doesn't exist yet, it asks a few questions and writes `.env` for you — no file to copy
@@ -180,7 +179,8 @@ The easiest way. Double-click the launcher for your OS at the repository root:
 Closing the window does **not** stop AthenaCognis — it keeps running in the background. Stop it with
 the matching `stop` script: it removes the containers and keeps your data (`DATA_PATH`).
 
-> **Linux note:** most file managers won't run a `.sh` file on double-click until it is executable.
+> **Linux / macOS note:** run `./start.sh` (or `bash start.sh`) from a terminal. On Linux, most file managers
+> only run a `.sh` file on double-click once it is executable.
 > Right-click `start.sh` / `stop.sh` → Properties → Permissions → "Allow executing file as program" (varies
 > by desktop environment), or run `chmod +x start.sh stop.sh` once from a terminal.
 
@@ -194,7 +194,7 @@ There are two ways to run AthenaCognis:
 ```bash
 git clone https://github.com/ChadEstoupStreiff/athenacognis.git
 cd athenacognis
-./start.sh          # macOS: ./start.command — asks the settings, writes .env, builds and starts
+./start.sh          # Linux & macOS (Windows: start.bat) — asks the settings, writes .env, builds and starts
 ```
 
 The launcher opens `http://localhost:<FRONT_PORT>` once the app is up. Later starts: `./up.sh`

@@ -1,5 +1,7 @@
 #!/bin/bash
-# Double-click launcher for AthenaCognis (Linux).
+# Re-run under bash if started with sh/dash (e.g. `sh start.sh`).
+[ -z "$BASH_VERSION" ] && exec bash "$0" "$@"
+# Launcher for AthenaCognis (Linux & macOS).
 # Checks Docker, creates .env interactively if missing, pulls the latest
 # version (git), rebuilds and starts the app
 # detached, and opens it in your browser once it's confirmed running.
@@ -8,9 +10,26 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+PROJECT_PREFIX="athenacognis_"
+# Older launchers used this prefix: stop such a stack before starting the new one.
+LEGACY_PROJECT_PREFIX="superdiary_"
+
 pause_exit() {
   read -rp "Press Enter to close..." _
   exit 1
+}
+
+# open_url URL: open a URL in the default browser (macOS, Linux, WSL).
+open_url() {
+  if [ "$(uname -s)" = "Darwin" ]; then
+    open "$1" >/dev/null 2>&1 && return
+  elif command -v wslview >/dev/null 2>&1; then
+    wslview "$1" >/dev/null 2>&1 && return
+  elif command -v xdg-open >/dev/null 2>&1; then
+    xdg-open "$1" >/dev/null 2>&1 &
+    return
+  fi
+  echo "Open $1 in your browser."
 }
 
 echo "=== AthenaCognis launcher ==="
@@ -19,19 +38,20 @@ echo
 # --- 1. Docker installed? ---------------------------------------------
 if ! command -v docker >/dev/null 2>&1; then
   echo "Docker was not found on this system."
-  echo "Opening the Docker install page in your browser..."
-  if command -v xdg-open >/dev/null 2>&1; then
-    xdg-open "https://docs.docker.com/engine/install/" >/dev/null 2>&1 &
+  if [ "$(uname -s)" = "Darwin" ]; then
+    DOCKER_URL="https://www.docker.com/products/docker-desktop/"
   else
-    echo "Install it from: https://docs.docker.com/engine/install/"
+    DOCKER_URL="https://docs.docker.com/engine/install/"
   fi
+  echo "Install it from: $DOCKER_URL"
+  open_url "$DOCKER_URL"
   echo "Install Docker, then run this script again."
   pause_exit
 fi
 
 if ! docker info >/dev/null 2>&1; then
   echo "Docker is installed but not running (or you lack permission to use it)."
-  echo "Start Docker and try again."
+  echo "Start Docker (Docker Desktop on macOS) and try again."
   pause_exit
 fi
 
@@ -139,8 +159,15 @@ if command -v git >/dev/null 2>&1 && [ -d .git ]; then
 fi
 
 # --- 4. Launch detached --------------------------------------------------
+PROJECT="${PROJECT_PREFIX}${PROJECT_NAME:-athenacognis}"
+LEGACY_PROJECT="${LEGACY_PROJECT_PREFIX}${PROJECT_NAME:-athenacognis}"
+if [ -n "$(docker compose -p "$LEGACY_PROJECT" ps -q 2>/dev/null)" ]; then
+  echo "Stopping the stack started by an older launcher ($LEGACY_PROJECT)..."
+  docker compose -p "$LEGACY_PROJECT" down
+fi
+
 echo "Starting AthenaCognis (first run can take a while while images download)..."
-if ! docker compose -p "athenacognis_${PROJECT_NAME:-athenacognis}" up -d --build; then
+if ! docker compose -p "$PROJECT" up -d --build; then
   echo
   echo "docker compose failed to start the app. Check the errors above, and"
   echo "double-check your .env file (DATA_PATH, DATABASE_PASSWORD, ports)."
@@ -164,22 +191,18 @@ done
 if [ "$READY" != "1" ]; then
   echo
   echo "AthenaCognis did not come up at $URL in time. Current container status:"
-  docker compose -p "athenacognis_${PROJECT_NAME:-athenacognis}" ps
+  docker compose -p "$PROJECT" ps
   echo
   echo "Something is likely wrong - check your .env file (DATA_PATH, DATABASE_PASSWORD,"
   echo "or a port already in use), and see the logs with:"
-  echo "  docker compose logs -f"
+  echo "  docker compose -p $PROJECT logs -f"
   pause_exit
 fi
 
-if command -v xdg-open >/dev/null 2>&1; then
-  xdg-open "$URL" >/dev/null 2>&1 &
-else
-  echo "Open $URL in your browser."
-fi
+open_url "$URL"
 
 echo
 echo "AthenaCognis is running at $URL"
 echo "Closing this window will NOT stop the app - it keeps running in the background."
-echo "To stop it later, double-click stop.sh (or run ./stop.sh)."
+echo "To stop it later, run ./stop.sh."
 read -rp "Press Enter to close this window..." _

@@ -1,2 +1,4 @@
-# Windows cmd needs CRLF to find labels reliably.
-*.bat text eol=crlf
+# Windows cmd needs CRLF to find labels reliably. Stored as-is (-text) so the
+# raw GitHub download is CRLF too, not only a git checkout.
+*.bat -text
+*.sh text eol=lf
